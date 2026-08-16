@@ -15,7 +15,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install pytest
+      - name: Install test and runtime dependencies
+        run: python -m pip install -r requirements.txt pytest
       - name: Validate scripts
         run: |
           bash -n scripts/tailnet-prereq-check.sh scripts/tailnet-setup.sh scripts/tailnet-status.sh scripts/tailnet-uninstall.sh scripts/update.sh qa/tailnet-installer-smoke.sh qa/update-smoke.sh

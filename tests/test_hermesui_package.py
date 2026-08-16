@@ -13,7 +13,7 @@ def read(path: str) -> str:
 
 
 def test_public_name_and_tailnet_path_are_consistent():
-    assert read("VERSION").strip() == "0.1.0"
+    assert read("VERSION").strip() == "0.1.1"
     manifest = json.loads(read("static/manifest.json"))
     assert manifest["name"] == "HermesUI"
     assert manifest["short_name"] == "HermesUI"
@@ -42,6 +42,27 @@ def test_public_repository_links_point_to_hermesui():
     assert f'Repository = "{repo_url}"' in metadata
     assert f'Issues = "{repo_url}/issues"' in metadata
     assert f'href="{repo_url}/issues"' in shell
+
+
+def test_verify_workflow_installs_runtime_dependencies_before_interface_tests():
+    workflow = read(".github/workflows/verify.yml")
+    install = "python -m pip install -r requirements.txt pytest"
+    test_command = "python -m pytest -q"
+    assert install in workflow
+    assert workflow.index(install) < workflow.index(test_command)
+
+
+def test_shipped_mcp_server_has_a_declared_compatible_runtime_dependency():
+    requirements = read("requirements.txt").splitlines()
+    assert "mcp<2" in requirements
+    assert 'from mcp.server import Server' in read("mcp_server.py")
+
+
+def test_public_ui_docs_do_not_embed_a_contributor_home_path():
+    docs = read("docs/ui-ux/index.html")
+    contributor_path = "/Users/" + "aron/hermes-webui"
+    assert contributor_path not in docs
+    assert "~/hermes-webui" in docs
 
 
 def test_installer_is_private_and_never_enables_funnel():
@@ -119,9 +140,9 @@ def test_installer_lifecycle_is_parser_verified_and_fail_closed():
 def test_release_prompt_is_tag_pinned_and_verifiable():
     prompt = read("docs/Tailnet-HermesUI-Prompt.md")
     assert read("docs/give-this-prompt-to-your-ai.md") == prompt
-    assert "reviewed tag `v0.1.0`" in prompt
+    assert "reviewed tag `v0.1.1`" in prompt
     assert "git describe --tags --exact-match" in prompt
-    assert "v0.1.0^{commit}" in prompt
+    assert "v0.1.1^{commit}" in prompt
     assert "git rev-parse HEAD" in prompt
     assert "git ls-remote origin" in prompt
     assert "Do not claim success until every check passes" in prompt

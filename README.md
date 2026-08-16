@@ -32,7 +32,7 @@ Install a reviewed release tag rather than a moving branch:
 
 ```bash
 mkdir -p ~/apps
-git clone --branch v0.1.0 --depth 1 https://github.com/humanitylabs-org/HermesUI.git ~/apps/HermesUI
+git clone --branch v0.1.1 --depth 1 https://github.com/humanitylabs-org/HermesUI.git ~/apps/HermesUI
 cd ~/apps/HermesUI
 ./scripts/tailnet-prereq-check.sh
 ./scripts/tailnet-setup.sh
@@ -58,7 +58,7 @@ The canonical Humanity Labs installation prompt is in [docs/Tailnet-HermesUI-Pro
 
 ```bash
 ./scripts/tailnet-status.sh
-./scripts/update.sh v0.1.0
+./scripts/update.sh v0.1.1
 ./scripts/tailnet-uninstall.sh
 ```
 
