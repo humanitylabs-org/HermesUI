@@ -1,0 +1,43 @@
+name: Verify HermesUI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pytest
+      - name: Validate scripts
+        run: |
+          bash -n scripts/tailnet-prereq-check.sh scripts/tailnet-setup.sh scripts/tailnet-status.sh scripts/tailnet-uninstall.sh scripts/update.sh qa/tailnet-installer-smoke.sh qa/update-smoke.sh
+          shellcheck scripts/tailnet-prereq-check.sh scripts/tailnet-setup.sh scripts/tailnet-status.sh scripts/tailnet-uninstall.sh scripts/update.sh qa/tailnet-installer-smoke.sh qa/update-smoke.sh
+          python -m py_compile scripts/owned-path-op.py scripts/tailscale-serve-cas.py scripts/stop-owned-process.py scripts/systemd-start-owned.py scripts/systemd-launcher-unit.py
+          python scripts/privacy-check.py
+      - name: Test Tailnet installer contract
+        run: |
+          ./qa/tailnet-installer-smoke.sh
+          ./qa/update-smoke.sh
+      - name: Test HermesUI interface contract
+        run: |
+          python -m pytest -q \
+            tests/test_hermesui_chat_shell.py \
+            tests/test_hermesui_mobile_session_swipe.py \
+            tests/test_hermesui_session_dashboard.py \
+            tests/test_hermesui_sessions_sidebar.py \
+            tests/test_hermesui_settings_popup.py \
+            tests/test_hermesui_subpath_login.py \
+            tests/test_hermesui_subpath_share.py \
+            tests/test_hermesui_package.py \
+            tests/test_auth_sessions.py \
+            tests/test_hermesui_cookie_scope.py \
+            tests/test_tailnet_atomic_helpers.py \
+            tests/test_issue3227_help_tab.py
