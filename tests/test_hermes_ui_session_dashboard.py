@@ -43,6 +43,9 @@ def test_dashboard_has_unboxed_original_request_and_exactly_three_cards():
 
 def test_session_summary_uses_original_request_as_frontend_only_placeholder():
     assert "function dashboardSessionSummary(projection)" in DASHBOARD
+    assert "typeof _messagesTruncated!=='undefined'" in DASHBOARD
+    assert "typeof _oldestIdx!=='undefined'" in DASHBOARD
+    assert "The original request is not loaded yet. Switch to Classic view and load earlier messages to see it." in DASHBOARD
     assert "const firstUser=projection.firstUser" in DASHBOARD
     assert "return firstText||'No original request is available yet.'" in DASHBOARD
     assert "setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(projection))" in DASHBOARD
@@ -52,6 +55,55 @@ def test_session_summary_uses_original_request_as_frontend_only_placeholder():
     assert "compression_anchor_summary" not in DASHBOARD
     assert ".session-dashboard-original{" in CSS
     assert ".session-dashboard-copy--original{" in CSS
+
+
+def test_truncated_tail_is_never_labeled_as_the_original_request():
+    node = shutil.which("node")
+    assert node is not None, "node is required for the dashboard provenance regression"
+    harness = f"""
+const fs=require('fs');
+const vm=require('vm');
+const elements=new Map();
+function element(id){{
+  if(!elements.has(id)) elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},addEventListener(){{}}}});
+  return elements.get(id);
+}}
+global.window=global;
+global.document={{
+  readyState:'complete',
+  documentElement:{{dataset:{{sessionView:'dashboard'}}}},
+  getElementById:element,
+  addEventListener(){{}}
+}};
+global.S={{session:{{session_id:'long',message_count:80}},messages:Array.from({{length:30}},(_,i)=>({{
+  role:i%2?'assistant':'user',content:`TAIL user ${{i}}`,id:`m-${{i+50}}`
+}})),busy:false,activeStreamId:null}};
+global.msgContent=m=>String(m&&m.content||'');
+global.renderMd=s=>String(s||'');
+global._stripWorkspaceDisplayPrefix=s=>String(s||'');
+global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');
+global._messageIsRenderable=()=>true;
+global._isContextCompactionMessage=()=>false;
+global._isPreservedCompressionTaskListMessage=()=>false;
+global._isRecoveryControlMessage=()=>false;
+global.INFLIGHT={{}};
+global.requestAnimationFrame=cb=>{{cb();return 1;}};
+global.queueMicrotask=cb=>cb();
+let _messagesTruncated=true;
+let _oldestIdx=50;
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
+syncSessionDashboard();
+process.stdout.write(JSON.stringify({{
+  original:element('sessionDashboardOriginalRequest').innerHTML,
+  tailWasMisrepresented:element('sessionDashboardOriginalRequest').innerHTML.includes('TAIL user'),
+}}));
+"""
+    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "original": "The original request is not loaded yet. Switch to Classic view and load earlier messages to see it.",
+        "tailWasMisrepresented": False,
+    }
 
 
 def test_dashboard_reads_existing_session_state_without_mutating_messages():
