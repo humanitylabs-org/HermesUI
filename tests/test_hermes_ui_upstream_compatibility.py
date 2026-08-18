@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = ROOT / "hermesui" / "run_upstream_compatibility.py"
 MANIFEST_PATH = ROOT / "hermesui" / "upstream-frontend-replacements.json"
+ISOLATED_MANIFEST_PATH = ROOT / "hermesui" / "upstream-isolated-tests.json"
 
 
 def _runner_module():
@@ -61,3 +62,42 @@ def test_replacements_only_cover_frontend_contract_families():
         for entry in manifest["replacements"]
         for token in ("api", "server", "auth", "storage", "package", "docker", "mcp")
     )
+
+
+def test_order_sensitive_manifest_is_pinned_mandatory_and_separate():
+    module = _runner_module()
+    isolated = module.load_isolated_tests()
+    upstream = json.loads((ROOT / "UPSTREAM.json").read_text(encoding="utf-8"))
+    manifest = json.loads(ISOLATED_MANIFEST_PATH.read_text(encoding="utf-8"))
+    replacements = {entry["nodeid"] for entry in module.load_replacements()}
+
+    assert manifest["upstream_commit"] == upstream["commit"]
+    assert len(isolated) == 1
+    assert isolated[0]["nodeid"] not in replacements
+    assert isolated[0]["nodeid"].startswith("tests/test_issue5220_")
+    assert "fresh" in isolated[0]["reason"]
+
+
+def test_order_sensitive_node_runs_once_per_unsharded_or_shard_zero(monkeypatch):
+    module = _runner_module()
+    calls = []
+
+    def fake_call(command, cwd):
+        calls.append((command, cwd))
+        return 0
+
+    monkeypatch.setattr(module.subprocess, "call", fake_call)
+
+    assert module.main(["tests/", "--shard-id=0", "--num-shards=5"]) == 0
+    assert len(calls) == 2
+    isolated_nodeid = module.load_isolated_tests()[0]["nodeid"]
+    assert f"--deselect={isolated_nodeid}" in calls[0][0]
+    assert isolated_nodeid in calls[1][0]
+
+    calls.clear()
+    assert module.main(["tests/", "--shard-id=1", "--num-shards=5"]) == 0
+    assert len(calls) == 1
+
+    calls.clear()
+    assert module.main(["tests/"]) == 0
+    assert len(calls) == 2

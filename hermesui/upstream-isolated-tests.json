@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "upstream_commit": "b1c2bea92ee8369797d051a0e0789968bd351343",
+  "description": "Exact inherited tests with proven shared-process order sensitivity. Each remains mandatory and runs in a fresh pytest subprocess once per Python version; none is treated as a frontend replacement.",
+  "isolated_tests": [
+    {
+      "nodeid": "tests/test_issue5220_config_reload_stampede.py::test_stale_model_readers_collapse_to_single_reload_when_models_are_requested",
+      "reason": "The pinned upstream test depends on prior process-global config state: removing one obsolete frontend assertion changes a test boundary and makes this node fail in the shared shard, while the same node passes 20/20 in fresh processes and its complete three-test file passes. Run it fresh so the backend concurrency contract remains mandatory without relying on unrelated frontend test ordering."
+    }
+  ]
+}
