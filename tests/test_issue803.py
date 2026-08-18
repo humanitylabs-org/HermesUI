@@ -34,20 +34,6 @@ class TestProfileCookieHelpers:
         assert 'SameSite=Lax' in s
         assert 'Path=/' in s
 
-    def test_profile_cookie_uses_managed_mount_scope_and_secure(self, monkeypatch):
-        from api.helpers import build_profile_cookie
-
-        monkeypatch.setattr('api.auth.is_auth_enabled', lambda: False)
-        monkeypatch.setenv('HERMES_WEBUI_PROFILE_COOKIE_NAME', 'hermesui_profile')
-        monkeypatch.setenv('HERMES_WEBUI_COOKIE_PATH', '/hermesUI')
-        monkeypatch.setenv('HERMES_WEBUI_SECURE', '1')
-        s = build_profile_cookie('alice')
-        assert 'hermesui_profile=alice' in s
-        assert 'Path=/hermesUI' in s
-        assert 'Secure' in s
-        assert 'HttpOnly' in s
-        assert 'SameSite=Lax' in s
-
     def test_build_profile_cookie_survives_stale_password_hash_cache(self, monkeypatch):
         """#5588 regression: a prior test that set HERMES_WEBUI_PASSWORD populates
         api.auth's process-wide password-hash cache; if that cache leaks past the

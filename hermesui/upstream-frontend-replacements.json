@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "upstream_commit": "b1c2bea92ee8369797d051a0e0789968bd351343",
+  "description": "Exact Nesquena frontend assertions superseded by intentional Hermes UI contracts. Backend, API, runtime, packaging, and all non-listed upstream tests remain mandatory.",
+  "replacements": [
+    {
+      "nodeid": "tests/test_issue3227_help_tab.py::test_help_pane_present",
+      "reason": "Hermes UI keeps the upstream Help pane and documentation link but retargets issue reporting to the downstream HermesUI repository.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
+    },
+    {
+      "nodeid": "tests/test_issue4391_settings_shortcut.py::TestSettingsShortcutPresence::test_no_text_input_skip_guard",
+      "reason": "Hermes UI keeps the composer authoritative while typing and exposes Settings through its accessible modal and shortcut outside editable controls.",
+      "covered_by": ["tests/test_hermes_ui_settings_popup.py"]
+    },
+    {
+      "nodeid": "tests/test_issue4553_mobile_transcript_overflow.py::test_messages_inner_mobile_has_containment",
+      "reason": "Hermes UI's expanded mobile customization moves the equivalent containment rule beyond the upstream test's fixed 5,000-character source window.",
+      "covered_by": ["tests/test_hermes_ui_session_dashboard.py", "tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_issue5759_composer_focus_shortcut.py::test_mode_matrix_covers_focus_return_shortcut_and_unchanged_ctrl_k",
+      "reason": "Hermes UI preserves Ctrl/Cmd+K while additionally synchronizing its mobile session tabs; the upstream assertion requires the old exact statement sequence.",
+      "covered_by": ["tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_mobile_layout.py::test_mobile_sidebar_edge_guard_claims_body_edge_only",
+      "reason": "Hermes UI replaces the upstream edge-guard drawer gesture with session-first mobile navigation.",
+      "covered_by": ["tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_mobile_layout.py::test_mobile_sidebar_opens_as_full_screen_surface_with_panel_rail",
+      "reason": "Hermes UI uses a session-first phone surface and hamburger-only navigation instead of the upstream full-screen panel rail.",
+      "covered_by": ["tests/test_hermes_ui_chat_shell.py", "tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_mobile_layout.py::test_pwa_edge_swipe_opens_current_mobile_panel",
+      "reason": "Hermes UI assigns horizontal swipe to adjacent sessions rather than the upstream PWA panel drawer.",
+      "covered_by": ["tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_mobile_layout.py::test_mobile_titlebar_has_new_conversation_button",
+      "reason": "Hermes UI creates a new Untitled session from its session-first mobile surface rather than the upstream titlebar control.",
+      "covered_by": ["tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_mobile_layout.py::test_titlebar_new_chat_button_mobile_visibility_css",
+      "reason": "Hermes UI intentionally removes the upstream mobile titlebar new-chat control.",
+      "covered_by": ["tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_mobile_layout.py::test_titlebar_reload_button_visibility_css_contract",
+      "reason": "Hermes UI's phone titlebar is intentionally minimal and does not expose the upstream reload control.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
+    },
+    {
+      "nodeid": "tests/test_mobile_sidebar_header_icon_align.py::test_mobile_close_glyph_matches_plus_button_size",
+      "reason": "Hermes UI replaces the upstream mobile sidebar header composition.",
+      "covered_by": ["tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_pwa_manifest_sw.py::TestSessionManifestRoute::test_session_manifest_json_has_hermes_name",
+      "reason": "Hermes UI intentionally brands its installable frontend as HermesUI.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
+    },
+    {
+      "nodeid": "tests/test_pwa_manifest_sw.py::TestSessionManifestRoute::test_session_manifest_webmanifest_is_parseable_json",
+      "reason": "Hermes UI intentionally brands its installable frontend as HermesUI while preserving valid manifest JSON.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
+    },
+    {
+      "nodeid": "tests/test_pwa_manifest_sw.py::TestRootManifestRoute::test_root_manifest_json_has_hermes_name_and_512_icon",
+      "reason": "Hermes UI intentionally brands its root manifest as HermesUI.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
+    },
+    {
+      "nodeid": "tests/test_pwa_sidebar_swipe.py::test_pwa_edge_swipe_gesture_is_registered_for_mobile_sidebar",
+      "reason": "Hermes UI replaces edge-drawer swiping with adjacent-session swiping.",
+      "covered_by": ["tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_pwa_sidebar_swipe.py::test_pwa_sidebar_swipe_is_edge_gated_standalone_and_horizontal",
+      "reason": "Hermes UI replaces the upstream edge-drawer gesture contract.",
+      "covered_by": ["tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_pwa_sidebar_swipe.py::test_pwa_sidebar_edge_guard_is_non_interactive_and_swipe_uses_window_capture",
+      "reason": "Hermes UI removes the upstream edge guard and validates interactive-target exclusions on its adjacent-session gesture.",
+      "covered_by": ["tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_pwa_sidebar_swipe.py::test_pwa_sidebar_swipe_opens_existing_mobile_drawer_without_desktop_collapse",
+      "reason": "Hermes UI's horizontal gesture navigates sessions rather than opening the drawer.",
+      "covered_by": ["tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_real_steer.py::TestFrontendWiring::test_file_steer_upload_status_and_indicator_are_owner_scoped",
+      "reason": "Hermes UI adds accepted-steer projection into the active session dashboard while preserving owner scoping.",
+      "covered_by": ["tests/test_hermes_ui_session_dashboard.py"]
+    },
+    {
+      "nodeid": "tests/test_session_batch_select.py::test_batch_select_toggle_button",
+      "reason": "Hermes UI moves Select from an appended text row to the persistent session header.",
+      "covered_by": ["tests/test_hermes_ui_sessions_sidebar.py"]
+    },
+    {
+      "nodeid": "tests/test_session_public_share_static.py::test_boot_js_wires_share_create_and_revoke",
+      "reason": "Hermes UI builds share URLs relative to the application mount instead of the upstream root-relative contract.",
+      "covered_by": ["tests/test_hermesui_subpath_share.py"]
+    },
+    {
+      "nodeid": "tests/test_session_public_share_static.py::test_public_share_page_assets_exist",
+      "reason": "Hermes UI uses mount-relative public-share assets instead of upstream root-relative /static paths.",
+      "covered_by": ["tests/test_hermesui_subpath_share.py"]
+    },
+    {
+      "nodeid": "tests/test_session_public_share_static.py::test_session_action_menu_exposes_public_share_actions",
+      "reason": "Hermes UI keeps share actions but constructs the resulting URL from the mounted application root.",
+      "covered_by": ["tests/test_hermesui_subpath_share.py"]
+    },
+    {
+      "nodeid": "tests/test_sidebar_search_highlights.py::test_session_search_has_accessible_clear_button",
+      "reason": "Hermes UI keeps session search collapsed until requested and uses its own accessible header control composition.",
+      "covered_by": ["tests/test_hermes_ui_sessions_sidebar.py"]
+    },
+    {
+      "nodeid": "tests/test_sidebar_unassigned_filter.py::test_unassigned_chip_only_shown_when_relevant",
+      "reason": "Hermes UI hides redundant folder filters until at least one real folder exists.",
+      "covered_by": ["tests/test_hermes_ui_sessions_sidebar.py"]
+    }
+  ]
+}

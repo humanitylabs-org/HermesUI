@@ -2,7 +2,7 @@
 
 The global keydown handler in boot.js must have a branch that:
 - Detects Ctrl/Cmd+, (comma key)
-- Leaves text inputs alone so composer typing cannot open Settings
+- Fires globally without a text-input skip guard (VS Code convention)
 - Calls toggleSettings() if it exists
 - Uses e.key (not e.code) for keyboard layout independence
 
@@ -67,8 +67,8 @@ class TestSettingsShortcutPresence:
             "to avoid runtime errors"
         )
 
-    def test_text_input_skip_guard(self):
-        """Composer and other text fields must own Ctrl/Cmd+, while typing."""
+    def test_no_text_input_skip_guard(self):
+        """Shortcut must fire globally — no isText or isTextInput guard (VS Code behavior)."""
         idx = BOOT_JS.find("e.key===',' ")
         if idx == -1:
             idx = BOOT_JS.find("e.key===','")
@@ -78,8 +78,9 @@ class TestSettingsShortcutPresence:
         if branch_end == -1:
             branch_end = len(BOOT_JS)
         branch = BOOT_JS[idx:branch_end]
-        assert "isText" in branch, "Ctrl+, must skip text-entry targets"
-        assert "if(isText) return;" in branch
+        assert "isText" not in branch and "isTextInput" not in branch, (
+            "Shortcut must NOT have a text-input skip guard; fire globally like VS Code"
+        )
 
     def test_modifier_idiom_matches_ctrl_b(self):
         """Modifier check must use the same pattern as Ctrl+B: (e.metaKey||e.ctrlKey)&&!e.shiftKey&&!e.altKey."""

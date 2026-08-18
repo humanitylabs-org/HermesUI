@@ -90,14 +90,14 @@ def test_sidebar_search_rendering_uses_safe_dom_helpers():
 
 def test_session_search_has_accessible_clear_button():
     html = INDEX_HTML.read_text(encoding="utf-8")
-    assert '<div class="session-search sidebar-search" id="sessionSearchWrap" hidden><div class="session-search-field">' in html
+    assert '<div class="session-search sidebar-search"><div class="session-search-field">' in html
     clear = re.search(r'<button[^>]*id="sessionSearchClear"[^>]*>', html)
     assert clear, "#sessionSearchClear button not found beside #sessionSearch"
     tag = clear.group(0)
     assert 'type="button"' in tag
     assert 'hidden' in tag
     assert 'onclick="clearSessionSearch()"' in tag
-    assert 'aria-label="Clear session filter"' in tag
+    assert 'aria-label="Clear conversation filter"' in tag
 
 
 def test_session_search_clear_button_styles_do_not_shift_input_width():

@@ -8,7 +8,11 @@ CROSS_TMP=""
 cleanup() {
   [[ -z "$SERVER_PID" ]] || kill "$SERVER_PID" >/dev/null 2>&1 || true
   [[ -z "$CROSS_TMP" ]] || rm -rf "$CROSS_TMP"
-  rm -rf "$TMP"
+  if [[ "${HERMESUI_QA_KEEP_TMP:-0}" == "1" ]]; then
+    printf 'Preserved Tailnet QA directory: %s\n' "$TMP" >&2
+  else
+    rm -rf "$TMP"
+  fi
 }
 trap cleanup EXIT
 mkdir -p "$TMP/home" "$TMP/bin" "$TMP/systemd" "$TMP/state"
@@ -42,9 +46,36 @@ case " $* " in
     if [[ -e "$HERMESUI_QA_STOPPED_STATE" ]]; then exit 3; fi
     if [[ -e "$HERMESUI_QA_SERVICE_STATE" || -e "$HERMESUI_QA_FOREIGN_ACTIVE" || "${HERMESUI_QA_ACTIVE:-0}" == "1" ]]; then printf 'active\n'; else exit 3; fi
     ;;
+  *" --property=ActiveState --property=LoadState --property=MainPID "*)
+    [[ "${HERMESUI_QA_SYSTEMCTL_FAIL:-}" != "service-state" ]] || exit 79
+    [[ -z "${HERMESUI_QA_STOP_QUERY_FAIL_FLAG:-}" || ! -e "$HERMESUI_QA_STOP_QUERY_FAIL_FLAG" ]] || exit 79
+    if [[ -e "$HERMESUI_QA_STOPPED_STATE" ]]; then
+      printf 'ActiveState=inactive\nLoadState=not-found\nMainPID=0\n'
+    elif [[ -e "$HERMESUI_QA_SERVICE_STATE" || -e "$HERMESUI_QA_FOREIGN_ACTIVE" || "${HERMESUI_QA_ACTIVE:-0}" == "1" ]]; then
+      printf 'ActiveState=active\nLoadState=loaded\nMainPID=424242\n'
+    else
+      printf 'ActiveState=inactive\nLoadState=not-found\nMainPID=0\n'
+    fi
+    ;;
+  *" --property=ActiveState --value "*)
+    [[ "${HERMESUI_QA_SYSTEMCTL_FAIL:-}" != "active-state" ]] || exit 78
+    if [[ -e "$HERMESUI_QA_STOPPED_STATE" ]]; then
+      printf 'inactive\n'
+    elif [[ -e "$HERMESUI_QA_SERVICE_STATE" || -e "$HERMESUI_QA_FOREIGN_ACTIVE" || "${HERMESUI_QA_ACTIVE:-0}" == "1" ]]; then
+      printf 'active\n'
+    else
+      printf 'inactive\n'
+    fi
+    ;;
   *" --property=MainPID --value "*)
     [[ "${HERMESUI_QA_SYSTEMCTL_FAIL:-}" != "main-pid" ]] || exit 77
-    printf '424242\n'
+    if [[ -e "$HERMESUI_QA_STOPPED_STATE" ]]; then
+      printf '0\n'
+    elif [[ -e "$HERMESUI_QA_SERVICE_STATE" || -e "$HERMESUI_QA_FOREIGN_ACTIVE" || "${HERMESUI_QA_ACTIVE:-0}" == "1" ]]; then
+      printf '424242\n'
+    else
+      printf '0\n'
+    fi
     ;;
   *" --property=FragmentPath --value "*)
     [[ "${HERMESUI_QA_SYSTEMCTL_FAIL:-}" != "show" ]] || exit 76
@@ -165,6 +196,11 @@ elif [[ " $* " == *" serve status --json "* ]]; then
       fi
       ;;
     funnel) printf '{"AllowFunnel":{"device.tailnet.example.ts.net:443":true},"Web":{"device.tailnet.example.ts.net:443":{"Handlers":{}}}}\n' ;;
+    listener_null) printf '{"Web":{"device.tailnet.example.ts.net:443":null}}\n' ;;
+    handler_null) printf '{"Web":{"device.tailnet.example.ts.net:443":{"Handlers":{"/hermesUI":null}}}}\n' ;;
+    foreground_listener_null) printf '{"Web":{},"Foreground":{"session-1":{"Web":{"device.tailnet.example.ts.net:443":null}}}}\n' ;;
+    tcp_null) printf '{"TCP":{"443":null},"Web":{"device.tailnet.example.ts.net:443":{"Handlers":{}}}}\n' ;;
+    tcp_future) printf '{"TCP":{"443":{"HTTPS":true,"Future":true}},"Web":{"device.tailnet.example.ts.net:443":{"Handlers":{}}}}\n' ;;
   esac
 elif [[ " $* " == *" serve --bg "* ]]; then
   : >"$HERMESUI_QA_ROUTE_STATE"
@@ -179,6 +215,8 @@ cat >"$TMP/bin/curl" <<'SH'
 #!/usr/bin/env bash
 printf 'curl %s\n' "$*" >>"$HERMESUI_QA_LOG"
 if [[ "${HERMESUI_QA_TAILNET_HEALTH_FAIL:-0}" == "1" && "$*" == *"https://device.tailnet.example.ts.net/hermesUI/health"* ]]; then
+  [[ -z "${HERMESUI_QA_ROLLBACK_FUNNEL_FLAG:-}" ]] || : >"$HERMESUI_QA_ROLLBACK_FUNNEL_FLAG"
+  [[ -z "${HERMESUI_QA_STOP_QUERY_FAIL_FLAG:-}" ]] || : >"$HERMESUI_QA_STOP_QUERY_FAIL_FLAG"
   case "${HERMESUI_QA_ROLLBACK_RACE:-}" in
     route) : >"$HERMESUI_QA_ROUTE_FOREIGN_STATE" ;;
     unit) printf '[Unit]\nDescription=Foreign takeover\n' >"$HERMESUI_QA_UNIT_FILE" ;;
@@ -268,6 +306,12 @@ else
   current='absent'
 fi
 [[ "$current" == "$expected" ]] || exit 75
+if [[ -n "${HERMESUI_QA_ROLLBACK_FUNNEL_FLAG:-}" && -e "$HERMESUI_QA_ROLLBACK_FUNNEL_FLAG" && "$desired" != "absent" ]]; then
+  exit 75
+fi
+if [[ "${HERMESUI_QA_CAS_FUNNEL_RACE:-0}" == "1" && "$desired" != "absent" ]]; then
+  exit 75
+fi
 if [[ "$desired" == "absent" ]]; then
   printf '%s\n' 'tailscale serve --https=443 --set-path=/hermesUI off' >>"$HERMESUI_QA_LOG"
   [[ "${HERMESUI_QA_TAILSCALE_OFF_FAIL:-0}" != "1" ]] || exit 1
@@ -304,7 +348,7 @@ export HERMESUI_QA_FOREIGN_ACTIVE="$TMP/foreign-active"
 export HERMESUI_QA_STATE_FILE="$TMP/state/install.env"
 export HERMESUI_QA_SYSTEMD_CACHE="$TMP/systemd-cache"
 export HERMESUI_QA_UNIT_RACE_DONE="$TMP/uninstall-unit-race-done"
-export HERMESUI_QA_REAL_PATH_OP="$ROOT/scripts/owned-path-op.py"
+export HERMESUI_QA_REAL_PATH_OP="$ROOT/hermesui/installer/owned-path-op.py"
 export HERMESUI_PATH_OP="$TMP/bin/path-op"
 export HERMESUI_PROCESS_STOP="$TMP/bin/stop-owned-process"
 export HERMESUI_SERVICE_START="$TMP/bin/start-owned-service"
@@ -315,10 +359,11 @@ export HERMESUI_QA_PASSWORD_ROOT_BLOCK=1
 # A concurrent lifecycle owner must block setup before any preflight or
 # mutation. This exercises the same lock shared by setup, update, and uninstall.
 exec 8>"$HERMESUI_LIFECYCLE_LOCK_FILE"
+chmod 600 "$HERMESUI_LIFECYCLE_LOCK_FILE"
 flock -n 8
 export HERMESUI_PORT=18993 HERMESUI_QA_ACTIVE=0 HERMESUI_QA_SERVE_MODE=missing
 set +e
-"$ROOT/scripts/tailnet-setup.sh" >"$TMP/lock-contention.out" 2>"$TMP/lock-contention.err"
+"$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/lock-contention.out" 2>"$TMP/lock-contention.err"
 lock_status=$?
 set -e
 flock -u 8
@@ -329,7 +374,7 @@ grep -q 'another HermesUI setup, update, or uninstall is already running' "$TMP/
 
 # A failed Tailscale prerequisite must not execute the suggested state-changing command.
 export HERMESUI_QA_TAILSCALE_STATUS_FAIL=1
-if "$ROOT/scripts/tailnet-prereq-check.sh" >"$TMP/prereq.out" 2>"$TMP/prereq.err"; then
+if "$ROOT/hermesui/installer/tailnet-prereq-check.sh" >"$TMP/prereq.out" 2>"$TMP/prereq.err"; then
   printf 'Disconnected prerequisite test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -342,6 +387,17 @@ assert 'tailscale status\n' in log
 assert 'tailscale up' not in log
 PY
 : >"$LOG"
+
+# A failed authoritative runtime-state query is not evidence that the service
+# is inactive. Setup must fail before any mutation.
+export HERMESUI_PORT=18993 HERMESUI_QA_ACTIVE=0 HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_SYSTEMCTL_FAIL=service-state
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/service-state-preflight.out" 2>"$TMP/service-state-preflight.err"; then
+  printf 'Runtime-state preflight query failure unexpectedly succeeded.\n' >&2
+  exit 1
+fi
+[[ ! -e "$TMP/systemd/hermesui-launcher.service" && ! -e "$TMP/state/install.env" && ! -e "$SERVICE_STATE" && ! -e "$ROUTE_STATE" ]]
+grep -q 'ActiveState, LoadState, and MainPID' "$TMP/service-state-preflight.err"
+unset HERMESUI_QA_SYSTEMCTL_FAIL
 
 # A busy unmanaged port must fail before a unit or route is changed.
 python3 -m http.server 18994 --bind 127.0.0.1 >/dev/null 2>&1 &
@@ -357,7 +413,7 @@ else:
     raise SystemExit('test server did not start')
 PY
 export HERMESUI_PORT=18994 HERMESUI_QA_ACTIVE=0
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/port.out" 2>"$TMP/port.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/port.out" 2>"$TMP/port.err"; then
   printf 'Port collision test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -371,7 +427,7 @@ SERVER_PID=""
 for failure in daemon-reload service-start; do
   rm -f "$ROUTE_STATE" "$ROUTE_FOREIGN_STATE" "$SERVICE_STATE" "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/install.env"
   export HERMESUI_PORT=18993 HERMESUI_QA_ACTIVE=0 HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_SYSTEMCTL_FAIL="$failure"
-  if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/setup-${failure}.out" 2>"$TMP/setup-${failure}.err"; then
+  if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/setup-${failure}.out" 2>"$TMP/setup-${failure}.err"; then
     printf '%s setup failure test unexpectedly succeeded.\n' "$failure" >&2
     exit 1
   fi
@@ -390,7 +446,7 @@ unset HERMESUI_QA_SYSTEMCTL_FAIL
 rm -f "$ROUTE_STATE" "$ROUTE_FOREIGN_STATE" "$SERVICE_STATE" "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/install.env"
 export HERMESUI_PORT=18993 HERMESUI_QA_ACTIVE=0 HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_TAILSCALE_SERVE_FAIL=1
 before_off_count="$(grep -c 'set-path=/hermesUI off' "$LOG" || true)"
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/serve-partial.out" 2>"$TMP/serve-partial.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/serve-partial.out" 2>"$TMP/serve-partial.err"; then
   printf 'Partial Serve mutation failure test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -404,17 +460,17 @@ unset HERMESUI_QA_TAILSCALE_SERVE_FAIL
 # A foreign user unit must not be overwritten.
 printf '[Unit]\nDescription=Unrelated service\n' >"$TMP/systemd/hermesui-launcher.service"
 export HERMESUI_PORT=18993 HERMESUI_QA_ACTIVE=0 HERMESUI_QA_SERVE_MODE=missing
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/unit.out" 2>"$TMP/unit.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/unit.out" 2>"$TMP/unit.err"; then
   printf 'Unit collision test unexpectedly succeeded.\n' >&2
   exit 1
 fi
 rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK"
 
 # A managed unit without installer state must not be adopted using a default port.
-"$ROOT/scripts/systemd-launcher-unit.py" write "$TMP/systemd/hermesui-launcher.service" \
+"$ROOT/hermesui/installer/systemd-launcher-unit.py" write "$TMP/systemd/hermesui-launcher.service" \
   --repo-root "$ROOT" --home "$TMP/home" --host 127.0.0.1 --port 18993
 export HERMESUI_PORT=18993 HERMESUI_QA_ACTIVE=0 HERMESUI_QA_SERVE_MODE=missing
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/missing-state.out" 2>"$TMP/missing-state.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/missing-state.out" 2>"$TMP/missing-state.err"; then
   printf 'Missing install-state ownership test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -423,42 +479,104 @@ rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK"
 
 # A foreign route, ownership-ambiguous matching route, or existing Funnel listener must fail closed.
 export HERMESUI_QA_SERVE_MODE=foreign
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/route.out" 2>"$TMP/route.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/route.out" 2>"$TMP/route.err"; then
   printf 'Serve collision test unexpectedly succeeded.\n' >&2
   exit 1
 fi
 export HERMESUI_QA_SERVE_MODE=foreground_foreign
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/foreground-route.out" 2>"$TMP/foreground-route.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/foreground-route.out" 2>"$TMP/foreground-route.err"; then
   printf 'Foreground Serve collision test unexpectedly succeeded.\n' >&2
   exit 1
 fi
 for mode in manual_owned foreground_owned mixed_owned; do
   export HERMESUI_QA_SERVE_MODE="$mode"
-  if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/setup-${mode}.out" 2>"$TMP/setup-${mode}.err"; then
+  if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/setup-${mode}.out" 2>"$TMP/setup-${mode}.err"; then
     printf '%s setup ownership test unexpectedly succeeded.\n' "$mode" >&2
     exit 1
   fi
   [[ ! -e "$TMP/systemd/hermesui-launcher.service" && ! -e "$TMP/state/install.env" ]]
 done
 export HERMESUI_QA_SERVE_MODE=funnel
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/funnel.out" 2>"$TMP/funnel.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/funnel.out" 2>"$TMP/funnel.err"; then
   printf 'Funnel collision test unexpectedly succeeded.\n' >&2
   exit 1
 fi
 [[ ! -e "$TMP/systemd/hermesui-launcher.service" && ! -e "$TMP/state/install.env" ]]
 
+# A present-null canonical listener is authoritative unknown state, not absence.
+# Reject it at preflight whether it is top-level or nested in Foreground.
+for mode in listener_null foreground_listener_null; do
+  export HERMESUI_QA_SERVE_MODE="$mode"
+  if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/${mode}.out" 2>"$TMP/${mode}.err"; then
+    printf '%s listener-null test unexpectedly succeeded.\n' "$mode" >&2
+    exit 1
+  fi
+  grep -q 'listener configuration is invalid' "$TMP/${mode}.err"
+  [[ ! -e "$TMP/systemd/hermesui-launcher.service" && ! -e "$TMP/state/install.env" && ! -e "$SERVICE_STATE" && ! -e "$ROUTE_STATE" ]]
+done
+
+# Present-but-incompatible TCP 443 values must fail before any local mutation.
+for mode in tcp_null tcp_future; do
+  export HERMESUI_QA_SERVE_MODE="$mode"
+  if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/${mode}.out" 2>"$TMP/${mode}.err"; then
+    printf '%s TCP ownership test unexpectedly succeeded.\n' "$mode" >&2
+    exit 1
+  fi
+  [[ ! -e "$TMP/systemd/hermesui-launcher.service" && ! -e "$TMP/state/install.env" && ! -e "$SERVICE_STATE" && ! -e "$ROUTE_STATE" ]]
+done
+
+# Funnel enabled after preflight but before the ETag-protected CAS must fail and
+# roll back the already prepared local unit, service, and ownership state.
+export HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_CAS_FUNNEL_RACE=1
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/funnel-race.out" 2>"$TMP/funnel-race.err"; then
+  printf 'Funnel CAS race test unexpectedly succeeded.\n' >&2
+  exit 1
+fi
+[[ ! -e "$TMP/systemd/hermesui-launcher.service" && ! -e "$TMP/state/install.env" && ! -e "$SERVICE_STATE" && ! -e "$ROUTE_STATE" ]]
+grep -q 'failed setup changes were rolled back' "$TMP/funnel-race.err"
+unset HERMESUI_QA_CAS_FUNNEL_RACE
+: >"$LOG"
+
 # Normal setup, active rerun, status, and owned-route uninstall.
 rm -f "$ROUTE_STATE"
 export HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_ACTIVE=0
-"$ROOT/scripts/tailnet-setup.sh" >"$TMP/setup.out"
+"$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/setup.out"
 export HERMESUI_QA_SERVE_MODE=owned HERMESUI_QA_ACTIVE=1
 unset HERMESUI_PORT
-"$ROOT/scripts/tailnet-setup.sh" >"$TMP/rerun.out"
-"$ROOT/scripts/tailnet-status.sh" >"$TMP/status.out"
+"$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/rerun.out"
+"$ROOT/hermesui/installer/tailnet-status.sh" >"$TMP/status.out"
+
+# Locked updater operations must validate the exact checkout/runtime identity,
+# avoid every Tailscale query or mutation, and preserve active/inactive intent.
+runtime_commit="$(git -C "$ROOT" rev-parse HEAD)"
+runtime_tree="$(git -C "$ROOT" rev-parse 'HEAD^{tree}')"
+tailscale_calls_before="$(grep -c '^tailscale ' "$LOG" || true)"
+HERMESUI_RUNTIME_OPERATION=probe HERMESUI_EXPECTED_RUNTIME_COMMIT="$runtime_commit" HERMESUI_EXPECTED_RUNTIME_TREE="$runtime_tree" \
+  "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/runtime-probe-active.out"
+grep -qx active "$TMP/runtime-probe-active.out"
+HERMESUI_RUNTIME_OPERATION=stop HERMESUI_EXPECTED_RUNTIME_COMMIT="$runtime_commit" HERMESUI_EXPECTED_RUNTIME_TREE="$runtime_tree" \
+  "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/runtime-stop.out"
+grep -qx inactive "$TMP/runtime-stop.out"
+HERMESUI_RUNTIME_OPERATION=probe HERMESUI_EXPECTED_RUNTIME_COMMIT="$runtime_commit" HERMESUI_EXPECTED_RUNTIME_TREE="$runtime_tree" \
+  "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/runtime-probe-inactive.out"
+grep -qx inactive "$TMP/runtime-probe-inactive.out"
+HERMESUI_RUNTIME_OPERATION=ensure-active HERMESUI_EXPECTED_RUNTIME_COMMIT="$runtime_commit" HERMESUI_EXPECTED_RUNTIME_TREE="$runtime_tree" \
+  "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/runtime-ensure-active.out"
+grep -qx active "$TMP/runtime-ensure-active.out"
+tailscale_calls_after="$(grep -c '^tailscale ' "$LOG" || true)"
+[[ "$tailscale_calls_after" == "$tailscale_calls_before" ]]
+
+if HERMESUI_RUNTIME_OPERATION=stop HERMESUI_EXPECTED_RUNTIME_COMMIT="$(printf '0%.0s' {1..40})" HERMESUI_EXPECTED_RUNTIME_TREE="$runtime_tree" \
+  "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/runtime-wrong-identity.out" 2>"$TMP/runtime-wrong-identity.err"; then
+  printf 'Wrong runtime identity unexpectedly authorized a stop.\n' >&2
+  exit 1
+fi
+[[ -e "$SERVICE_STATE" ]]
+grep -q 'checkout identity does not match' "$TMP/runtime-wrong-identity.err"
 
 # Status requires authoritative state and a managed unit whose port matches it.
 mv "$TMP/state/install.env" "$TMP/state/install.env.saved"
-if "$ROOT/scripts/tailnet-status.sh" >"$TMP/status-missing-state.out" 2>"$TMP/status-missing-state.err"; then
+if "$ROOT/hermesui/installer/tailnet-status.sh" >"$TMP/status-missing-state.out" 2>"$TMP/status-missing-state.err"; then
   printf 'Missing status ownership-state test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -470,12 +588,12 @@ import sys
 path = Path(sys.argv[1])
 path.write_text(path.read_text().replace('HERMES_WEBUI_PORT=18993', 'HERMES_WEBUI_PORT=18994'), encoding='utf-8')
 PY
-if "$ROOT/scripts/tailnet-status.sh" >"$TMP/status-unit-port.out" 2>"$TMP/status-unit-port.err"; then
+if "$ROOT/hermesui/installer/tailnet-status.sh" >"$TMP/status-unit-port.out" 2>"$TMP/status-unit-port.err"; then
   printf 'Status unit/state port mismatch test unexpectedly succeeded.\n' >&2
   exit 1
 fi
 mv "$TMP/systemd/hermesui-launcher.service.saved" "$TMP/systemd/hermesui-launcher.service"
-if HERMESUI_PORT=18994 "$ROOT/scripts/tailnet-status.sh" >"$TMP/status-env-port.out" 2>"$TMP/status-env-port.err"; then
+if HERMESUI_PORT=18994 "$ROOT/hermesui/installer/tailnet-status.sh" >"$TMP/status-env-port.out" 2>"$TMP/status-env-port.err"; then
   printf 'Status environment/state port mismatch test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -483,7 +601,7 @@ fi
 # Status must preserve route provenance and reject Foreground or mixed handlers.
 for mode in foreground_owned mixed_owned mixed_foreign wrong_listener; do
   export HERMESUI_QA_SERVE_MODE="$mode"
-  if "$ROOT/scripts/tailnet-status.sh" >"$TMP/status-${mode}.out" 2>"$TMP/status-${mode}.err"; then
+  if "$ROOT/hermesui/installer/tailnet-status.sh" >"$TMP/status-${mode}.out" 2>"$TMP/status-${mode}.err"; then
     printf '%s status provenance test unexpectedly succeeded.\n' "$mode" >&2
     exit 1
   fi
@@ -510,14 +628,14 @@ assert 'HERMES_WEBUI_PRESERVE_ENV=1' in unit
 assert 'HERMES_WEBUI_SECURE=1' in unit
 assert 'HERMES_WEBUI_COOKIE_NAME=hermesui_session' in unit
 assert 'HERMES_WEBUI_PROFILE_COOKIE_NAME=hermesui_profile' in unit
-assert 'HERMES_WEBUI_COOKIE_PATH=/hermesUI' in unit
+assert 'HERMES_WEBUI_COOKIE_PATH' not in unit
 assert 'systemd-start-owned.py' in unit
 assert '--unit hermesui.service' in unit
 assert '--port 18993' in unit
 assert state == 'HERMESUI_PORT=18993\nHERMESUI_TCP_443_CREATED=1\n'
 assert 'tailscale serve --bg --https=443 --set-path=/hermesUI http://127.0.0.1:18993' in log
 assert 'https://device.tailnet.example.ts.net/hermesUI/' in log
-assert log.count('start-owned-service ') == 2
+assert log.count('start-owned-service ') == 3
 assert 'HermesUI is ready.' in setup
 assert 'URL: https://device.tailnet.example.ts.net/hermesUI/' in setup
 assert 'HermesUI URL: https://device.tailnet.example.ts.net/hermesUI/' in status
@@ -538,7 +656,7 @@ cp -p "$TMP/systemd/hermesui-launcher.service" "$TMP/systemd/hermesui-launcher.s
 cp -p "$TMP/state/install.env" "$TMP/state/install.env.before-failed-rerun"
 before_serve_count="$(grep -c 'tailscale serve --bg --https=443 --set-path=/hermesUI' "$LOG" || true)"
 export HERMESUI_QA_SERVE_MODE=owned HERMESUI_QA_ACTIVE=1 HERMESUI_QA_TAILNET_HEALTH_FAIL=1
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/rerun-late-health.out" 2>"$TMP/rerun-late-health.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/rerun-late-health.out" 2>"$TMP/rerun-late-health.err"; then
   printf 'Failed managed rerun rollback test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -551,6 +669,59 @@ grep -q 'failed setup changes were rolled back' "$TMP/rerun-late-health.err"
 unset HERMESUI_QA_TAILNET_HEALTH_FAIL
 rm -f "$TMP/systemd/hermesui-launcher.service.before-failed-rerun" "$TMP/state/install.env.before-failed-rerun"
 
+# A stop-time systemd query error after candidate activation must preserve the
+# runtime ownership files and must never claim complete rollback.
+export HERMESUI_QA_STOP_QUERY_FAIL_FLAG="$TMP/stop-query-fail"
+export HERMESUI_QA_TAILNET_HEALTH_FAIL=1
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/rerun-stop-query.out" 2>"$TMP/rerun-stop-query.err"; then
+  printf 'Stop-time runtime-state query failure unexpectedly succeeded.\n' >&2
+  exit 1
+fi
+[[ -e "$SERVICE_STATE" && -e "$TMP/systemd/hermesui-launcher.service" && -L "$ENABLE_LINK" && -e "$TMP/state/install.env" ]]
+grep -q 'could not be queried or stopped authoritatively' "$TMP/rerun-stop-query.err"
+grep -q 'automatic rollback was incomplete' "$TMP/rerun-stop-query.err"
+grep -q 'rollback evidence was preserved' "$TMP/rerun-stop-query.err"
+if grep -q 'failed setup changes were rolled back' "$TMP/rerun-stop-query.err"; then
+  printf 'Stop-time query failure falsely claimed complete rollback.\n' >&2
+  exit 1
+fi
+unset HERMESUI_QA_TAILNET_HEALTH_FAIL HERMESUI_QA_STOP_QUERY_FAIL_FLAG
+rm -f "$TMP/stop-query-fail"
+rm -rf "$TMP/state"/.install.env.txn.*
+rm -f "$TMP/state"/.install.env.rollback.* "$TMP/systemd"/.hermesui.service.rollback.*
+"$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/rerun-after-stop-query.out"
+
+# If Funnel appears after an owned route is applied, rollback must never restore
+# a non-absent route. It removes the still-owned candidate while restoring the
+# prior local unit, state, and service bytes, but must report that route recovery
+# remains incomplete and preserve recovery evidence.
+cp -p "$TMP/systemd/hermesui-launcher.service" "$TMP/systemd/hermesui-launcher.service.before-funnel-rollback"
+cp -p "$TMP/state/install.env" "$TMP/state/install.env.before-funnel-rollback"
+export HERMESUI_QA_ROLLBACK_FUNNEL_FLAG="$TMP/rollback-funnel"
+export HERMESUI_QA_TAILNET_HEALTH_FAIL=1
+before_funnel_off_count="$(grep -c 'set-path=/hermesUI off' "$LOG" || true)"
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/rerun-funnel-rollback.out" 2>"$TMP/rerun-funnel-rollback.err"; then
+  printf 'Funnel-safe rerun rollback test unexpectedly succeeded.\n' >&2
+  exit 1
+fi
+after_funnel_off_count="$(grep -c 'set-path=/hermesUI off' "$LOG" || true)"
+[[ "$after_funnel_off_count" -eq $((before_funnel_off_count + 1)) ]]
+cmp -s "$TMP/systemd/hermesui-launcher.service.before-funnel-rollback" "$TMP/systemd/hermesui-launcher.service"
+cmp -s "$TMP/state/install.env.before-funnel-rollback" "$TMP/state/install.env"
+[[ ! -e "$ROUTE_STATE" && -e "$SERVICE_STATE" ]]
+grep -q 'automatic rollback was incomplete' "$TMP/rerun-funnel-rollback.err"
+grep -q 'Disable Funnel and rerun setup' "$TMP/rerun-funnel-rollback.err"
+if grep -q 'failed setup changes were rolled back' "$TMP/rerun-funnel-rollback.err"; then
+  printf 'Funnel-safe rerun falsely claimed complete rollback.\n' >&2
+  exit 1
+fi
+grep -q 'rollback evidence was preserved' "$TMP/rerun-funnel-rollback.err"
+unset HERMESUI_QA_TAILNET_HEALTH_FAIL HERMESUI_QA_ROLLBACK_FUNNEL_FLAG
+rm -f "$TMP/rollback-funnel" "$TMP/systemd/hermesui-launcher.service.before-funnel-rollback" "$TMP/state/install.env.before-funnel-rollback"
+rm -rf "$TMP/state"/.install.env.txn.*
+rm -f "$TMP/state"/.install.env.rollback.* "$TMP/systemd"/.hermesui.service.rollback.*
+: >"$ROUTE_STATE"
+
 # Rollback sources must remain on each managed destination filesystem even when
 # TMPDIR is a different device. A late failure must restore exact bytes and modes.
 if [[ -d /dev/shm && "$(stat -c %d /dev/shm)" != "$(stat -c %d "$TMP")" ]]; then
@@ -561,7 +732,7 @@ if [[ -d /dev/shm && "$(stat -c %d /dev/shm)" != "$(stat -c %d "$TMP")" ]]; then
   state_mode_before="$(stat -c %a "$TMP/state/install.env")"
   link_target_before="$(readlink "$ENABLE_LINK")"
   export HERMESUI_QA_TAILNET_HEALTH_FAIL=1
-  if TMPDIR="$CROSS_TMP" "$ROOT/scripts/tailnet-setup.sh" >"$TMP/crossfs-rerun.out" 2>"$TMP/crossfs-rerun.err"; then
+  if TMPDIR="$CROSS_TMP" "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/crossfs-rerun.out" 2>"$TMP/crossfs-rerun.err"; then
     printf 'Cross-filesystem rollback test unexpectedly succeeded.\n' >&2
     exit 1
   fi
@@ -582,7 +753,7 @@ if [[ -d /dev/shm && "$(stat -c %d /dev/shm)" != "$(stat -c %d "$TMP")" ]]; then
   CROSS_TMP=""
 fi
 
-"$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/uninstall.out"
+"$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/uninstall.out"
 [[ ! -e "$TMP/systemd/hermesui-launcher.service" ]]
 [[ ! -e "$TMP/state/install.env" ]]
 python3 - "$LOG" "$TMP/uninstall.out" <<'PY'
@@ -600,11 +771,11 @@ PY
 # uninstall removes only hostname:443 while leaving the other listener alone.
 rm -f "$ROUTE_STATE"
 export HERMESUI_PORT=18993 HERMESUI_QA_SERVE_MODE=wrong_then_owned HERMESUI_QA_ACTIVE=0
-"$ROOT/scripts/tailnet-setup.sh" >"$TMP/wrong-listener-setup.out"
+"$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/wrong-listener-setup.out"
 unset HERMESUI_PORT
 export HERMESUI_QA_ACTIVE=1
-"$ROOT/scripts/tailnet-status.sh" >"$TMP/wrong-listener-status.out"
-"$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/wrong-listener-uninstall.out"
+"$ROOT/hermesui/installer/tailnet-status.sh" >"$TMP/wrong-listener-status.out"
+"$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/wrong-listener-uninstall.out"
 [[ ! -e "$TMP/systemd/hermesui-launcher.service" && ! -e "$TMP/state/install.env" && ! -e "$ROUTE_STATE" ]]
 
 # A late canonical Tailnet health failure must roll back every fresh-install
@@ -612,7 +783,7 @@ export HERMESUI_QA_ACTIVE=1
 rm -f "$ROUTE_STATE" "$SERVICE_STATE" "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/install.env"
 export HERMESUI_PORT=18993 HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_ACTIVE=0 HERMESUI_QA_TAILNET_HEALTH_FAIL=1
 before_off_count="$(grep -c 'set-path=/hermesUI off' "$LOG" || true)"
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/late-health.out" 2>"$TMP/late-health.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/late-health.out" 2>"$TMP/late-health.err"; then
   printf 'Late Tailnet health failure test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -627,7 +798,7 @@ unset HERMESUI_QA_TAILNET_HEALTH_FAIL
 rm -f "$ROUTE_STATE" "$ROUTE_FOREIGN_STATE" "$SERVICE_STATE" "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/install.env"
 export HERMESUI_PORT=18993 HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_ACTIVE=0 HERMESUI_QA_TAILNET_HEALTH_FAIL=1 HERMESUI_QA_ROLLBACK_RACE=route
 before_off_count="$(grep -c 'set-path=/hermesUI off' "$LOG" || true)"
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/route-race.out" 2>"$TMP/route-race.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/route-race.out" 2>"$TMP/route-race.err"; then
   printf 'Route rollback race test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -646,7 +817,7 @@ fi
 rm -f "$ROUTE_STATE" "$ROUTE_FOREIGN_STATE" "$SERVICE_STATE" "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/install.env"
 export HERMESUI_QA_ROLLBACK_RACE=unit
 before_stop_count="$(grep -c 'stop-owned-process --pid' "$LOG" || true)"
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/unit-race.out" 2>"$TMP/unit-race.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/unit-race.out" 2>"$TMP/unit-race.err"; then
   printf 'Unit rollback race test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -660,7 +831,7 @@ grep -q 'automatic rollback was incomplete' "$TMP/unit-race.err"
 # A replaced install.env must likewise be preserved.
 rm -f "$ROUTE_STATE" "$ROUTE_FOREIGN_STATE" "$SERVICE_STATE" "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/install.env"
 export HERMESUI_QA_ROLLBACK_RACE=state
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/state-race.out" 2>"$TMP/state-race.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/state-race.out" 2>"$TMP/state-race.err"; then
   printf 'State rollback race test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -680,7 +851,7 @@ import sys
 print(Path(sys.argv[1]).read_text().count('set-path=/hermesUI off'))
 PY
 )"
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/manual-route.out" 2>"$TMP/manual-route.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/manual-route.out" 2>"$TMP/manual-route.err"; then
   printf 'Manual route ownership test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -700,7 +871,7 @@ PY
 # Uninstall preserves a route reassigned to another app.
 mkdir -p "$TMP/state" "$TMP/systemd"
 printf 'HERMESUI_PORT=18993\nHERMESUI_TCP_443_CREATED=1\n' >"$TMP/state/install.env"
-"$ROOT/scripts/systemd-launcher-unit.py" write "$TMP/systemd/hermesui-launcher.service" \
+"$ROOT/hermesui/installer/systemd-launcher-unit.py" write "$TMP/systemd/hermesui-launcher.service" \
   --repo-root "$ROOT" --home "$TMP/home" --host 127.0.0.1 --port 18993
 rm -f "$ROUTE_STATE"
 export HERMESUI_QA_SERVE_MODE=foreign HERMESUI_QA_ACTIVE=1
@@ -710,7 +881,7 @@ import sys
 print(Path(sys.argv[1]).read_text().count('set-path=/hermesUI off'))
 PY
 )"
-"$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/foreign-uninstall.out" 2>"$TMP/foreign-uninstall.err"
+"$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/foreign-uninstall.out" 2>"$TMP/foreign-uninstall.err"
 after_count="$(python3 - "$LOG" <<'PY'
 from pathlib import Path
 import sys
@@ -727,12 +898,33 @@ PY
 prepare_owned_install() {
   mkdir -p "$TMP/state" "$TMP/systemd/default.target.wants"
   printf 'HERMESUI_PORT=18993\nHERMESUI_TCP_443_CREATED=1\n' >"$TMP/state/install.env"
-  "$ROOT/scripts/systemd-launcher-unit.py" write "$TMP/systemd/hermesui-launcher.service" \
+  "$ROOT/hermesui/installer/systemd-launcher-unit.py" write "$TMP/systemd/hermesui-launcher.service" \
     --repo-root "$ROOT" --home "$TMP/home" --host 127.0.0.1 --port 18993
   rm -f "$ENABLE_LINK"
   rm -f "$STOPPED_STATE"
   ln -s "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK"
 }
+
+# Present-null Serve ownership state is not absence. Uninstall must fail before
+# stopping the service or discarding the unit, enable link, and install state.
+for null_mode in listener_null handler_null; do
+  prepare_owned_install
+  : >"$SERVICE_STATE"
+  : >"$ROUTE_STATE"
+  : >"$LOG"
+  export HERMESUI_QA_SERVE_MODE="$null_mode" HERMESUI_QA_ACTIVE=1
+  if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/${null_mode}-uninstall.out" 2>"$TMP/${null_mode}-uninstall.err"; then
+    printf 'Uninstall accepted ownership-ambiguous Serve state: %s.\n' "$null_mode" >&2
+    exit 1
+  fi
+  [[ -e "$TMP/systemd/hermesui-launcher.service" && -L "$ENABLE_LINK" && -e "$TMP/state/install.env" && -e "$SERVICE_STATE" && -e "$ROUTE_STATE" ]]
+  if grep -qE 'stop-owned-process|set-path=/hermesUI off' "$LOG"; then
+    printf 'Uninstall mutated state for ownership-ambiguous Serve mode: %s.\n' "$null_mode" >&2
+    exit 1
+  fi
+  grep -q 'Serve ownership could not be verified, so nothing was changed' "$TMP/${null_mode}-uninstall.err"
+  rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/install.env" "$SERVICE_STATE" "$ROUTE_STATE"
+done
 
 # A failed authoritative systemd provenance lookup must retain its distinctive
 # status and perform no process stop, route, unit, link, or state mutation.
@@ -742,7 +934,7 @@ prepare_owned_install
 : >"$LOG"
 export HERMESUI_QA_SERVE_MODE=owned HERMESUI_QA_ACTIVE=1 HERMESUI_QA_SYSTEMCTL_FAIL=show
 set +e
-"$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/show-fail.out" 2>"$TMP/show-fail.err"
+"$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/show-fail.out" 2>"$TMP/show-fail.err"
 show_status=$?
 set -e
 [[ "$show_status" == "76" ]]
@@ -759,6 +951,27 @@ grep -q 'Could not verify the systemd provenance' "$TMP/show-fail.err"
 unset HERMESUI_QA_SYSTEMCTL_FAIL
 rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/install.env" "$ROUTE_STATE" "$SERVICE_STATE"
 
+# An ActiveState lookup error must fail before process, route, unit, link, or
+# install-state mutation instead of being treated as an inactive service.
+prepare_owned_install
+: >"$ROUTE_STATE"
+: >"$SERVICE_STATE"
+: >"$LOG"
+export HERMESUI_QA_SERVE_MODE=owned HERMESUI_QA_ACTIVE=1 HERMESUI_QA_SYSTEMCTL_FAIL=active-state
+set +e
+"$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/active-state-fail.out" 2>"$TMP/active-state-fail.err"
+active_state_status=$?
+set -e
+[[ "$active_state_status" == "78" ]]
+[[ -e "$TMP/systemd/hermesui-launcher.service" && -e "$TMP/state/install.env" && -e "$ROUTE_STATE" && -e "$SERVICE_STATE" && -L "$ENABLE_LINK" ]]
+if grep -qE 'stop-owned-process|set-path=/hermesUI off' "$LOG"; then
+  printf 'Uninstall ActiveState failure gate unexpectedly mutated runtime state.\n' >&2
+  exit 1
+fi
+grep -q 'Could not verify the exact hermesui.service ActiveState, LoadState, and MainPID' "$TMP/active-state-fail.err"
+unset HERMESUI_QA_SYSTEMCTL_FAIL
+rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/install.env" "$ROUTE_STATE" "$SERVICE_STATE"
+
 # Replacing the owned unit during the later route-status read must be detected
 # before process stop or removal, and the byte-distinct replacement must survive.
 prepare_owned_install
@@ -767,7 +980,7 @@ prepare_owned_install
 : >"$LOG"
 rm -f "$HERMESUI_QA_UNIT_RACE_DONE"
 export HERMESUI_QA_UNINSTALL_UNIT_RACE=1
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/uninstall-unit-race.out" 2>"$TMP/uninstall-unit-race.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/uninstall-unit-race.out" 2>"$TMP/uninstall-unit-race.err"; then
   printf 'Uninstall unit takeover test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -788,7 +1001,7 @@ prepare_owned_install
 : >"$LOG"
 rm -f "$ROUTE_STATE"
 export HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_UNINSTALL_UNIT_STOP_RACE=1
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/uninstall-unit-stop-race.out" 2>"$TMP/uninstall-unit-stop-race.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/uninstall-unit-stop-race.out" 2>"$TMP/uninstall-unit-stop-race.err"; then
   printf 'Uninstall post-stop unit takeover test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -805,7 +1018,7 @@ prepare_owned_install
 : >"$LOG"
 rm -f "$ROUTE_STATE" "$HERMESUI_QA_FOREIGN_ACTIVE"
 export HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_PROCESS_ENTRY_TAKEOVER=1
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/uninstall-process-entry.out" 2>"$TMP/uninstall-process-entry.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/uninstall-process-entry.out" 2>"$TMP/uninstall-process-entry.err"; then
   printf 'Process-stop command-entry takeover test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -828,7 +1041,7 @@ prepare_owned_install
 : >"$LOG"
 rm -f "$ROUTE_FOREIGN_STATE"
 export HERMESUI_QA_SERVE_MODE=owned HERMESUI_QA_UNINSTALL_ROUTE_RACE=1
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/uninstall-route-race.out" 2>"$TMP/uninstall-route-race.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/uninstall-route-race.out" 2>"$TMP/uninstall-route-race.err"; then
   printf 'Uninstall route takeover test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -848,7 +1061,7 @@ prepare_owned_install
 : >"$SERVICE_STATE"
 : >"$LOG"
 export HERMESUI_QA_SERVE_MODE=owned HERMESUI_QA_UNINSTALL_STATE_RACE=1
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/uninstall-state-race.out" 2>"$TMP/uninstall-state-race.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/uninstall-state-race.out" 2>"$TMP/uninstall-state-race.err"; then
   printf 'Uninstall state takeover test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -866,7 +1079,7 @@ rm -f "$TMP/state/install.env" "$ROUTE_STATE" "$SERVICE_STATE"
 # publication begins must survive byte-identically and must never be adopted.
 rm -f "$TMP/state/install.env" "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$ROUTE_STATE" "$ROUTE_FOREIGN_STATE" "$SERVICE_STATE"
 export HERMESUI_PORT=18993 HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_ACTIVE=0 HERMESUI_QA_PATH_RACE=setup_state
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/setup-state-boundary.out" 2>"$TMP/setup-state-boundary.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/setup-state-boundary.out" 2>"$TMP/setup-state-boundary.err"; then
   printf 'Setup state publication boundary test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -879,7 +1092,7 @@ rm -f "$TMP/state/install.env"
 # Exact command-entry boundary: a foreign unit appearing as fresh unit
 # publication begins must survive while the transaction removes its own state.
 export HERMESUI_QA_PATH_RACE=setup_unit
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/setup-unit-boundary.out" 2>"$TMP/setup-unit-boundary.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/setup-unit-boundary.out" 2>"$TMP/setup-unit-boundary.err"; then
   printf 'Setup unit publication boundary test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -893,7 +1106,7 @@ rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK"
 rm -f "$TMP/state/install.env" "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$ROUTE_STATE" "$SERVICE_STATE"
 : >"$LOG"
 export HERMESUI_QA_SETUP_UNIT_RACE=after_daemon_reload
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/setup-after-reload.out" 2>"$TMP/setup-after-reload.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/setup-after-reload.out" 2>"$TMP/setup-after-reload.err"; then
   printf 'Post-daemon-reload takeover test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -911,7 +1124,7 @@ rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK"
 # survive, and setup must not reach the transient service start operation.
 : >"$LOG"
 export HERMESUI_QA_PATH_RACE=setup_enable_link
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/setup-enable-link-boundary.out" 2>"$TMP/setup-enable-link-boundary.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/setup-enable-link-boundary.out" 2>"$TMP/setup-enable-link-boundary.err"; then
   printf 'Enable-link publication boundary test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -930,7 +1143,7 @@ rm -f "$ENABLE_LINK"
 # the foreign replacement acquires any enable link.
 rm -f "$TMP/state/install.env" "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$ROUTE_STATE" "$SERVICE_STATE" "$STOPPED_STATE" "$HERMESUI_QA_FOREIGN_ACTIVE"
 export HERMESUI_PORT=18993 HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_ACTIVE=0 HERMESUI_QA_PATH_RACE=setup_enable_unit_takeover
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/setup-enable-unit-entry.out" 2>"$TMP/setup-enable-unit-entry.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/setup-enable-unit-entry.out" 2>"$TMP/setup-enable-unit-entry.err"; then
   printf 'Setup enable-target takeover test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -945,7 +1158,7 @@ rm -f "$TMP/systemd/hermesui-launcher.service"
 # takeover, stops only its verified runtime, and preserves the foreign launcher.
 : >"$LOG"
 export HERMESUI_QA_SETUP_UNIT_RACE=service_start_entry
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/setup-start-entry.out" 2>"$TMP/setup-start-entry.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/setup-start-entry.out" 2>"$TMP/setup-start-entry.err"; then
   printf 'Service-start entry takeover test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -965,7 +1178,7 @@ rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$SERVICE_STATE"
 # is not signaled and installer-owned state is rolled back.
 : >"$LOG"
 export HERMESUI_QA_RUNTIME_COLLISION=1
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/runtime-collision.out" 2>"$TMP/runtime-collision.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/runtime-collision.out" 2>"$TMP/runtime-collision.err"; then
   printf 'Transient runtime collision test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -981,7 +1194,7 @@ rm -f "$HERMESUI_QA_FOREIGN_ACTIVE"
 # helper must be preserved, and local setup resources must roll back.
 export HERMESUI_QA_CAS_ROUTE_RACE=1
 set +e
-"$ROOT/scripts/tailnet-setup.sh" >"$TMP/setup-route-cas-boundary.out" 2>"$TMP/setup-route-cas-boundary.err"
+"$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/setup-route-cas-boundary.out" 2>"$TMP/setup-route-cas-boundary.err"
 setup_route_status=$?
 set -e
 [[ "$setup_route_status" == "75" ]]
@@ -995,7 +1208,7 @@ rm -f "$ROUTE_FOREIGN_STATE"
 prepare_owned_install
 : >"$SERVICE_STATE"
 export HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_ACTIVE=1 HERMESUI_QA_PATH_RACE=uninstall_unit_rm
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/uninstall-unit-remove-boundary.out" 2>"$TMP/uninstall-unit-remove-boundary.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/uninstall-unit-remove-boundary.out" 2>"$TMP/uninstall-unit-remove-boundary.err"; then
   printf 'Uninstall unit removal boundary test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -1011,7 +1224,7 @@ prepare_owned_install
 : >"$SERVICE_STATE"
 : >"$LOG"
 export HERMESUI_QA_PATH_RACE=uninstall_enable_link
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/uninstall-enable-link-boundary.out" 2>"$TMP/uninstall-enable-link-boundary.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/uninstall-enable-link-boundary.out" 2>"$TMP/uninstall-enable-link-boundary.err"; then
   printf 'Uninstall enable-link boundary test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -1027,7 +1240,7 @@ prepare_owned_install
 : >"$SERVICE_STATE"
 : >"$LOG"
 export HERMESUI_QA_PATH_RACE=uninstall_enable_unit_takeover
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/uninstall-enable-unit-entry.out" 2>"$TMP/uninstall-enable-unit-entry.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/uninstall-enable-unit-entry.out" 2>"$TMP/uninstall-enable-unit-entry.err"; then
   printf 'Uninstall enable-target takeover test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -1042,7 +1255,7 @@ rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/instal
 rm -f "$ROUTE_STATE" "$ROUTE_FOREIGN_STATE" "$SERVICE_STATE" "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/install.env" "$HERMESUI_QA_FOREIGN_ACTIVE"
 export HERMESUI_PORT=18993 HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_ACTIVE=0
 export HERMESUI_QA_TAILNET_HEALTH_FAIL=1 HERMESUI_QA_PROCESS_ENTRY_TAKEOVER=1
-if "$ROOT/scripts/tailnet-setup.sh" >"$TMP/setup-rollback-stop-entry.out" 2>"$TMP/setup-rollback-stop-entry.err"; then
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/setup-rollback-stop-entry.out" 2>"$TMP/setup-rollback-stop-entry.err"; then
   printf 'Setup rollback process-entry takeover test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -1057,7 +1270,7 @@ rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/instal
 prepare_owned_install
 : >"$SERVICE_STATE"
 export HERMESUI_QA_PATH_RACE=uninstall_state_rm
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/uninstall-state-remove-boundary.out" 2>"$TMP/uninstall-state-remove-boundary.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/uninstall-state-remove-boundary.out" 2>"$TMP/uninstall-state-remove-boundary.err"; then
   printf 'Uninstall state removal boundary test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -1074,7 +1287,7 @@ prepare_owned_install
 : >"$SERVICE_STATE"
 : >"$LOG"
 export HERMESUI_QA_SERVE_MODE=owned HERMESUI_QA_CAS_ROUTE_RACE=1
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/uninstall-route-cas-boundary.out" 2>"$TMP/uninstall-route-cas-boundary.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/uninstall-route-cas-boundary.out" 2>"$TMP/uninstall-route-cas-boundary.err"; then
   printf 'Uninstall route CAS boundary test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -1098,7 +1311,7 @@ import sys
 print(Path(sys.argv[1]).read_text().count('set-path=/hermesUI off'))
 PY
 )"
-  if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/${mode}.out" 2>"$TMP/${mode}.err"; then
+  if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/${mode}.out" 2>"$TMP/${mode}.err"; then
     printf '%s uninstall ambiguity test unexpectedly succeeded.\n' "$mode" >&2
     exit 1
   fi
@@ -1117,7 +1330,7 @@ done
 prepare_owned_install
 : >"$ROUTE_STATE"
 export HERMESUI_QA_SERVE_MODE=post_stuck HERMESUI_QA_ACTIVE=1
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/post-stuck.out" 2>"$TMP/post-stuck.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/post-stuck.out" 2>"$TMP/post-stuck.err"; then
   printf 'Post-removal route verification test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -1133,7 +1346,7 @@ rm -f "$TMP/state/install.env" "$ROUTE_STATE"
 # Every external cleanup failure must return non-zero and preserve retry state.
 prepare_owned_install
 export HERMESUI_QA_SERVE_MODE=missing HERMESUI_QA_ACTIVE=1 HERMESUI_QA_SYSTEMCTL_FAIL=stop
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/stop.out" 2>"$TMP/stop.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/stop.out" 2>"$TMP/stop.err"; then
   printf 'Owned-process stop failure test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -1143,7 +1356,7 @@ rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK"
 
 prepare_owned_install
 export HERMESUI_QA_RM_FAIL=unit
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/rm.out" 2>"$TMP/rm.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/rm.out" 2>"$TMP/rm.err"; then
   printf 'Unit removal failure test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -1158,7 +1371,7 @@ prepare_owned_install
 : >"$LOG"
 export HERMESUI_QA_SERVE_MODE=owned HERMESUI_QA_ACTIVE=1
 export HERMESUI_QA_SYSTEMCTL_FAIL=daemon-reload
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/reload-first.out" 2>"$TMP/reload-first.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/reload-first.out" 2>"$TMP/reload-first.err"; then
   printf 'Daemon-reload failure test unexpectedly succeeded.\n' >&2
   exit 1
 fi
@@ -1166,7 +1379,7 @@ fi
 grep -q 'systemd user units could not be reloaded' "$TMP/reload-first.err"
 unset HERMESUI_QA_SYSTEMCTL_FAIL
 export HERMESUI_QA_ACTIVE=0
-"$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/reload-retry.out" 2>"$TMP/reload-retry.err"
+"$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/reload-retry.out" 2>"$TMP/reload-retry.err"
 [[ ! -e "$TMP/state/install.env" && ! -e "$ROUTE_STATE" && ! -e "$HERMESUI_QA_SYSTEMD_CACHE" ]]
 [[ "$(grep -c 'systemctl --user daemon-reload' "$LOG")" == "2" ]]
 grep -q 'HermesUI uninstall complete' "$TMP/reload-retry.out"
@@ -1174,14 +1387,14 @@ grep -q 'HermesUI uninstall complete' "$TMP/reload-retry.out"
 prepare_owned_install
 : >"$ROUTE_STATE"
 export HERMESUI_QA_TAILSCALE_OFF_FAIL=1
-if "$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/off.out" 2>"$TMP/off.err"; then
+if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/off.out" 2>"$TMP/off.err"; then
   printf 'Route removal failure test unexpectedly succeeded.\n' >&2
   exit 1
 fi
 [[ -e "$ROUTE_STATE" && -e "$TMP/state/install.env" ]]
 unset HERMESUI_QA_TAILSCALE_OFF_FAIL
 export HERMESUI_QA_ACTIVE=0
-"$ROOT/scripts/tailnet-uninstall.sh" >"$TMP/off-retry.out"
+"$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/off-retry.out"
 [[ ! -e "$ROUTE_STATE" && ! -e "$TMP/state/install.env" ]]
 
 printf 'Tailnet prerequisite, collision, setup, rerun, status, and failure-injected uninstall tests passed.\n'

@@ -66,26 +66,25 @@ def test_unassigned_chip_filter_logic():
     )
 
 
-def test_project_bar_requires_a_real_folder_and_unassigned_chip_only_when_relevant():
-    """Folder filters stay hidden until the user creates a real folder.
+def test_unassigned_chip_only_shown_when_relevant():
+    """The Unassigned chip should only render when there are unassigned sessions.
 
-    With zero folders every session is necessarily unassigned, so showing both
-    All and Unassigned adds no information. Once a folder exists, the bar is
-    useful; its Unassigned chip still appears only when a matching session
-    exists.
+    In the common case where every session is already organized, hiding the
+    chip keeps the project-bar uncluttered. The conditional also keeps the
+    project-bar from rendering at all when there are NO projects AND NO
+    unassigned sessions (e.g. brand-new install with one organized session
+    — though that's vanishingly rare).
     """
     js = _js()
     assert "const hasUnprojected=profileFiltered.some(s=>!s.project_id);" in js, (
         "The render function must compute whether unassigned sessions exist"
     )
-    assert "if(_allProjects.length>0){" in js, (
-        "The project-bar must stay hidden until at least one real folder exists"
-    )
-    assert "if(_allProjects.length>0||hasUnprojected){" not in js, (
-        "Unassigned sessions alone must not resurrect the redundant zero-folder bar"
+    assert "if(_allProjects.length>0||hasUnprojected){" in js, (
+        "The project-bar must render when EITHER there are real projects OR "
+        "there are unassigned sessions to filter to"
     )
     assert "if(hasUnprojected){" in js, (
-        "Once the bar exists, the Unassigned chip must be conditional on a matching session"
+        "The Unassigned chip must be conditionally rendered on hasUnprojected"
     )
 
 

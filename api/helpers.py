@@ -1361,14 +1361,10 @@ def build_profile_cookie(name: str, handler=None, *, session_cookie_value: str |
     # it would weaken the binding). If auth is on we require a handler so the
     # cookie is bound to the session. (#4023 Opus hardening.)
     try:
-        from api.auth import _is_secure_context, _resolve_cookie_path, is_auth_enabled
+        from api.auth import is_auth_enabled
         _auth_on = is_auth_enabled()
-        _cookie_path = _resolve_cookie_path()
-        _secure_cookie = _is_secure_context(handler)
     except Exception:
         _auth_on = False
-        _cookie_path = '/'
-        _secure_cookie = False
     if _auth_on and handler is None:
         if session_cookie_value is None:
             raise RuntimeError("build_profile_cookie requires a request handler when auth is enabled (to bind the profile cookie to the session)")
@@ -1388,11 +1384,9 @@ def build_profile_cookie(name: str, handler=None, *, session_cookie_value: str |
             logger.warning("Failed to sign active profile cookie", exc_info=True)
             raise RuntimeError("could not sign active profile cookie") from exc
     cookie[cookie_name] = value
-    cookie[cookie_name]['path'] = _cookie_path
+    cookie[cookie_name]['path'] = '/'
     cookie[cookie_name]['httponly'] = True
     cookie[cookie_name]['samesite'] = 'Lax'
-    if _secure_cookie:
-        cookie[cookie_name]['secure'] = True
     return cookie[cookie_name].OutputString()
 
 
@@ -1402,17 +1396,8 @@ def clear_profile_cookie(handler) -> None:
     cookie = _hc.SimpleCookie()
     cookie_name = get_profile_cookie_name()
     cookie[cookie_name] = ''
-    try:
-        from api.auth import _is_secure_context, _resolve_cookie_path
-        cookie_path = _resolve_cookie_path()
-        secure_cookie = _is_secure_context(handler)
-    except Exception:
-        cookie_path = '/'
-        secure_cookie = False
-    cookie[cookie_name]['path'] = cookie_path
+    cookie[cookie_name]['path'] = '/'
     cookie[cookie_name]['httponly'] = True
     cookie[cookie_name]['samesite'] = 'Lax'
     cookie[cookie_name]['max-age'] = '0'
-    if secure_cookie:
-        cookie[cookie_name]['secure'] = True
     handler.send_header('Set-Cookie', cookie[cookie_name].OutputString())

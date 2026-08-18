@@ -1,20 +1,21 @@
-"""Mobile sidebar close control uses a mirrored hamburger/menu glyph."""
+"""Mobile sidebar header: the close (X) button must visually match the
+new-conversation (+) button — same 14px glyph, vertically aligned on the
+panel-head row — instead of a larger 18px glyph sitting ~6px lower. Source guard.
+Mobile-only (@media max-width:640px); desktop hides the X entirely.
+"""
 
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 STYLE = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
-HTML = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 
 
-def test_mobile_close_uses_mirrored_menu_instead_of_x():
-    start = HTML.index('class="panel-head-btn mobile-sidebar-close')
-    end = HTML.index("</button>", start)
-    close_button = HTML[start:end]
-    assert 'class="mobile-sidebar-close-icon"' in close_button
-    assert '<polyline points="7 9 4 12 7 15"/>' in close_button
-    assert 'x1="18" y1="6" x2="6" y2="18"' not in close_button
-    assert ".panel-head-btn.mobile-sidebar-close svg{width:24px;height:24px" in STYLE
+def test_mobile_close_glyph_matches_plus_button_size():
+    # + button glyph is 14px (.panel-head-btn svg{width:14px}); the mobile X must match.
+    assert ".panel-head-btn svg{width:14px;height:14px" in STYLE
+    assert ".panel-head-btn.mobile-sidebar-close svg{width:14px;height:14px" in STYLE
+    # The old oversized 18px glyph must be gone.
+    assert ".panel-head-btn.mobile-sidebar-close svg{width:18px" not in STYLE
 
 
 def test_mobile_close_is_centered_and_keeps_tap_target():
@@ -30,5 +31,5 @@ def test_mobile_close_is_centered_and_keeps_tap_target():
 
 
 def test_mobile_close_hidden_on_desktop():
-    # Base (non-media) rule hides the close control on desktop.
+    # Base (non-media) rule hides the X on desktop — this fix is mobile-only.
     assert ".mobile-sidebar-close{display:none;}" in STYLE

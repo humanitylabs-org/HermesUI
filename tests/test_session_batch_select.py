@@ -71,13 +71,10 @@ def test_batch_select_escape_handler():
 
 
 def test_batch_select_toggle_button():
-    """Verify the header select icon toggles session selection mode."""
-    with open('static/index.html', encoding="utf-8") as f:
-        html = f.read()
+    """Verify select mode toggle button is rendered."""
     with open('static/sessions.js', encoding="utf-8") as f:
         src = f.read()
-    assert 'id="btnSessionSelectMode"' in html, "Missing header session-select control"
-    assert 'onclick="toggleSessionSelectMode()"' in html
+    assert 'session-select-toggle' in src, "Missing session-select-toggle class"
     assert 'toggleSessionSelectMode' in src, "Missing toggleSessionSelectMode call"
 
 

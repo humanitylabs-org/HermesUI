@@ -9,7 +9,7 @@ SHARE_HTML = (ROOT / "static" / "share.html").read_text(encoding="utf-8")
 SHARE_JS = (ROOT / "static" / "share.js").read_text(encoding="utf-8")
 BOOT_JS = (ROOT / "static" / "boot.js").read_text(encoding="utf-8")
 SESSIONS_JS = (ROOT / "static" / "sessions.js").read_text(encoding="utf-8")
-ROUTES_PY = (ROOT / "api" / "routes.py").read_text(encoding="utf-8")
+
 
 
 def test_share_page_constructs_absolute_mounted_assets_before_loading_them() -> None:
@@ -39,13 +39,7 @@ def test_share_api_and_generated_links_resolve_inside_mount() -> None:
     assert "new URL(`api/share/${encodeURIComponent(token)}`,appRoot)" in SHARE_JS
     assert "new URL(`share/${encodeURIComponent(S.session.share_token)}`,document.baseURI||location.href)" in BOOT_JS
     assert "new URL(`share/${encodeURIComponent(token)}`,document.baseURI||location.href)" in SESSIONS_JS
-    assert '"url": f"share/{share_meta[\'share_token\']}"' in ROUTES_PY
+    assert "res&&res.share&&res.share.share_token" in BOOT_JS
     assert "new URL(`/api/share/" not in SHARE_JS
     assert "new URL(`/share/" not in BOOT_JS
     assert "new URL(`/share/" not in SESSIONS_JS
-
-
-def test_login_incidental_resources_and_oidc_stay_inside_mount() -> None:
-    assert '<link rel="icon" href="static/favicon.ico">' in ROUTES_PY
-    assert 'href = "api/auth/oidc/start"' in ROUTES_PY
-    assert 'href = "/api/auth/oidc/start"' not in ROUTES_PY

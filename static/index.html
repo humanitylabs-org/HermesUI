@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>HermesUI</title>
+<title>Hermes</title>
 <!-- base href enables subpath mount support; all static paths must stay relative (no leading slash).
      MUST appear before manifest/favicon links so browsers resolve relative URLs against the
      correct base when the page is served from /session/<id> routes. See #2226. -->
@@ -15,9 +15,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="HermesUI">
+<meta name="apple-mobile-web-app-title" content="Hermes">
 <link rel="apple-touch-icon" sizes="512x512" href="static/apple-touch-icon.png">
-<script>(function(){try{var themes={light:1,dark:1,system:1},skins={codex:1,terracotta:1,default:1,ares:1,mono:1,graphite:1,github:1,slate:1,poseidon:1,sisyphus:1,charizard:1,sienna:1,catppuccin:1,hepburn:1,nous:1,'geist-contrast':1,neon:1,'neon-soft':1,'neon-paint':1,zeus:1,'verdigris':1},legacy={slate:['dark','slate'],solarized:['dark','poseidon'],monokai:['dark','sisyphus'],nord:['dark','slate'],oled:['dark','default']},t=(localStorage.getItem('hermes-theme')||'dark').toLowerCase(),s=(localStorage.getItem('hermes-skin')||'').toLowerCase(),m=legacy[t],theme=m?m[0]:(themes[t]?t:'dark');var pendingExt=s&&s!=='default'&&!skins[s]&&!legacy[s];var skin=skins[s]?s:(pendingExt?s:(m?m[1]:'default'));localStorage.setItem('hermes-theme',theme);localStorage.setItem('hermes-skin',skin);if(theme==='system')theme=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';if(theme==='dark')document.documentElement.classList.add('dark');if(skin!=='default')document.documentElement.dataset.skin=skin;}catch(e){document.documentElement.classList.add('dark');}})()</script>
+<script>(function(){try{var _hadAppearance=localStorage.getItem('hermes-theme')!==null||localStorage.getItem('hermes-skin')!==null;var themes={light:1,dark:1,system:1},skins={codex:1,terracotta:1,default:1,ares:1,mono:1,graphite:1,github:1,slate:1,poseidon:1,sisyphus:1,charizard:1,sienna:1,catppuccin:1,hepburn:1,nous:1,'geist-contrast':1,neon:1,'neon-soft':1,'neon-paint':1,zeus:1,'verdigris':1},legacy={slate:['dark','slate'],solarized:['dark','poseidon'],monokai:['dark','sisyphus'],nord:['dark','slate'],oled:['dark','default']},t=(localStorage.getItem('hermes-theme')||'dark').toLowerCase(),s=(localStorage.getItem('hermes-skin')||'').toLowerCase(),m=legacy[t],theme=m?m[0]:(themes[t]?t:'dark');var pendingExt=s&&s!=='default'&&!skins[s]&&!legacy[s];var skin=skins[s]?s:(pendingExt?s:(m?m[1]:'default'));if(_hadAppearance){localStorage.setItem('hermes-theme',theme);localStorage.setItem('hermes-skin',skin);}if(theme==='system')theme=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';if(theme==='dark')document.documentElement.classList.add('dark');if(skin!=='default')document.documentElement.dataset.skin=skin;}catch(e){document.documentElement.classList.add('dark');}})()</script>
 <script>(function(){try{var fs=localStorage.getItem('hermes-font-size');if(fs&&fs!=='default')document.documentElement.dataset.fontSize=fs;}catch(e){}})()</script>
 <!-- theme-color: surfaces the active app chrome color to native status bars (Safari status bar, PWA, native WKWebView wrappers). Updated dynamically by boot.js when theme/skin changes. The light/dark default values match style.css :root --sidebar / :root.dark --sidebar. -->
 <meta name="theme-color" content="#FAF7F0" media="(prefers-color-scheme: light)">
@@ -217,7 +217,7 @@
           <button class="panel-head-btn has-tooltip has-tooltip--bottom" id="btnSessionSearch" type="button" data-tooltip="Filter sessions" aria-label="Filter sessions" aria-expanded="false" aria-controls="sessionSearchWrap" onclick="toggleSessionSearchPanel()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           </button>
-          <button class="panel-head-btn has-tooltip has-tooltip--bottom-right" id="btnNewChat" data-tooltip="New session (Cmd+K)" aria-label="New session" title="New session">
+          <button class="panel-head-btn has-tooltip has-tooltip--bottom-right" id="btnNewChat" data-tooltip="New session (Cmd+K)" aria-label="New session">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
         </div>
@@ -473,7 +473,7 @@
       <section class="session-dashboard" id="sessionDashboard" aria-label="Session dashboard" hidden>
         <header class="session-dashboard-original">
           <div class="session-dashboard-card-head">
-            <div class="session-dashboard-label">Session summary</div>
+            <div class="session-dashboard-label">Original request</div>
             <button type="button" class="session-dashboard-refresh" id="sessionDashboardSummaryRefresh">Refresh summary</button>
           </div>
           <div class="session-dashboard-copy session-dashboard-copy--original" id="sessionDashboardOriginalRequest"></div>
@@ -482,10 +482,6 @@
         <article class="session-dashboard-card">
           <div class="session-dashboard-label">Last instruction</div>
           <div class="session-dashboard-copy session-dashboard-copy--verbatim" id="sessionDashboardInstruction"></div>
-        </article>
-        <article class="session-dashboard-card session-dashboard-card--steers" id="sessionDashboardSteersCard" hidden>
-          <div class="session-dashboard-label">Steers added while working</div>
-          <div class="session-dashboard-copy session-dashboard-copy--verbatim" id="sessionDashboardSteers"></div>
         </article>
         <article class="session-dashboard-card session-dashboard-card--status">
           <div class="session-dashboard-card-head">

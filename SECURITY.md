@@ -10,6 +10,8 @@ HermesUI controls a Hermes Agent account and may expose conversations, files, to
 
 The supported installer binds HermesUI to `127.0.0.1` and publishes only `/hermesUI` through Tailscale Serve. Never enable Tailscale Funnel for HermesUI. Use Tailscale grants or ACLs to limit which Tailnet identities can reach the host, and enable the WebUI password when Tailnet membership is broader than the intended operators.
 
+The unchanged upstream backend scopes its cookies to the whole origin (`Path=/`). HermesUI gives its session and profile cookies unique names to avoid collisions, but sibling paths on the same MagicDNS origin must still be equally trusted. Use a dedicated MagicDNS origin when that is not true. OIDC callbacks are not supported through the shared `/hermesUI` mount without upstream backend support; password and passkey authentication remain supported.
+
 HermesUI does not replace host security, Tailscale identity controls, or Hermes Agent's own authentication and approval boundaries.
 
 ## Reporting

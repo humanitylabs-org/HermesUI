@@ -261,25 +261,13 @@ class TestCookieNameResolution(unittest.TestCase):
 
     def setUp(self):
         self._saved = os.environ.get("HERMES_WEBUI_COOKIE_NAME")
-        self._saved_path = os.environ.get("HERMES_WEBUI_COOKIE_PATH")
-        self._saved_secure = os.environ.get("HERMES_WEBUI_SECURE")
         os.environ.pop("HERMES_WEBUI_COOKIE_NAME", None)
-        os.environ.pop("HERMES_WEBUI_COOKIE_PATH", None)
-        os.environ.pop("HERMES_WEBUI_SECURE", None)
 
     def tearDown(self):
         if self._saved is None:
             os.environ.pop("HERMES_WEBUI_COOKIE_NAME", None)
         else:
             os.environ["HERMES_WEBUI_COOKIE_NAME"] = self._saved
-        if self._saved_path is None:
-            os.environ.pop("HERMES_WEBUI_COOKIE_PATH", None)
-        else:
-            os.environ["HERMES_WEBUI_COOKIE_PATH"] = self._saved_path
-        if self._saved_secure is None:
-            os.environ.pop("HERMES_WEBUI_SECURE", None)
-        else:
-            os.environ["HERMES_WEBUI_SECURE"] = self._saved_secure
 
     def test_default_when_unset(self):
         """With the env var unset the legacy default name is used."""
@@ -314,42 +302,6 @@ class TestCookieNameResolution(unittest.TestCase):
 
         auth.set_auth_cookie(_H(), "tok.sig")
         self.assertIn("hermes_session_alt=", sent["Set-Cookie"])
-
-    def test_cookie_path_defaults_to_root(self):
-        self.assertEqual(auth._resolve_cookie_path(), "/")
-
-    def test_cookie_path_normalizes_valid_mount(self):
-        os.environ["HERMES_WEBUI_COOKIE_PATH"] = "/hermesUI/"
-        self.assertEqual(auth._resolve_cookie_path(), "/hermesUI")
-
-    def test_cookie_path_rejects_unsafe_value(self):
-        os.environ["HERMES_WEBUI_COOKIE_PATH"] = "/hermesUI; Secure"
-        self.assertEqual(auth._resolve_cookie_path(), "/")
-
-    def test_set_and_clear_cookie_use_mount_scope_and_secure(self):
-        os.environ["HERMES_WEBUI_COOKIE_NAME"] = "hermesui_session"
-        os.environ["HERMES_WEBUI_COOKIE_PATH"] = "/hermesUI"
-        os.environ["HERMES_WEBUI_SECURE"] = "1"
-        sent = []
-
-        class _H:
-            request = object()
-            headers: dict = {}
-
-            def send_header(self, key, value):
-                if key == "Set-Cookie":
-                    sent.append(value)
-
-        handler = _H()
-        auth.set_auth_cookie(handler, "tok.sig")
-        auth.clear_auth_cookie(handler)
-        self.assertEqual(len(sent), 2)
-        for header in sent:
-            self.assertIn("hermesui_session=", header)
-            self.assertIn("Path=/hermesUI", header)
-            self.assertIn("Secure", header)
-            self.assertIn("HttpOnly", header)
-            self.assertIn("SameSite=Lax", header)
 
 
 if __name__ == "__main__":

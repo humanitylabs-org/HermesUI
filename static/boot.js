@@ -2041,7 +2041,7 @@ $('btnDownload').onclick=()=>{
 };
 $('btnExportJSON').onclick=()=>{
   if(!S.session)return;
-  const url=`/api/session/export?session_id=${encodeURIComponent(S.session.session_id)}`;
+  const url=new URL(`api/session/export?session_id=${encodeURIComponent(S.session.session_id)}`,document.baseURI||location.href).href;
   const a=document.createElement('a');a.href=url;
   a.download=`hermes-${S.session.session_id}.json`;a.click();
 };
@@ -2065,7 +2065,9 @@ $('btnShareSession').onclick=async()=>{
     }
     const res=await api('/api/share/create',{method:'POST',body:JSON.stringify({session_id:S.session.session_id})});
     if(res&&res.session) S.session=res.session;
-    const href=new URL(String(res&&res.share&&res.share.url||''),document.baseURI||location.href).href;
+    const token=String(res&&res.share&&res.share.share_token||res&&res.session&&res.session.share_token||'').trim();
+    if(!token) throw new Error('Share response did not include a token');
+    const href=new URL(`share/${encodeURIComponent(token)}`,document.baseURI||location.href).href;
     await _copyText(href);
     showToast(t('share_session_created'));
     if(typeof _syncHermesPanelSessionActions==='function') _syncHermesPanelSessionActions();
@@ -2118,7 +2120,7 @@ function exportSessionHTML(session){
   // Drop empties so the inlined fallback keeps working for anything we couldn't read.
   const clean={};for(const k in palette){if(palette[k])clean[k]=palette[k];}
   const paletteB64=btoa(unescape(encodeURIComponent(JSON.stringify(clean))));
-  const url=`/api/session/export?session_id=${encodeURIComponent(sid)}&format=html&theme=${theme}&palette=${encodeURIComponent(paletteB64)}`;
+  const url=new URL(`api/session/export?session_id=${encodeURIComponent(sid)}&format=html&theme=${theme}&palette=${encodeURIComponent(paletteB64)}`,document.baseURI||location.href).href;
   const a=document.createElement('a');a.href=url;
   a.download=`hermes-${sid}.html`;a.click();
 }
@@ -3456,7 +3458,7 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
   const _testUpdates=new URLSearchParams(location.search).get('test_updates')==='1';
   if(_testUpdates||(_bootSettings.check_for_updates!==false&&!sessionStorage.getItem('hermes-update-checked')&&!sessionStorage.getItem('hermes-update-dismissed'))){
     const _checkUrl='api/updates/check'+(_testUpdates?'?simulate=1':'');
-    api(_checkUrl,{method:_testUpdates?'GET':'POST',body:_testUpdates?undefined:JSON.stringify({force:false})}).then(d=>{if(!_testUpdates)sessionStorage.setItem('hermes-update-checked','1');if((d.webui&&d.webui.behind>0)||(d.agent&&d.agent.behind>0))_showUpdateBanner(d);}).catch(()=>{});
+    api(_checkUrl,{method:_testUpdates?'GET':'POST',body:_testUpdates?undefined:JSON.stringify({force:false}),timeoutMs:300000}).then(d=>{if(!_testUpdates)sessionStorage.setItem('hermes-update-checked','1');if((d.webui&&d.webui.behind>0)||(d.agent&&d.agent.behind>0))_showUpdateBanner(d);}).catch(()=>{});
   }
   const _bootActiveProfileUnauthRedirectBudget=(()=>{
     const markerKey='hermes-webui-active-profile-bootstrap-401';

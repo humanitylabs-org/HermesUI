@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.metadata
 import os
 import platform
 import re
@@ -306,21 +305,7 @@ def ensure_python_has_webui_deps(python_exe: str, agent_dir: Path | None = None)
             "HERMES_WEBUI_PYTHON to an interpreter with Hermes Agent dependencies."
         )
 
-    requirements_path = REPO_ROOT / "requirements.txt"
-    if requirements_path.is_file():
-        venv_dir = REPO_ROOT / ".venv"
-        dependency_args = ["-r", str(requirements_path)]
-    else:
-        cache_root = Path(
-            os.getenv("XDG_CACHE_HOME", str(Path.home() / ".cache"))
-        ).expanduser()
-        venv_dir = cache_root / "hermes-webui" / f"venv-py{sys.version_info.major}{sys.version_info.minor}"
-        requirements = importlib.metadata.requires("hermes-webui") or []
-        if not requirements:
-            raise RuntimeError(
-                "Installed HermesUI package metadata contains no runtime dependencies."
-            )
-        dependency_args = requirements
+    venv_dir = REPO_ROOT / ".venv"
     venv_python = venv_dir / (
         "Scripts/python.exe" if platform.system() == "Windows" else "bin/python"
     )
@@ -349,7 +334,8 @@ def ensure_python_has_webui_deps(python_exe: str, agent_dir: Path | None = None)
             "pip",
             "install",
             "--quiet",
-            *dependency_args,
+            "-r",
+            str(REPO_ROOT / "requirements.txt"),
         ],
         check=True,
     )

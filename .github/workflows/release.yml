@@ -1,0 +1,53 @@
+name: Hermes UI release preflight
+
+# This downstream fork intentionally does not inherit Nesquena's tag-triggered
+# GitHub Release or GHCR publication. A release remains a separate, explicitly
+# approved human action after this read-only preflight succeeds for an exact SHA.
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_commit:
+        description: Exact reviewed 40-character commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Validate requested identity
+        id: identity
+        env:
+          REVIEWED_COMMIT: ${{ inputs.reviewed_commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$REVIEWED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+            printf 'reviewed_commit must be a full lowercase commit SHA\n' >&2
+            exit 1
+          }
+          printf 'commit=%s\n' "$REVIEWED_COMMIT" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact reviewed candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.identity.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify checkout and frontend-only boundary
+        env:
+          REVIEWED_COMMIT: ${{ steps.identity.outputs.commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$REVIEWED_COMMIT"
+          test -z "$(git status --porcelain)"
+          python3 hermesui/check_boundary.py
+          cmp -s docs/Tailnet-HermesUI-Prompt.md docs/give-this-prompt-to-your-ai.md
+          grep -q 'REVIEWED_COMMIT_SHA' docs/Tailnet-HermesUI-Prompt.md
+          printf 'Read-only preflight passed for %s. No release, tag, package, image, or deployment was created.\n' "$REVIEWED_COMMIT"

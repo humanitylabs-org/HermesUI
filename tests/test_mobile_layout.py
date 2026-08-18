@@ -457,15 +457,31 @@ def test_mobile_overlay_present():
     )
 
 
-def test_mobile_sidebar_has_no_swipe_open_affordance():
-    """The hamburger is the only mobile entry point to the sidebar."""
-    boot_js = (REPO / "static" / "boot.js").read_text(encoding="utf-8")
-    assert 'id="pwaSidebarEdgeGuard"' not in HTML
-    assert ".pwa-sidebar-edge-guard" not in CSS
-    assert "_installPwaSidebarSwipeGesture" not in boot_js
-    assert "_openMobileSidebarFromGesture" not in boot_js
-    assert 'id="btnHamburger"' in HTML
-    assert 'onclick="toggleMobileSidebar()"' in HTML
+def test_mobile_sidebar_edge_guard_claims_body_edge_only():
+    """A narrow body-only edge guard helps iOS hand left swipes to WebUI."""
+    assert 'id="pwaSidebarEdgeGuard"' in HTML, (
+        "mobile sidebar edge guard missing from index.html"
+    )
+    assert ".pwa-sidebar-edge-guard{display:none;}" in CSS.replace(" ", ""), (
+        "edge guard should be hidden outside the phone layout"
+    )
+    mobile_css = "\n".join(_max_width_media_blocks(640))
+    guard = _declarations(_rule_body(mobile_css, ".pwa-sidebar-edge-guard"))
+    assert guard.get("display") == "block"
+    assert guard.get("position") == "fixed"
+    assert guard.get("left") == "0"
+    assert guard.get("top") == "calc(52px + var(--app-titlebar-safe-top))", (
+        "edge guard should start below the PWA titlebar so it does not block hamburger"
+    )
+    assert guard.get("width") == "24px"
+    assert guard.get("pointer-events") == "none", (
+        "edge guard must be pointer-events:none so taps/vertical scrolls starting in the "
+        "strip fall through to the .messages scroller; the edge-swipe gesture is handled by "
+        "window-level capture listeners, not by the guard intercepting hit-testing (#4660 review)"
+    )
+    assert guard.get("z-index") == "198", (
+        "edge guard should sit below the full-screen sidebar but above the page body"
+    )
 
 
 def test_sidebar_nav_present():
@@ -487,7 +503,7 @@ def test_mobile_keeps_panel_navigation_available():
 def test_mobile_sidebar_opens_as_full_screen_surface_with_panel_rail():
     """Phone sidebar should open full-screen while keeping the panel rail visible."""
     mobile_css = "\n".join(_max_width_media_blocks(640))
-    assert re.search(r'\.app-titlebar-hamburger\{[^}]*display:\s*flex', mobile_css), (
+    assert re.search(r'\.app-titlebar-hamburger,\s*\.app-titlebar-spacer\{[^}]*display:\s*flex', mobile_css), (
         "Phone titlebar hamburger must stay visible"
     )
     assert not re.search(r'\.rail\{[^}]*display:\s*flex[^}]*position:\s*fixed', mobile_css), (
@@ -613,35 +629,24 @@ def test_mobile_switch_panel_non_chat_opens_sidebar():
     )
 
 
-def test_mobile_sidebar_is_not_opened_by_edge_swipe():
-    """Horizontal gestures must switch sessions, never open the sidebar."""
+def test_pwa_edge_swipe_opens_current_mobile_panel():
+    """Left-edge swipe should open the current sidebar panel, matching hamburger."""
     boot_js = (REPO / "static" / "boot.js").read_text(encoding="utf-8")
-    swipe_js = (REPO / "static" / "session-swipe-navigation.js").read_text(encoding="utf-8")
-    assert "_openMobileSidebarFromGesture" not in boot_js
-    assert "_installPwaSidebarSwipeGesture" not in boot_js
-    assert "_openSidebarSession(target,{source})" in swipe_js
-    assert "mobile-session-swipe" in swipe_js
-
-
-def test_mobile_boot_starts_in_sessions_and_never_closes_without_a_selection():
-    """A fresh mobile load must show Sessions instead of a synthetic Chat tab."""
-    boot_js = (REPO / "static" / "boot.js").read_text(encoding="utf-8")
-    sessions_js = (REPO / "static" / "sessions.js").read_text(encoding="utf-8")
-
-    assert "function openMobileSidebar(skipPanelSync=false)" in boot_js
-    assert "if(typeof openMobileSidebar==='function') openMobileSidebar();" in boot_js
-    assert "if(!force&&_mobileSessionSelectionRequired())" in boot_js
-    assert "return isPhone&&!(S.session&&S.session.session_id)" in boot_js
-    assert "closeMobileSidebar();" in sessions_js
-
-
-def test_new_session_activates_real_untitled_tab_before_mobile_drawer_closes():
-    boot_js = (REPO / "static" / "boot.js").read_text(encoding="utf-8")
-    handler = boot_js.split("$('btnNewChat').onclick=async()=>{", 1)[1].split("$('btnDownload').onclick", 1)[0]
-
-    assert "await newSession();await renderSessionList();" in handler
-    assert "window.__sessionSwipeNavigation.syncTabs(true)" in handler
-    assert handler.index("syncTabs(true)") < handler.rindex("closeMobileSidebar()")
+    body = _js_function_body(boot_js, "_openMobileSidebarFromGesture")
+    assert "switchPanel('chat',{bypassSettingsGuard:true})" not in body, (
+        "Left-edge gesture should not force Chat; it should preserve the active panel"
+    )
+    assert "sidebar.classList.remove('mobile-session-page')" in body, (
+        "Left-edge gesture should leave the rail-hiding session page mode"
+    )
+    assert "sidebar.classList.add('mobile-panel-drawer')" in body, (
+        "Left-edge gesture should open the full-screen sidebar with panel rail"
+    )
+    assert "sidebar.classList.add('mobile-open')" in body
+    assert "overlay.classList.add('visible')" not in body
+    assert "_syncMobileSidebarPanelFromMainView()" in body, (
+        "Left-edge gesture should sync sidebar panel from the visible detail view before opening"
+    )
 
 
 def test_mobile_sidebar_open_syncs_panel_from_visible_detail_view():
@@ -680,6 +685,18 @@ def test_mobile_sidebar_open_syncs_panel_from_visible_detail_view():
     assert "_currentPanel=panel" in sync_body
     assert "document.querySelectorAll('[data-panel]')" in sync_body
     assert "document.querySelectorAll('.panel-view')" in sync_body
+    assert "showing-x-" in sync_body, (
+        "Mobile sidebar sync must recognize an active extension panel instead of treating it as Chat"
+    )
+    assert "data-panel-token" in sync_body, (
+        "Mobile sidebar sync must restore the extension's matching sidebar view"
+    )
+    assert "const extensionPanel=`x-${extensionToken}`" in sync_body, (
+        "Extension nav buttons use x- tokens and must regain their active state on mobile"
+    )
+    assert "_currentPanel=extensionPanel" not in sync_body, (
+        "Extension tokens are not host panels and must not corrupt switchPanel's native state"
+    )
     boot_js = (REPO / "static" / "boot.js").read_text(encoding="utf-8")
     toggle_body = _js_function_body(boot_js, "toggleMobileSidebar")
     assert "_syncMobileSidebarPanelFromMainView()" in toggle_body, (
@@ -869,8 +886,8 @@ def test_new_conversation_shortcut_works_while_busy():
     )
 
 
-def test_mobile_titlebar_has_browser_style_session_tabs_and_new_tab():
-    """Mobile titlebar exposes a scrollable session row and a final plus tab."""
+def test_mobile_titlebar_has_new_conversation_button():
+    """Mobile titlebar shows the New Conversation action and keeps it next to reload."""
     header_match = re.search(
         r'<header class="app-titlebar"[^>]*>(?P<body>.*?)</header>',
         HTML,
@@ -879,32 +896,33 @@ def test_mobile_titlebar_has_browser_style_session_tabs_and_new_tab():
     assert header_match, "app-titlebar header block missing"
     header_html = header_match.group("body")
 
-    idx_tabs = header_html.find('id="mobileSessionTabs"')
-    idx_viewport = header_html.find('id="mobileSessionTabsViewport"')
-    idx_track = header_html.find('id="mobileSessionTabsTrack"')
-    idx_list = header_html.find('id="mobileSessionTabList"')
     idx_btn = header_html.find('id="btnTitlebarNewChat"')
+    idx_reload = header_html.find('id="btnReload"')
+    idx_spacer = header_html.find('class="app-titlebar-spacer"')
 
-    assert idx_tabs != -1, "mobile session tab strip should exist"
     assert idx_btn != -1, "titlebar mobile new chat button should exist"
-    assert idx_tabs < idx_viewport < idx_track < idx_list < idx_btn, (
-        "session tab list should be followed by the plus tab inside the scrollable track"
+    assert idx_reload != -1, "titlebar reload button should remain present"
+    assert idx_spacer != -1, "titlebar spacer should remain present"
+    assert idx_spacer < idx_btn < idx_reload, (
+        "titlebar new chat button must sit left of the reload button on mobile"
     )
-    assert 'role="tablist"' in header_html
     assert "btnTitlebarNewChat" in header_html
-    assert "aria-label=\"New session\"" in header_html
-    assert "title=\"New session\"" in header_html
+    assert "data-i18n-title=\"new_conversation\"" in header_html
+    assert "data-i18n-aria-label=\"new_conversation\"" in header_html
+    assert "aria-label=\"New conversation\"" in header_html
+    assert "title=\"New conversation\"" in header_html
     assert "$('btnNewChat').click()" in header_html
 
 
-def test_titlebar_new_chat_button_is_a_mobile_plus_tab():
-    """Keep new session mobile-only and style it as the final browser tab."""
+def test_titlebar_new_chat_button_mobile_visibility_css():
+    """Keep the titlebar new-chat control mobile-only and reuse reload button styling."""
     base_rule = _declarations(_rule_body(CSS, ".app-titlebar-new-chat"))
     assert base_rule.get("display") == "none", "app-titlebar new chat button must be hidden by default"
     mobile_blocks = "".join(_max_width_media_blocks(640))
-    compact_mobile = mobile_blocks.replace(" ", "")
-    assert ".app-titlebar-new-chat.mobile-session-new-tab{display:inline-flex" in compact_mobile
-    assert "border-radius:11px11px0 0".replace(" ", "") in compact_mobile
+    mobile_rule = _declarations(_rule_body(mobile_blocks, ".app-titlebar-new-chat"))
+    assert mobile_rule.get("display") == "inline-flex", (
+        "app-titlebar new chat button must be visible in mobile layout rules"
+    )
     desktop_css = re.sub(
         r"@media\(max-width:640px\).*",
         "",
@@ -916,8 +934,8 @@ def test_titlebar_new_chat_button_is_a_mobile_plus_tab():
     )
 
 
-def test_titlebar_reload_button_is_hidden_on_mobile():
-    """Pull-to-refresh replaces the redundant mobile reload button."""
+def test_titlebar_reload_button_visibility_css_contract():
+    """Keep reload hidden by default, keep standalone visibility, and expose it on mobile width."""
     base_rule = _declarations(_rule_body(CSS, ".app-titlebar-reload"))
     assert _display_hidden(base_rule), "app-titlebar reload button should stay hidden by default"
 
@@ -950,8 +968,10 @@ def test_titlebar_reload_button_is_hidden_on_mobile():
     )
 
     mobile_blocks = "".join(_max_width_media_blocks(640))
-    compact_mobile = mobile_blocks.replace(" ", "")
-    assert ".app-titlebar-inner,.app-titlebar-spacer,.app-titlebar-reload{display:none!important;" in compact_mobile
+    mobile_rule = _declarations(_rule_body(mobile_blocks, ".app-titlebar-reload"))
+    assert _display_inline_flex(mobile_rule), (
+        "app-titlebar reload button should be visible in phone-width titlebar rules"
+    )
 
 
 # ── Viewport and scroll safety ────────────────────────────────────────────────

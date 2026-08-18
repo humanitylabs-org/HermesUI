@@ -8,8 +8,8 @@
 > Prerequisites: SSH tunnel is active on port 8787. Open http://localhost:8787 in browser.
 > Server health check: curl http://127.0.0.1:8787/health should return {"status":"ok"}.
 >
-> This broad testing plan is inherited from the upstream project and remains available for optional local validation. It is not a description of this fork's public CI.
-> HermesUI's public release gate is `.github/workflows/verify.yml`: Python 3.12, shell syntax and ShellCheck, the privacy check, the isolated Tailnet installer lifecycle smoke test, and focused interface/package regressions. Run the same focused commands shown in that workflow before releasing.
+> Automated coverage: ~11,500 tests collected via `./scripts/test.sh tests/ --collect-only -q`. Tests run on every PR via GitHub Actions on Python 3.11, 3.12, and 3.13 (3 parallel shards each), alongside a ruff lint gate, a headless browser smoke test, and a Docker smoke test. The suite covers the bootstrap/static wizard, real provider config persistence (`config.yaml` + `.env`), the `/api/onboarding/*` backend, the onboarding skip/existing-config guard, CSS regression coverage for thinking/tool card animation, streaming session persistence, mobile layout breakpoints, locale parity across 14 languages, and hundreds of issue/PR-pinned regression tests.
+> Run: `./scripts/test.sh`
 >
 > Local regression focus: verify that a previously closed workspace panel stays visually closed from first paint through boot completion on desktop refresh; there should be no brief open-then-close flash.
 
@@ -63,9 +63,10 @@ python3 scripts/ruff_lint.py --all
 
 `tests/test_ruff_forward_lint.py` holds the **whole tree** free of E9 (real
 syntax/runtime) findings and verifies the curated config shape; it runs in-suite
-when ruff is present and **skips gracefully** when it isn't. The upstream
-project runs this diff-scoped gate in its broader CI. It is an
-optional local check in this public fork and is not part of `verify.yml`.
+when ruff is present and **skips gracefully** when it isn't — so environments
+without ruff aren't blocked, while CI (which installs ruff) enforces it. The
+diff-scoped gate runs as the `lint` job in `.github/workflows/tests.yml` and is
+also part of the maintainer pre-release pre-gate.
 
 ## Automated browser smoke (runtime brick-class gate)
 
@@ -77,8 +78,8 @@ that throws only when a real browser executes the page (e.g. a `function X(){}` 
 `tests/browser_smoke.py` boots the real `server.py` (agent-free, on an ephemeral
 port, with an isolated temp state dir) and loads the key pages in headless
 Chromium, failing if **any** console error or uncaught JS exception fires on load.
-The upstream project runs it in its broader CI. In this public fork it remains
-an optional local check:
+It runs in CI (`.github/workflows/browser-smoke.yml`) on every PR and push to
+master, and locally:
 
 ```bash
 pip install playwright && python -m playwright install chromium
@@ -2004,7 +2005,7 @@ Bridged CLI sessions:
 ---
 
 *Last updated: v0.51.792, July 1, 2026*
-*Upstream broad-suite reference: run `./scripts/test.sh tests/ --collect-only -q` locally for the current collected count; this is not the HermesUI public CI gate.*
+*Total automated tests collected: ~11,500 (run `./scripts/test.sh tests/ --collect-only -q` for the exact current count)*
 *Regression gate: tests/test_regressions.py*
 *Run: ./scripts/test.sh*
 *Source: <repo>/*

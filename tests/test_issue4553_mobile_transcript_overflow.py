@@ -22,13 +22,13 @@ def test_messages_inner_mobile_has_containment():
     css_file = Path(__file__).resolve().parent.parent / "static" / "style.css"
     content = css_file.read_text()
 
-    # Find the first mobile .messages-inner rule after the breakpoint. The mobile
-    # block is intentionally large and grows as new responsive behavior is added.
+    # Find the @media(max-width:640px) block and then .messages-inner within a reasonable window
     media_match = re.search(r'@media\(max-width:640px\)\{', content)
     assert media_match, "@media(max-width:640px) block not found"
 
+    # Extract content after the media query opening brace
     media_start = media_match.start()
-    remaining_content = content[media_start:]
+    remaining_content = content[media_start:media_start + 5000]  # Look ahead 5000 chars
 
     # Find .messages-inner rule within this section
     messages_inner_match = re.search(r'\.messages-inner\{([^}]*)\}', remaining_content)

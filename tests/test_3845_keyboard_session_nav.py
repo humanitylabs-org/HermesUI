@@ -15,12 +15,13 @@ def test_navigateSession_function_exists():
     assert "function navigateSession(dir)" in SESSIONS_JS
 
 
-def test_navigateSession_uses_the_shared_session_open_path():
-    """Keyboard navigation uses the same session-opening path as taps and swipes."""
+def test_navigateSession_calls_loadSession():
+    """navigateSession calls loadSession(next) when switching sessions."""
+    # Extract the navigateSession function definition
     start = SESSIONS_JS.index("function navigateSession(dir)")
-    end = SESSIONS_JS.index("document.addEventListener('keydown'", start)
+    end = SESSIONS_JS.index("}", start) + 1
     func_body = SESSIONS_JS[start:end]
-    assert "_openSidebarSession(session,{source:'keyboard-session-navigation'})" in func_body
+    assert "loadSession(next)" in func_body
 
 
 def test_navigateSession_queries_session_items():
@@ -75,7 +76,8 @@ def test_j_k_listener_checks_interactive_swipe_target():
     jk_block_end = SESSIONS_JS.index("});", jk_start)
     jk_block = SESSIONS_JS[jk_start:jk_block_end]
 
-    assert "if(_isInteractiveSwipeTarget(e.target)) return" in jk_block
+    assert "_isInteractiveSwipeTarget" in jk_block
+    assert "typeof _isInteractiveSwipeTarget===" in jk_block
 
 
 def test_j_navigates_forward():

@@ -20,7 +20,7 @@ def test_conversation_panel_has_share_actions():
 
 def test_boot_js_wires_share_create_and_revoke():
     assert "$('btnShareSession').onclick=async()=>{" in BOOT_JS
-    assert "new URL(`share/${encodeURIComponent(S.session.share_token)}`,document.baseURI||location.href).href" in BOOT_JS
+    assert "new URL(`/share/${encodeURIComponent(S.session.share_token)}`,location.origin).href" in BOOT_JS
     assert "api('/api/share/create'" in BOOT_JS
     assert "$('btnStopSharingSession').onclick=async()=>{" in BOOT_JS
     assert "api('/api/share/revoke'" in BOOT_JS
@@ -56,18 +56,16 @@ def test_share_i18n_keys_exist_in_english_locale():
 
 def test_public_share_page_assets_exist():
     assert "Hermes Shared Conversation" in SHARE_HTML
-    assert "window.__HERMES_SHARE_APP_ROOT__=root" in SHARE_HTML
-    assert "'+root+'static/style.css" in SHARE_HTML
-    assert "'+root+'static/share.js" in SHARE_HTML
-    assert 'href="#" id="shareHomeLink"' in SHARE_HTML
+    assert "/static/style.css" in SHARE_HTML
+    assert "/static/share.js" in SHARE_HTML
     assert "function _shareLoad()" in SHARE_JS
-    assert "new URL(`api/share/${encodeURIComponent(token)}`,appRoot)" in SHARE_JS
+    assert "/api/share/" in SHARE_JS
 
 
 def test_session_action_menu_exposes_public_share_actions():
     assert "_appendSessionShareActions(menu, session);" in SESSIONS_JS
     assert "function _createOrRefreshSessionShare(session){" in SESSIONS_JS
-    assert "new URL(`share/${encodeURIComponent(token)}`,document.baseURI||location.href).href;" in SESSIONS_JS
+    assert "new URL(`/share/${encodeURIComponent(token)}`,location.origin).href;" in SESSIONS_JS
     assert "api('/api/share/create'" in SESSIONS_JS
     assert "api('/api/share/revoke'" in SESSIONS_JS
     assert "t('stop_sharing_session')" in SESSIONS_JS

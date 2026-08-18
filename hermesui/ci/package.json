@@ -1,0 +1,9 @@
+{
+  "name": "hermesui-ci-tools",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Locked downstream-only CI tools for the Hermes UI overlay.",
+  "devDependencies": {
+    "eslint": "10.4.0"
+  }
+}

@@ -70,7 +70,7 @@ def test_share_create_returns_public_url_and_persists_session_fields():
         assert payload["ok"] is True
         share = payload["share"]
         assert share["token"]
-        assert share["url"].startswith("share/")
+        assert share["url"].startswith("/share/")
         assert payload["session"]["share_token"] == share["token"]
         assert payload["session"]["share_created_at"]
     finally:

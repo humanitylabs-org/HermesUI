@@ -370,8 +370,7 @@ class TestFrontendWiring:
         assert "_steerSetComposerStatusForOwner(ownerSid,t('uploading')||'Uploading…')" in steer_helpers
         assert "_steerSetComposerStatusForOwner(ownerSid,'')" in steer_helpers
         assert "function _steerIndicatorText" in steer_helpers
-        assert "const steerDisplayText=_steerIndicatorText(originalMsg,pendingFilesSnapshot)" in try_body
-        assert "_showSteerIndicator(steerDisplayText)" in try_body, (
+        assert "_showSteerIndicator(_steerIndicatorText(originalMsg,pendingFilesSnapshot))" in try_body, (
             "visible steer indicator must use original text or a file-only display label, not attachment tool instructions"
         )
         assert "_showSteerIndicator(steerText)" not in try_body

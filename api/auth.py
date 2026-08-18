@@ -59,7 +59,6 @@ PUBLIC_PATHS = frozenset({
 })
 
 COOKIE_NAME = 'hermes_session'
-COOKIE_PATH = '/'
 CSRF_HEADER_NAME = 'X-Hermes-CSRF-Token'
 
 
@@ -87,33 +86,6 @@ def _resolve_cookie_name() -> str:
         '(name must be a valid RFC 6265 token)', name, COOKIE_NAME,
     )
     return COOKIE_NAME
-
-
-def _resolve_cookie_path() -> str:
-    """Resolve the shared WebUI cookie path from env > root default.
-
-    ``HERMES_WEBUI_COOKIE_PATH`` lets a reverse-proxy subpath deployment keep
-    its session and profile cookies out of sibling applications on the same
-    origin. Only an absolute, printable URL path without query, fragment,
-    backslash, whitespace, or cookie-delimiter characters is accepted.
-    """
-    path = os.getenv('HERMES_WEBUI_COOKIE_PATH', '').strip()
-    if not path:
-        return COOKIE_PATH
-    invalid = {';', '?', '#', '\\'}
-    if (
-        path.startswith('/')
-        and all(0x21 <= ord(ch) <= 0x7E and ch not in invalid for ch in path)
-    ):
-        return path.rstrip('/') or COOKIE_PATH
-    logger.warning(
-        'Ignoring invalid HERMES_WEBUI_COOKIE_PATH=%r; falling back to %r '
-        '(path must be an absolute printable URL path without whitespace, '
-        'query, fragment, backslash, or semicolon)',
-        path,
-        COOKIE_PATH,
-    )
-    return COOKIE_PATH
 
 
 def _warn_auth_persistence_failure(prefix: str, artifact: Path, exc: Exception, consequence: str) -> None:
@@ -796,23 +768,21 @@ def _auth_cookie_header(cookie_value, handler=None) -> str:
     cookie[name] = cookie_value
     cookie[name]['httponly'] = True
     cookie[name]['samesite'] = 'Lax'
-    cookie[name]['path'] = _resolve_cookie_path()
+    cookie[name]['path'] = '/'
     cookie[name]['max-age'] = str(_resolve_session_ttl())
     if _is_secure_context(handler):
         cookie[name]['secure'] = True
     return cookie[name].OutputString()
 
 
-def _clear_auth_cookie_header(handler=None) -> str:
+def _clear_auth_cookie_header() -> str:
     cookie = http.cookies.SimpleCookie()
     name = _resolve_cookie_name()
     cookie[name] = ''
     cookie[name]['httponly'] = True
-    cookie[name]['path'] = _resolve_cookie_path()
+    cookie[name]['path'] = '/'
     cookie[name]['samesite'] = 'Lax'
     cookie[name]['max-age'] = '0'
-    if _is_secure_context(handler):
-        cookie[name]['secure'] = True
     return cookie[name].OutputString()
 
 
@@ -1271,4 +1241,4 @@ def set_auth_cookie(handler, cookie_value) -> None:
 
 def clear_auth_cookie(handler) -> None:
     """Clear the auth cookie on the response."""
-    handler.send_header('Set-Cookie', _clear_auth_cookie_header(handler))
+    handler.send_header('Set-Cookie', _clear_auth_cookie_header())
