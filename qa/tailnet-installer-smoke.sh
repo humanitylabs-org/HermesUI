@@ -197,6 +197,7 @@ elif [[ " $* " == *" serve status --json "* ]]; then
       ;;
     funnel) printf '{"AllowFunnel":{"device.tailnet.example.ts.net:443":true},"Web":{"device.tailnet.example.ts.net:443":{"Handlers":{}}}}\n' ;;
     listener_null) printf '{"Web":{"device.tailnet.example.ts.net:443":null}}\n' ;;
+    handler_null) printf '{"Web":{"device.tailnet.example.ts.net:443":{"Handlers":{"/hermesUI":null}}}}\n' ;;
     foreground_listener_null) printf '{"Web":{},"Foreground":{"session-1":{"Web":{"device.tailnet.example.ts.net:443":null}}}}\n' ;;
     tcp_null) printf '{"TCP":{"443":null},"Web":{"device.tailnet.example.ts.net:443":{"Handlers":{}}}}\n' ;;
     tcp_future) printf '{"TCP":{"443":{"HTTPS":true,"Future":true}},"Web":{"device.tailnet.example.ts.net:443":{"Handlers":{}}}}\n' ;;
@@ -903,6 +904,27 @@ prepare_owned_install() {
   rm -f "$STOPPED_STATE"
   ln -s "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK"
 }
+
+# Present-null Serve ownership state is not absence. Uninstall must fail before
+# stopping the service or discarding the unit, enable link, and install state.
+for null_mode in listener_null handler_null; do
+  prepare_owned_install
+  : >"$SERVICE_STATE"
+  : >"$ROUTE_STATE"
+  : >"$LOG"
+  export HERMESUI_QA_SERVE_MODE="$null_mode" HERMESUI_QA_ACTIVE=1
+  if "$ROOT/hermesui/installer/tailnet-uninstall.sh" >"$TMP/${null_mode}-uninstall.out" 2>"$TMP/${null_mode}-uninstall.err"; then
+    printf 'Uninstall accepted ownership-ambiguous Serve state: %s.\n' "$null_mode" >&2
+    exit 1
+  fi
+  [[ -e "$TMP/systemd/hermesui-launcher.service" && -L "$ENABLE_LINK" && -e "$TMP/state/install.env" && -e "$SERVICE_STATE" && -e "$ROUTE_STATE" ]]
+  if grep -qE 'stop-owned-process|set-path=/hermesUI off' "$LOG"; then
+    printf 'Uninstall mutated state for ownership-ambiguous Serve mode: %s.\n' "$null_mode" >&2
+    exit 1
+  fi
+  grep -q 'Serve ownership could not be verified, so nothing was changed' "$TMP/${null_mode}-uninstall.err"
+  rm -f "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK" "$TMP/state/install.env" "$SERVICE_STATE" "$ROUTE_STATE"
+done
 
 # A failed authoritative systemd provenance lookup must retain its distinctive
 # status and perform no process stop, route, unit, link, or state mutation.

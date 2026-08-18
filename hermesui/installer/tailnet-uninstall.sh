@@ -70,27 +70,46 @@ matches = []
 
 def configs(value, provenance='top'):
     if not isinstance(value, dict):
-        return
+        raise ValueError('Serve configuration entry is invalid')
     yield value, provenance
-    foreground = value.get('Foreground') or {}
-    if isinstance(foreground, dict):
-        for nested in foreground.values():
-            yield from configs(nested, 'foreground')
+    if 'Foreground' not in value:
+        return
+    foreground = value['Foreground']
+    if not isinstance(foreground, dict):
+        raise ValueError('Serve Foreground configuration is invalid')
+    for nested in foreground.values():
+        yield from configs(nested, 'foreground')
 
-for value, provenance in configs(root):
-    web_configs = value.get('Web') or {}
-    if not isinstance(web_configs, dict):
-        continue
-    for listener, web in web_configs.items():
-        if listener != canonical_listener:
+try:
+    for value, provenance in configs(root):
+        if 'Web' not in value:
             continue
+        web_configs = value['Web']
+        if not isinstance(web_configs, dict):
+            raise ValueError('Serve Web configuration is invalid')
+        if canonical_listener not in web_configs:
+            continue
+        web = web_configs[canonical_listener]
         if not isinstance(web, dict):
+            raise ValueError('canonical Serve listener configuration is invalid')
+        if 'Handlers' not in web:
             continue
-        handler = (web.get('Handlers') or {}).get(path)
-        if handler is None:
+        handlers = web['Handlers']
+        if not isinstance(handlers, dict):
+            raise ValueError('canonical Serve Handlers configuration is invalid')
+        if path not in handlers:
             continue
-        proxy = str((handler or {}).get('Proxy') or '').rstrip('/')
+        handler = handlers[path]
+        if not isinstance(handler, dict) or set(handler) != {'Proxy'}:
+            raise ValueError('canonical Serve handler is invalid')
+        proxy_value = handler['Proxy']
+        if not isinstance(proxy_value, str) or not proxy_value:
+            raise ValueError('canonical Serve Proxy is invalid')
+        proxy = proxy_value.rstrip('/')
         matches.append((provenance, proxy in allowed))
+except (TypeError, ValueError):
+    print('unknown')
+    raise SystemExit
 
 if not matches:
     print('missing')
