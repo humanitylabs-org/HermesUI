@@ -35,6 +35,22 @@ def test_replacement_manifest_is_exact_pinned_and_has_real_downstream_coverage()
     )
 
 
+def test_previously_uncovered_replacements_have_dedicated_contract_tests():
+    replacements = {
+        entry["nodeid"]: entry["covered_by"]
+        for entry in _runner_module().load_replacements()
+    }
+    dedicated = ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
+    expected = {
+        "tests/test_issue3227_help_tab.py::test_help_pane_present",
+        "tests/test_mobile_layout.py::test_titlebar_reload_button_visibility_css_contract",
+        "tests/test_pwa_manifest_sw.py::TestSessionManifestRoute::test_session_manifest_json_has_hermes_name",
+        "tests/test_pwa_manifest_sw.py::TestSessionManifestRoute::test_session_manifest_webmanifest_is_parseable_json",
+        "tests/test_pwa_manifest_sw.py::TestRootManifestRoute::test_root_manifest_json_has_hermes_name_and_512_icon",
+    }
+    assert {nodeid for nodeid, covered_by in replacements.items() if covered_by == dedicated} == expected
+
+
 def test_replacements_only_cover_frontend_contract_families():
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     allowed_files = {
