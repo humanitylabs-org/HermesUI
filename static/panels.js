@@ -34,6 +34,11 @@ let _currentProfileDetail = null; // full profile object
 let _profileMode = 'empty'; // 'empty' | 'read' | 'create'
 let _profilePreFormDetail = null;
 let _pendingSettingsTargetPanel = null; // destination selected while settings had unsaved changes
+let _settingsPopupOpen = false;
+let _settingsPopupLastFocus = null;
+let _settingsPopupSidebarWasOpen = false;
+let _settingsPopupPanelAnchor = null;
+let _settingsPopupMainAnchor = null;
 let _logsAutoRefreshTimer = null;
 let _lastLogsLines = [];
 let _logsSeverityFilter = 'all';
@@ -298,6 +303,17 @@ function _beginSettingsPanelSession() {
 }
 
 function _beforePanelSwitch(nextPanel) {
+  if (_settingsPopupOpen && nextPanel !== 'settings') {
+    if (_settingsDirty) {
+      _pendingSettingsTargetPanel = nextPanel || _currentPanel || 'chat';
+      _showSettingsUnsavedBar();
+      return false;
+    }
+    _revertSettingsPreview();
+    _pendingSettingsTargetPanel = null;
+    _resetSettingsPanelState();
+    _unmountSettingsPopup({ restoreFocus: false, reopenSidebar: false });
+  }
   if (_currentPanel !== 'settings' || nextPanel === 'settings') return true;
   if (_settingsDirty) {
     _pendingSettingsTargetPanel = nextPanel || 'chat';
@@ -393,6 +409,10 @@ function _syncMobileSidebarPanelFromMainView(){
 async function switchPanel(name, opts = {}) {
   const nextPanel = name || 'chat';
   const prevPanel = _currentPanel;
+  if (nextPanel === 'settings') {
+    openSettingsPopup();
+    return true;
+  }
   // ── Desktop sidebar collapse toggle (rail-click only) ──
   // If the click came from a rail icon AND we're on desktop, the rail icon
   // does double duty: clicking the already-active panel collapses the sidebar;
@@ -461,10 +481,6 @@ async function switchPanel(name, opts = {}) {
   if (nextPanel === 'logs') await loadLogs();
   _syncLogsAutoRefresh();
   if (typeof _syncSystemHealthMonitorVisibility === 'function') _syncSystemHealthMonitorVisibility();
-  if (nextPanel === 'settings') {
-    switchSettingsSection(_currentSettingsSection);
-    loadSettingsPanel();
-  }
   _resyncChatSidebarAfterPanelSwitch();
   if (nextPanel === 'chat' && typeof syncTopbar === 'function') syncTopbar();
   else syncAppTitlebar();
@@ -7968,9 +7984,9 @@ function switchSettingsSection(name,opts){
   // If the main content is not showing settings, just remember the section
   // without force-switching the panel. The section will be applied when the
   // user next opens settings via switchPanel(). (#appearance-auto-reopen)
-  if (_currentPanel !== 'settings') {
-    _currentSettingsSection = name;
-    _settingsSection = name;
+  if(_currentPanel!=='settings'&&!_settingsPopupOpen){
+    _currentSettingsSection=name;
+    _settingsSection=name;
     return;
   }
   let section=(name==='appearance'||name==='preferences'||name==='providers'||name==='plugins'||name==='extensions'||name==='system'||name==='help')?name:'conversation';
@@ -8357,13 +8373,129 @@ function _syncHermesPanelSessionActions(){
   setDisabled('btnClearConvModal',!hasSession||visibleMessages===0);
 }
 
-// Thin wrapper: settings now live in the main content area. External callers
-// (keyboard shortcuts, commands) keep working through this name.
+function _isSettingsPopupOpen(){
+  return _settingsPopupOpen;
+}
+
+function _settingsPopupFocusables(){
+  const popup=$('settingsPopup');
+  if(!popup||popup.hidden) return [];
+  return Array.from(popup.querySelectorAll(
+    'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+  )).filter(el=>el.getClientRects().length>0&&getComputedStyle(el).visibility!=='hidden');
+}
+
+function _onSettingsPopupKeydown(event){
+  if(!_settingsPopupOpen) return;
+  if(event.key==='Escape'){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    _closeSettingsPanel();
+    return;
+  }
+  if(event.key!=='Tab') return;
+  const focusable=_settingsPopupFocusables();
+  if(!focusable.length){
+    event.preventDefault();
+    const surface=$('settingsPopupSurface');
+    if(surface) surface.focus();
+    return;
+  }
+  const first=focusable[0];
+  const last=focusable[focusable.length-1];
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+}
+
+function _mountSettingsPopup(){
+  const popup=$('settingsPopup');
+  const layout=$('settingsPopupLayout');
+  const panel=$('panelSettings');
+  const main=$('mainSettings');
+  if(!popup||!layout||!panel||!main) return false;
+  if(!_settingsPopupPanelAnchor){
+    _settingsPopupPanelAnchor=document.createComment('settings-panel-home');
+    panel.parentNode.insertBefore(_settingsPopupPanelAnchor,panel);
+  }
+  if(!_settingsPopupMainAnchor){
+    _settingsPopupMainAnchor=document.createComment('settings-main-home');
+    main.parentNode.insertBefore(_settingsPopupMainAnchor,main);
+  }
+  layout.append(panel,main);
+  panel.classList.add('active');
+  popup.hidden=false;
+  popup.setAttribute('aria-hidden','false');
+  document.body.classList.add('settings-popup-open');
+  return true;
+}
+
+function _unmountSettingsPopup(options={}){
+  if(!_settingsPopupOpen&&!document.body.classList.contains('settings-popup-open')) return;
+  const restoreFocus=options.restoreFocus!==false;
+  const reopenSidebar=options.reopenSidebar!==false;
+  const popup=$('settingsPopup');
+  const panel=$('panelSettings');
+  const main=$('mainSettings');
+  if(panel&&_settingsPopupPanelAnchor&&_settingsPopupPanelAnchor.parentNode){
+    _settingsPopupPanelAnchor.parentNode.insertBefore(panel,_settingsPopupPanelAnchor.nextSibling);
+    _settingsPopupPanelAnchor.remove();
+    _settingsPopupPanelAnchor=null;
+    panel.classList.remove('active');
+  }
+  if(main&&_settingsPopupMainAnchor&&_settingsPopupMainAnchor.parentNode){
+    _settingsPopupMainAnchor.parentNode.insertBefore(main,_settingsPopupMainAnchor.nextSibling);
+    _settingsPopupMainAnchor.remove();
+    _settingsPopupMainAnchor=null;
+  }
+  if(popup){popup.hidden=true;popup.setAttribute('aria-hidden','true');}
+  document.body.classList.remove('settings-popup-open');
+  document.removeEventListener('keydown',_onSettingsPopupKeydown,true);
+  _settingsPopupOpen=false;
+  document.querySelectorAll('[data-panel="settings"]').forEach(el=>el.classList.remove('settings-popup-active'));
+  const focusTarget=_settingsPopupLastFocus;
+  _settingsPopupLastFocus=null;
+  if(reopenSidebar&&_settingsPopupSidebarWasOpen&&typeof openMobileSidebar==='function') openMobileSidebar(true);
+  _settingsPopupSidebarWasOpen=false;
+  if(restoreFocus&&focusTarget&&focusTarget.isConnected&&typeof focusTarget.focus==='function') focusTarget.focus();
+}
+
+function openSettingsPopup(){
+  if(_settingsPopupOpen) return true;
+  _settingsPopupLastFocus=document.activeElement;
+  const sidebar=document.querySelector('.sidebar');
+  _settingsPopupSidebarWasOpen=!!(sidebar&&sidebar.classList.contains('mobile-open'));
+  if(typeof closeMobileSidebar==='function') closeMobileSidebar(true);
+  _beginSettingsPanelSession();
+  if(!_mountSettingsPopup()) return false;
+  _settingsPopupOpen=true;
+  document.querySelectorAll('[data-panel="settings"]').forEach(el=>el.classList.add('settings-popup-active'));
+  document.addEventListener('keydown',_onSettingsPopupKeydown,true);
+  switchSettingsSection(_currentSettingsSection);
+  loadSettingsPanel();
+  const close=$('settingsPopupClose');
+  if(close) close.focus({preventScroll:true});
+  setTimeout(()=>{if(close&&_settingsPopupOpen)close.focus({preventScroll:true});},0);
+  requestAnimationFrame(()=>{if(close)close.focus({preventScroll:true});});
+  return true;
+}
+
+function _requestSettingsPopupBackdropClose(event){
+  if(!_settingsPopupOpen||!event||!event.target.closest('[data-settings-popup-backdrop]')) return;
+  _closeSettingsPanel();
+}
+
+document.addEventListener('click',event=>{
+  if(_settingsPopupOpen&&event.target&&event.target.matches('[data-settings-popup-backdrop]')){
+    _requestSettingsPopupBackdropClose(event);
+  }
+});
+
+// Thin wrapper retained for keyboard shortcuts and commands.
 function toggleSettings(){
-  if(_currentPanel==='settings'){
+  if(_settingsPopupOpen){
     _closeSettingsPanel();
   } else {
-    switchPanel('settings');
+    openSettingsPopup();
   }
 }
 
@@ -8375,8 +8507,12 @@ function _resetSettingsPanelState(){
 
 function _hideSettingsPanel(){
   _resetSettingsPanelState();
+  if(_settingsPopupOpen&&!_pendingSettingsTargetPanel&&_currentPanel&&_currentPanel!=='settings'){
+    _pendingSettingsTargetPanel=_currentPanel;
+  }
   const target = _consumeSettingsTargetPanel('chat');
-  if(_currentPanel==='settings') switchPanel(target, {bypassSettingsGuard:true});
+  _unmountSettingsPopup();
+  if(_currentPanel==='settings'||(target&&target!==_currentPanel)) switchPanel(target, {bypassSettingsGuard:true});
 }
 
 // Close with unsaved-changes check. If dirty, show a confirm dialog.
@@ -8386,7 +8522,7 @@ function _closeSettingsPanel(){
     _hideSettingsPanel();
     return;
   }
-  _pendingSettingsTargetPanel = _pendingSettingsTargetPanel || 'chat';
+  _pendingSettingsTargetPanel = _pendingSettingsTargetPanel || ((_currentPanel&&_currentPanel!=='settings')?_currentPanel:'chat');
   _showSettingsUnsavedBar();
 }
 

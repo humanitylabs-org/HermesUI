@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Hermes",
-  "short_name": "Hermes",
-  "description": "Hermes AI Agent Web UI",
+  "name": "HermesUI",
+  "short_name": "HermesUI",
+  "description": "A focused, mobile-first interface for Hermes Agent",
   "start_url": "./?source=pwa",
   "scope": "./",
   "display": "standalone",

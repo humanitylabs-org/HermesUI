@@ -402,112 +402,42 @@ function toggleMobileSidebar(){
   if(isOpen){closeMobileSidebar();}
   else{
     try{if(typeof _syncMobileSidebarPanelFromMainView==='function')_syncMobileSidebarPanelFromMainView();}catch(_){}
-    sidebar.classList.remove('mobile-session-page');sidebar.classList.add('mobile-panel-drawer','mobile-open');
+    openMobileSidebar(true);
   }
 }
+function _mobileSessionSelectionRequired(){
+  let isPhone=false;
+  try{isPhone=window.matchMedia('(max-width:640px)').matches;}catch(_){isPhone=window.innerWidth<=640;}
+  return isPhone&&!(S.session&&S.session.session_id);
+}
+function openMobileSidebar(skipPanelSync=false){
+  const sidebar=document.querySelector('.sidebar');
+  if(!sidebar)return false;
+  let isPhone=false;
+  try{isPhone=window.matchMedia('(max-width:640px)').matches;}catch(_){isPhone=window.innerWidth<=640;}
+  if(!isPhone)return false;
+  if(!skipPanelSync){
+    try{if(typeof _syncMobileSidebarPanelFromMainView==='function')_syncMobileSidebarPanelFromMainView();}catch(_){}
+  }
+  sidebar.classList.remove('mobile-session-page');
+  sidebar.classList.add('mobile-panel-drawer','mobile-open');
+  return true;
+}
 function closeMobileSidebar(){
+  const force=arguments[0]===true;
+  if(!force&&_mobileSessionSelectionRequired()){
+    openMobileSidebar();
+    return false;
+  }
   const sidebar=document.querySelector('.sidebar');
   const overlay=$('mobileOverlay');
   if(sidebar)sidebar.classList.remove('mobile-open','mobile-session-page','mobile-panel-drawer');
   if(overlay)overlay.classList.remove('visible');
+  return true;
 }
 
-const _PWA_SIDEBAR_SWIPE_EDGE=80;
-const _PWA_SIDEBAR_SWIPE_CLAIM=10;
-const _PWA_SIDEBAR_SWIPE_TRIGGER=64;
-const _PWA_SIDEBAR_SWIPE_MAX_VERTICAL=56;
-let _pwaSidebarSwipe=null;
-
-function _isPwaStandalone(){
-  try{
-    return document.documentElement.classList.contains('pwa-standalone')
-      || window.matchMedia('(display-mode: standalone)').matches
-      || window.navigator.standalone===true;
-  }catch(_){return false;}
-}
-
-function _isInteractiveSwipeTarget(target){
-  try{return !!(target&&target.closest&&target.closest('input,textarea,select,button,a,[contenteditable="true"],.topbar-chips,.composer-left,.sidebar,.rightpanel'));}
-  catch(_){return false;}
-}
-
-function _pwaSidebarSwipePoint(e){
-  const touch=e&&e.touches&&e.touches[0]||e&&e.changedTouches&&e.changedTouches[0];
-  const src=touch||e;
-  if(!src)return null;
-  return {clientX:Number(src.clientX)||0,clientY:Number(src.clientY)||0};
-}
-
-function _isTouchPointerEvent(e){
-  return !!(e&&e.pointerType==='touch');
-}
-
-function _openMobileSidebarFromGesture(){
-  if(_isDesktopWidth())return;
-  const sidebar=document.querySelector('.sidebar');
-  if(!sidebar)return;
-  try{if(typeof _syncMobileSidebarPanelFromMainView==='function')_syncMobileSidebarPanelFromMainView();}catch(_){}
-  const layout=document.querySelector('.layout');
-  if(layout)layout.classList.remove('sidebar-collapsed');
-  sidebar.classList.remove('sidebar-collapsed');
-  try{document.documentElement.removeAttribute('data-sidebar-collapsed');}catch(_){}
-  sidebar.classList.remove('mobile-session-page');
-  sidebar.classList.add('mobile-panel-drawer');
-  sidebar.classList.add('mobile-open');
-}
-
-function _onPwaSidebarSwipeStart(e){
-  if(_isDesktopWidth())return;
-  if(_isTouchPointerEvent(e))return;
-  if(e.pointerType==='mouse'||(e.pointerType&&e.pointerType!=='touch'&&e.pointerType!=='pen'))return;
-  if(document.querySelector('.sidebar')?.classList.contains('mobile-open'))return;
-  const point=_pwaSidebarSwipePoint(e);
-  if(!point)return;
-  if(point.clientX>_PWA_SIDEBAR_SWIPE_EDGE)return;
-  if(_isInteractiveSwipeTarget(e.target))return;
-  _pwaSidebarSwipe={startX:point.clientX,startY:point.clientY,active:true,opened:false};
-}
-
-function _onPwaSidebarSwipeMove(e){
-  if(_isTouchPointerEvent(e))return;
-  const swipe=_pwaSidebarSwipe;
-  if(!swipe||!swipe.active||swipe.opened)return;
-  const point=_pwaSidebarSwipePoint(e);
-  if(!point)return;
-  const dx=point.clientX-swipe.startX;
-  const dy=point.clientY-swipe.startY;
-  if(dx<0||Math.abs(dy)>_PWA_SIDEBAR_SWIPE_MAX_VERTICAL*1.5){_pwaSidebarSwipe=null;return;}
-  if(dx>=_PWA_SIDEBAR_SWIPE_CLAIM&&dx>Math.abs(dy)*1.2){
-    if(e.cancelable)e.preventDefault();
-  }
-  if(dx>=_PWA_SIDEBAR_SWIPE_TRIGGER&&Math.abs(dy)<=_PWA_SIDEBAR_SWIPE_MAX_VERTICAL&&dx>Math.abs(dy)*1.5){
-    if(e.cancelable)e.preventDefault();
-    swipe.opened=true;
-    _openMobileSidebarFromGesture();
-  }
-}
-
-function _onPwaSidebarSwipeEnd(e){if(_isTouchPointerEvent(e))return;_pwaSidebarSwipe=null;}
-function _onPwaSidebarSwipeCancel(e){if(_isTouchPointerEvent(e))return;_pwaSidebarSwipe=null;}
-
-function _installPwaSidebarSwipeGesture(){
-  // #4660 review (Codex CORE): the #pwaSidebarEdgeGuard element is now
-  // pointer-events:none (CSS), so it can no longer intercept hit-testing for
-  // taps / vertical scrolls that merely start in the left edge strip — those
-  // pass through to the underlying .messages scroller. The edge-swipe-to-open
-  // gesture is handled entirely by the window-level CAPTURE touch/pointer
-  // listeners below (which see the event regardless of the guard), so no
-  // dedicated guard-element listener is needed.
-  window.addEventListener('touchstart', _onPwaSidebarSwipeStart, {capture:true,passive:true});
-  window.addEventListener('touchmove', _onPwaSidebarSwipeMove, {capture:true,passive:false});
-  window.addEventListener('touchend', _onPwaSidebarSwipeEnd, {capture:true,passive:true});
-  window.addEventListener('touchcancel', _onPwaSidebarSwipeCancel, {capture:true,passive:true});
-  window.addEventListener('pointerdown', _onPwaSidebarSwipeStart, {passive:true});
-  window.addEventListener('pointermove', _onPwaSidebarSwipeMove, {passive:false});
-  window.addEventListener('pointerup', _onPwaSidebarSwipeEnd, {passive:true});
-  window.addEventListener('pointercancel', _onPwaSidebarSwipeCancel, {passive:true});
-}
-_installPwaSidebarSwipeGesture();
+// HermesUI mobile shell: opening the sidebar is deliberately hamburger-only.
+// Horizontal gestures on the session surface are reserved for switching sessions.
 
 // ── Desktop sidebar collapse toggle ────────────────────────────────────────
 // Two discoverability paths into the same state:
@@ -2090,13 +2020,18 @@ $('btnNewChat').onclick=async()=>{
   // `_restoreSettledSession()` in messages.js: an active stream id or a queued
   // pending user message means the session is real, not empty.
   if(_currentSessionIsReusableEmptyChat()){
+    if(window.__sessionSwipeNavigation) window.__sessionSwipeNavigation.syncTabs(true);
     $('msg').focus();closeMobileSidebar();return;
   }
   if(typeof _restoreRememberedNewChatDraftSession==='function'
      && await _restoreRememberedNewChatDraftSession()){
-    await renderSessionList();closeMobileSidebar();$('msg').focus();return;
+    await renderSessionList();
+    if(window.__sessionSwipeNavigation) window.__sessionSwipeNavigation.syncTabs(true);
+    closeMobileSidebar();$('msg').focus();return;
   }
-  await newSession();await renderSessionList();closeMobileSidebar();$('msg').focus();
+  await newSession();await renderSessionList();
+  if(window.__sessionSwipeNavigation) window.__sessionSwipeNavigation.syncTabs(true);
+  closeMobileSidebar();$('msg').focus();
 };
 $('btnDownload').onclick=()=>{
   if(!S.session)return;
@@ -2106,14 +2041,14 @@ $('btnDownload').onclick=()=>{
 };
 $('btnExportJSON').onclick=()=>{
   if(!S.session)return;
-  const url=`/api/session/export?session_id=${encodeURIComponent(S.session.session_id)}`;
+  const url=new URL(`api/session/export?session_id=${encodeURIComponent(S.session.session_id)}`,document.baseURI||location.href).href;
   const a=document.createElement('a');a.href=url;
   a.download=`hermes-${S.session.session_id}.json`;a.click();
 };
 $('btnShareSession').onclick=async()=>{
   if(!S.session) return;
   try{
-    const existing=(S.session&&S.session.share_token)?new URL(`/share/${encodeURIComponent(S.session.share_token)}`,location.origin).href:null;
+    const existing=(S.session&&S.session.share_token)?new URL(`share/${encodeURIComponent(S.session.share_token)}`,document.baseURI||location.href).href:null;
     if(existing){
       const reuse=await showConfirmDialog({
         title:t('share_session'),
@@ -2130,7 +2065,9 @@ $('btnShareSession').onclick=async()=>{
     }
     const res=await api('/api/share/create',{method:'POST',body:JSON.stringify({session_id:S.session.session_id})});
     if(res&&res.session) S.session=res.session;
-    const href=new URL(String(res&&res.share&&res.share.url||''),location.origin).href;
+    const token=String(res&&res.share&&res.share.share_token||res&&res.session&&res.session.share_token||'').trim();
+    if(!token) throw new Error('Share response did not include a token');
+    const href=new URL(`share/${encodeURIComponent(token)}`,document.baseURI||location.href).href;
     await _copyText(href);
     showToast(t('share_session_created'));
     if(typeof _syncHermesPanelSessionActions==='function') _syncHermesPanelSessionActions();
@@ -2183,7 +2120,7 @@ function exportSessionHTML(session){
   // Drop empties so the inlined fallback keeps working for anything we couldn't read.
   const clean={};for(const k in palette){if(palette[k])clean[k]=palette[k];}
   const paletteB64=btoa(unescape(encodeURIComponent(JSON.stringify(clean))));
-  const url=`/api/session/export?session_id=${encodeURIComponent(sid)}&format=html&theme=${theme}&palette=${encodeURIComponent(paletteB64)}`;
+  const url=new URL(`api/session/export?session_id=${encodeURIComponent(sid)}&format=html&theme=${theme}&palette=${encodeURIComponent(paletteB64)}`,document.baseURI||location.href).href;
   const a=document.createElement('a');a.href=url;
   a.download=`hermes-${sid}.html`;a.click();
 }
@@ -2483,11 +2420,16 @@ document.addEventListener('keydown',async e=>{
     // a long generation to finish before they could start something new — exactly
     // the moment they want to switch context. newSession() leaves the in-flight
     // stream running on its own session; the user just gets a fresh blank one.
-    await newSession();await renderSessionList();closeMobileSidebar();$('msg').focus();
+    await newSession();await renderSessionList();
+    if(window.__sessionSwipeNavigation) window.__sessionSwipeNavigation.syncTabs(true);
+    closeMobileSidebar();$('msg').focus();
   }
-  // Cmd/Ctrl+, opens/closes Settings (VS Code convention).
-  // Fire globally — like VS Code, don't skip text inputs.
+  // Cmd/Ctrl+, opens/closes Settings, except while the user is typing in a
+  // text field. Composer input always owns its keystrokes.
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&!e.altKey&&e.key===','){
+    const t=e.target;
+    const isText=t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable);
+    if(isText) return;
     e.preventDefault();
     if(typeof toggleSettings==='function') toggleSettings();
     return;
@@ -2499,7 +2441,10 @@ document.addEventListener('keydown',async e=>{
       if(typeof skipOnboarding==='function') skipOnboarding();
       return;
     }
-    // Close settings panel if active
+    // Close the Settings popup before handling lower-priority Escape actions.
+    if(typeof _isSettingsPopupOpen==='function'&&_isSettingsPopupOpen()){
+      _closeSettingsPanel();return;
+    }
     if(_currentPanel==='settings'){_closeSettingsPanel();return;}
     // Close workspace dropdown
     closeWsDropdown();
@@ -3719,6 +3664,9 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
   // Render the session list before restoring the saved conversation so a stale
   // saved-session/client-side boot error cannot leave the sidebar empty forever.
   await renderSessionList();
+  // HermesUI mobile shell: the Sessions panel is always the initial page. It stays
+  // open until the user chooses a real session or creates an actual Untitled one.
+  if(typeof openMobileSidebar==='function') openMobileSidebar();
   await _workspaceListReady;
   await _onboardingReady;
   _initResizePanels();

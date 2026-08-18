@@ -58,7 +58,10 @@ async function _shareLoad(){
     return;
   }
   try{
-    const data=await fetch(new URL(`/api/share/${encodeURIComponent(token)}`,window.location.origin).href,{credentials:'same-origin',cache:'no-store'});
+    const appRoot=(typeof window.__HERMES_SHARE_APP_ROOT__==='string'&&window.__HERMES_SHARE_APP_ROOT__)
+      ? window.__HERMES_SHARE_APP_ROOT__
+      : `${window.location.origin}/`;
+    const data=await fetch(new URL(`api/share/${encodeURIComponent(token)}`,appRoot).href,{credentials:'same-origin',cache:'no-store'});
     if(!data.ok){
       let message='The link may have expired or been revoked.';
       try{

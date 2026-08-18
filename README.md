@@ -1,4 +1,22 @@
-# Hermes Web UI
+# Hermes UI
+
+Hermes UI is Humanity Labs' **frontend-only fork** of [Nesquena's Hermes WebUI](https://github.com/nesquena/hermes-webui). Nesquena owns the WebUI server, API, authentication, persistence, streaming, and Hermes Agent integration. Humanity Labs changes only the browser interface and supplies a separate Tailnet installer.
+
+The project has three intentionally separate layers:
+
+1. **Upstream WebUI backend** — kept byte-for-byte identical to the commit in `UPSTREAM.json`.
+2. **Hermes UI frontend** — the changed files under `static/`, recorded with source and result hashes in `hermesui/frontend-overlay.json`.
+3. **Tailnet composition** — install, status, update, and uninstall tools under `hermesui/installer/`. These run the unchanged upstream server on loopback and expose `/hermesUI` privately with Tailscale Serve.
+
+Run `python3 hermesui/check_boundary.py` before every commit. It fails if an upstream backend/runtime file changed or if the frontend overlay manifest is stale. When a frontend asset changes, regenerate the manifest with `python3 hermesui/update_overlay_manifest.py`.
+
+The intended one-button flow on humanitylabs.org gives the user's AI the reviewed install prompt in `docs/give-this-prompt-to-your-ai.md`. The host must already have Hermes Agent, Python, systemd user services, and Tailscale connected to the user's devices.
+
+See [the architecture contract](hermesui/ARCHITECTURE.md) and [upstream refresh procedure](docs/UPSTREAM-MAINTENANCE.md).
+
+---
+
+# Upstream Hermes Web UI documentation
 
 [Hermes Agent](https://hermes-agent.nousresearch.com/) is a sophisticated autonomous agent that lives on your server, accessed via a terminal or messaging apps, that remembers what it learns and gets more capable the longer it runs.
 

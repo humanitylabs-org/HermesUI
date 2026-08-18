@@ -2490,16 +2490,24 @@ async function _openSidebarSession(session, loadOpts={}){
     var _preResult=_hermesNotifySessionOpen(session.session_id, null, {preload:true, opts:loadOpts});
     if(_preResult&&_preResult.cancel===true) return;
   }
-  // #5409: close mobile sidebar AFTER veto guard passes — only close if open proceeds.
-  if(typeof closeMobileSidebar==='function')closeMobileSidebar();
-  if(_isExternalSession(session)){
-    try{await api('/api/session/import_cli',{method:'POST',body:JSON.stringify(_externalImportPayload(session))});}
-    catch(_e){ /* import failed -- fall through to read-only view */ }
+  const setSessionContentLoading=window.__sessionSwipeNavigation&&window.__sessionSwipeNavigation.setContentLoading;
+  if(typeof setSessionContentLoading==='function') setSessionContentLoading(true);
+  try{
+    // Keep the mobile Sessions page visible while the target is being resolved.
+    // It closes only after a real active session exists, so a failed load cannot
+    // strand the user on an empty chat shell.
+    if(_isExternalSession(session)){
+      try{await api('/api/session/import_cli',{method:'POST',body:JSON.stringify(_externalImportPayload(session))});}
+      catch(_e){ /* import failed -- fall through to read-only view */ }
+    }
+    await _ensureSidebarSessionProfile(session);
+    // Tell loadSession to skip its pre-hook — we already ran it above.
+    await loadSession(session.session_id, Object.assign({}, loadOpts, {_preloadNotified:true}));
+    if(S.session&&S.session.session_id===session.session_id&&typeof closeMobileSidebar==='function') closeMobileSidebar();
+    renderSessionListFromCache();
+  }finally{
+    if(typeof setSessionContentLoading==='function') setSessionContentLoading(false);
   }
-  await _ensureSidebarSessionProfile(session);
-  // Tell loadSession to skip its pre-hook — we already ran it above.
-  await loadSession(session.session_id, Object.assign({}, loadOpts, {_preloadNotified:true}));
-  renderSessionListFromCache();
 }
 
 function _isReadOnlySession(session) {
@@ -4234,6 +4242,23 @@ function toggleSessionSelectMode(){
   _selectedSessions.clear();
   renderSessionListFromCache();
 }
+
+async function createSessionProjectFromHeader(){
+  const name=await showPromptDialog({
+    message:'Folder name:',
+    confirmLabel:t('create'),
+    placeholder:'Folder name'
+  });
+  if(!name||!name.trim()) return;
+  const color=PROJECT_COLORS[_allProjects.length%PROJECT_COLORS.length];
+  try{
+    await api('/api/projects/create',{method:'POST',body:JSON.stringify({name:name.trim(),color})});
+    await renderSessionList();
+    showToast('Folder created');
+  }catch(e){
+    showToast('Folder create failed: '+(e.message||e));
+  }
+}
 function exitSessionSelectMode(){
   _sessionSelectMode=false;
   _selectedSessions.clear();
@@ -4651,7 +4676,7 @@ function _appendSessionCopyLinkAction(menu, session){
 function _sessionPublicShareUrl(session){
   const token=session&&session.share_token?String(session.share_token).trim():'';
   if(!token) return '';
-  return new URL(`/share/${encodeURIComponent(token)}`,location.origin).href;
+  return new URL(`share/${encodeURIComponent(token)}`,document.baseURI||location.href).href;
 }
 
 function _syncSessionShareState(session, nextSession){
@@ -4692,7 +4717,9 @@ async function _createOrRefreshSessionShare(session){
   }
   const res=await api('/api/share/create',{method:'POST',body:JSON.stringify({session_id:session.session_id})});
   if(res&&res.session) _syncSessionShareState(session,res.session);
-  const href=new URL(String(res&&res.share&&res.share.url||''),location.origin).href;
+  const token=String(res&&res.share&&res.share.share_token||res&&res.session&&res.session.share_token||'').trim();
+  if(!token) throw new Error('Share response did not include a token');
+  const href=new URL(`share/${encodeURIComponent(token)}`,document.baseURI||location.href).href;
   // The share is now created server-side. A clipboard-copy failure (permissions,
   // focus, non-secure context) must NOT be reported as "Share failed" — the link
   // exists and we still open it. Only surface the copied-vs-not-copied distinction.
@@ -6560,6 +6587,23 @@ function clearSessionSearch(focusInput=true){
   if(focusInput) input.focus();
 }
 
+function toggleSessionSearchPanel(){
+  const wrap=$('sessionSearchWrap');
+  const input=$('sessionSearch');
+  const button=$('btnSessionSearch');
+  if(!wrap||!input) return;
+  const opening=wrap.hidden;
+  if(opening){
+    wrap.hidden=false;
+    if(button){button.classList.add('active');button.setAttribute('aria-expanded','true');}
+    requestAnimationFrame(()=>input.focus());
+    return;
+  }
+  clearSessionSearch(false);
+  wrap.hidden=true;
+  if(button){button.classList.remove('active');button.setAttribute('aria-expanded','false');}
+}
+
 function _syncArchivedSearchPagingRefresh(query){
   const queryActive=Boolean(String(query||'').trim());
   const previous=_archivedSearchPagingQueryActive;
@@ -7708,6 +7752,13 @@ function renderSessionListFromCache(){
   const committedSwipeReflowDelay=Math.max(0,committedSwipeDuration-SESSION_SWIPE_REFLOW_LEAD_MS);
   const listScrollTopBeforeRender=list.scrollTop||0;
   list.innerHTML='';
+  const selectModeButton=$('btnSessionSelectMode');
+  if(selectModeButton){
+    selectModeButton.classList.toggle('active',_sessionSelectMode);
+    selectModeButton.setAttribute('aria-pressed',_sessionSelectMode?'true':'false');
+    selectModeButton.setAttribute('aria-label',_sessionSelectMode?'Exit session selection':'Select sessions');
+    selectModeButton.dataset.tooltip=_sessionSelectMode?'Exit session selection':'Select sessions';
+  }
   // #4671: belt-and-suspenders. The authoritative skeleton-clear happens in
   // _applySessionListPayload (once fresh data is in hand) BEFORE this function is
   // reached, and the guard at the top of renderSessionListFromCache bails while the
@@ -7753,10 +7804,11 @@ function renderSessionListFromCache(){
     }
     list.appendChild(sourceTabs);
   }
-  // Project filter bar — show when there are real projects OR there are
-  // unassigned sessions (so the Unassigned chip has something to filter to).
+  // Project filter bar — only useful after the user creates a real folder.
+  // With zero projects every session is necessarily unassigned, so showing
+  // both All and Unassigned adds no information.
   const hasUnprojected=profileFiltered.some(s=>!s.project_id);
-  if(_allProjects.length>0||hasUnprojected){
+  if(_allProjects.length>0){
     const bar=document.createElement('div');
     bar.className='project-bar';
     // "All" chip
@@ -7843,13 +7895,6 @@ function renderSessionListFromCache(){
       if(window._projectQuickCreate) _attachProjectQuickCreateButton(chip,p);
       bar.appendChild(chip);
     }
-    // Create button
-    const addBtn=document.createElement('button');
-    addBtn.className='project-create-btn';
-    addBtn.textContent='+';
-    addBtn.title='New project';
-    addBtn.onclick=(e)=>{e.stopPropagation();_startProjectCreate(bar,addBtn);};
-    bar.appendChild(addBtn);
     list.appendChild(bar);
   }
   // Profile filter toggle (show sessions from other profiles).
@@ -7871,19 +7916,7 @@ function renderSessionListFromCache(){
     pfToggle.onclick=()=>{_setShowAllProfiles(false);renderSessionList({deferWhileInteracting:false});};
     list.appendChild(pfToggle);
   }
-  // Show/hide archived toggle if there are archived sessions. Archived rows
-  // are fetched on demand so large histories do not bloat every sidebar poll.
-  if(archivedCount>0||_showArchived){
-    const toggle=document.createElement('div');
-    toggle.style.cssText='font-size:10px;padding:4px 10px;color:var(--muted);cursor:pointer;text-align:center;opacity:.7;';
-    toggle.textContent=_showArchived?'Hide archived':'Show '+archivedCount+' archived';
-    toggle.onclick=()=>{
-      _showArchived=!_showArchived;
-      if(_showArchived) _archivedRowsLoadedLimit=SESSION_ARCHIVED_PAGE_SIZE;
-      renderSessionList();
-    };
-    list.appendChild(toggle);
-  }
+
   // Empty state for active project filter
   if(_sessionSourceFilter==='cli'&&sessions.length===0){
     const empty=document.createElement('div');
@@ -8051,12 +8084,19 @@ function renderSessionListFromCache(){
       list.appendChild(more);
     }
   }
-  // Select mode toggle button (only when NOT in select mode)
-  if(!_sessionSelectMode){
-    const toggleBtn=document.createElement('div');toggleBtn.className='session-select-toggle';
-    toggleBtn.textContent=t('session_select_mode');
-    toggleBtn.onclick=(e)=>{e.stopPropagation();toggleSessionSelectMode();};
-    list.appendChild(toggleBtn);
+  // Archived sessions stay at the bottom of the list, where the old Select
+  // affordance lived. Select itself is now a persistent icon in the header.
+  if(archivedCount>0||_showArchived){
+    const toggle=document.createElement('button');
+    toggle.type='button';
+    toggle.className='session-archive-toggle';
+    toggle.textContent=_showArchived?'Hide archived':'Show '+archivedCount+' archived';
+    toggle.onclick=()=>{
+      _showArchived=!_showArchived;
+      if(_showArchived) _archivedRowsLoadedLimit=SESSION_ARCHIVED_PAGE_SIZE;
+      renderSessionList();
+    };
+    list.appendChild(toggle);
   }
   // Refresh FLIP and queued archive/delete reflow both drive
   // --session-reflow-offset. Refresh wins so one render has one transform writer.
@@ -9472,6 +9512,14 @@ document.addEventListener('keydown',(e)=>{
 });
 
 // Keyboard session navigation — J/K bindings
+function _isInteractiveSwipeTarget(target){
+  return !!(target&&target.closest&&target.closest(
+    'button,a,input,textarea,select,option,label,[contenteditable]:not([contenteditable="false"]),pre,code,.markdown-table-wrap'
+  ));
+}
+function _openKeyboardSession(session){
+  return _openSidebarSession(session,{source:'keyboard-session-navigation'});
+}
 function navigateSession(dir){
   const rows=[...document.querySelectorAll('.session-item[data-sid]')];
   const sids=rows.map(r=>r.dataset.sid);
@@ -9479,13 +9527,19 @@ function navigateSession(dir){
   const i=sids.indexOf(cur);
   if(i<0||!sids.length)return;
   const next=sids[Math.min(Math.max(i+dir,0),sids.length-1)];
-  if(next&&next!==cur) loadSession(next);
+  if(next&&next!==cur){
+    const session=Array.isArray(_allSessions)?_allSessions.find(item=>item&&item.session_id===next):null;
+    if(session) _openKeyboardSession(session);
+    else loadSession(next);
+  }
 }
 
 document.addEventListener('keydown',(e)=>{
   if(e.key!=='j'&&e.key!=='k') return;
   if(e.ctrlKey||e.metaKey||e.altKey) return;
-  if(typeof _isInteractiveSwipeTarget==='function'&&_isInteractiveSwipeTarget(e.target)) return;
+  if(typeof _isInteractiveSwipeTarget==='function'){
+    if(_isInteractiveSwipeTarget(e.target)) return;
+  }else return;
   e.preventDefault();
   navigateSession(e.key==='j'?1:-1);
 });

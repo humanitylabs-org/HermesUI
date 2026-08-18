@@ -1653,6 +1653,10 @@ async function _trySteer(msg, explicitSteer){
     // the upload/API await, which is fine: we're clearing the OWNER's draft).
     _steerUploadCache=null; // delivered — invalidate the retry cache
     if(ownerSid&&typeof _clearComposerDraft==='function') _clearComposerDraft(ownerSid,_steerRestoreText(originalMsg,explicitSteer),pendingFilesSnapshot);
+    const steerDisplayText=_steerIndicatorText(originalMsg,pendingFilesSnapshot);
+    if(typeof window!=='undefined'&&typeof window.recordSessionDashboardSteer==='function'){
+      window.recordSessionDashboardSteer({sessionId:ownerSid,streamId:ownerStreamId,text:steerDisplayText});
+    }
     // Show a transient steer indicator in the chat (NOT in S.messages — it must
     // survive the done event's S.messages=d.session.messages replacement).
     // The indicator self-removes when the turn completes (done/cancel/error
@@ -1666,7 +1670,7 @@ async function _trySteer(msg, explicitSteer){
         const _remaining=S.pendingFiles.filter(f=>!_delivered.has(f));
         if(_remaining.length!==S.pendingFiles.length){S.pendingFiles=_remaining;if(typeof renderTray==='function')renderTray();}
       }
-      _showSteerIndicator(_steerIndicatorText(originalMsg,pendingFilesSnapshot));
+      _showSteerIndicator(steerDisplayText);
     }
     showToast(t('cmd_steer_delivered'),2500);
     return true;

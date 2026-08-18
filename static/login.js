@@ -2,6 +2,47 @@
  * Loaded by the /login route. Reads data attributes from the form for
  * i18n strings so the server does not need to inject JS literals.
  */
+function _loginMountPrefix(href) {
+  try {
+    var pathname = new URL(href).pathname.replace(/\/+$/, '');
+    if (pathname !== '/login' && !/\/login$/.test(pathname)) return '';
+    var prefix = pathname.slice(0, -'/login'.length);
+    return prefix === '/' ? '' : prefix;
+  } catch (_) { return ''; }
+}
+
+// Return the ?next= redirect path if present and safe. Tailscale Serve strips
+// the /hermesUI mount before proxying, so the backend legitimately reports
+// next=/ even though the browser is on /hermesUI/login. Reapply the browser-
+// visible mount prefix so successful login cannot escape to the origin root.
+function _safeLoginNextPath(href) {
+  try {
+    var current = new URL(href);
+    var mount = _loginMountPrefix(href);
+    var raw = current.searchParams.get('next');
+    if (!raw) return mount ? mount + '/' : './';
+    if (raw.charAt(0) !== '/') return mount ? mount + '/' : './';
+    if (raw.charAt(1) === '/' || raw.charAt(1) === '\\') return mount ? mount + '/' : './';
+    if (/[\x00-\x1f\x7f\s]/.test(raw)) return mount ? mount + '/' : './';
+    if (raw.length > 2048) return mount ? mount + '/' : './';
+    var probe = raw;
+    var stabilized = false;
+    for (var i = 0; i < 8; i++) {
+      var pathOnly = probe.split('?')[0].split('#')[0].split('&')[0].replace(/\/+$/, '');
+      if (pathOnly === '/login' || /\/login$/.test(pathOnly)) return mount ? mount + '/' : './';
+      var decoded;
+      try { decoded = decodeURIComponent(probe); } catch (_) { stabilized = true; break; }
+      if (decoded === probe) { stabilized = true; break; }
+      probe = decoded;
+    }
+    if (!stabilized) return mount ? mount + '/' : './';
+    if (mount && raw !== mount && raw.indexOf(mount + '/') !== 0) {
+      return mount + (raw === '/' ? '/' : raw);
+    }
+    return raw;
+  } catch (_) { return './'; }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   var form = document.getElementById('login-form');
   var input = document.getElementById('pw');
@@ -22,39 +63,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (err) { err.style.display = 'none'; }
   }
 
-  // Return the ?next= redirect path if present and safe, otherwise './'
-  // Guards against open-redirect: rejects protocol-relative (//evil.com),
-  // absolute URLs, backslash variants, and control characters.
+  // Guards against open redirect and preserves a reverse-proxy mount prefix.
   function _safeNextPath() {
-    try {
-      var raw = new URL(window.location.href).searchParams.get('next');
-      if (!raw) return './';
-      if (raw.charAt(0) !== '/') return './';             // must be path-absolute
-      if (raw.charAt(1) === '/' || raw.charAt(1) === '\\') return './'; // reject // and \\
-      if (/[\x00-\x1f\x7f\s]/.test(raw)) return './';  // reject control chars / whitespace
-      // #5578: never redirect back to the login page — that self-referential
-      // chain is what grows the URL exponentially on repeated expired-auth
-      // bounces. Detect the login route even through nested percent-encoding
-      // (a nested chain looks like `/session/login%3Fnext%3D...`, where the `?`
-      // is encoded so a plain split('?') wouldn't isolate the path). Decode a
-      // few levels and check the leading PATH. Only collapse login-route chains
-      // — a legitimate non-login path that merely carries its own `next=` query
-      // key must still round-trip.
-      if (raw.length > 2048) return './';
-      var probe = raw;
-      var stabilized = false;
-      for (var i = 0; i < 8; i++) {
-        var pathOnly = probe.split('?')[0].split('#')[0].split('&')[0].replace(/\/+$/, '');
-        if (pathOnly === '/login' || /\/login$/.test(pathOnly)) return './';
-        var decoded;
-        try { decoded = decodeURIComponent(probe); } catch (_) { stabilized = true; break; }
-        if (decoded === probe) { stabilized = true; break; }
-        probe = decoded;
-      }
-      // If still decoding at the cap (pathologically deep encoding), fail closed.
-      if (!stabilized) return './';
-      return raw;
-    } catch (_) { return './'; }
+    return _safeLoginNextPath(window.location.href);
   }
 
   async function doLogin(e) {
