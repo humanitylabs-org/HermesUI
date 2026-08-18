@@ -5,17 +5,18 @@ Hermes UI tracks Nesquena's Hermes WebUI while keeping the normal release line f
 ## Branches
 
 - `upstream/master`: fetched directly from `https://github.com/nesquena/hermes-webui.git`.
-- `hermes-ui-frontend-only`: Humanity Labs frontend plus the isolated Tailnet installer.
+- `upstream-sync`: reviewed local pointer to the exact upstream commit recorded in `UPSTREAM.json`.
+- `hermes-ui-v0.2-frontend-only`: Humanity Labs frontend plus the isolated Tailnet installer.
 - `refresh/<upstream-tag>`: disposable branch for one upstream update.
 - `backend-experiment/*`: optional research only; never merge into the normal release line.
 
 ## Refresh procedure
 
-1. Start with a clean `hermes-ui-frontend-only` checkout and verify the `upstream` remote URL.
+1. Start with a clean `hermes-ui-v0.2-frontend-only` checkout and verify the `upstream` remote URL.
 2. Fetch `upstream` without force-updating tags.
 3. Select one exact reviewed upstream commit and record its full commit, tree, and tag.
-4. Create `refresh/<upstream-tag>` from the current Hermes UI tip.
-5. Merge that exact upstream commit. Resolve conflicts only under `static/` or downstream-owned `hermesui/`, `qa/`, docs, and Hermes UI tests. Do not resolve a backend conflict by keeping a Humanity Labs version; the upstream file wins.
+4. Fast-forward `upstream-sync` to that exact commit; never rewrite it to a different tree under the same review.
+5. Create `refresh/<upstream-tag>` from the current Hermes UI tip and merge the exact `upstream-sync` commit. Resolve conflicts only under `static/` or downstream-owned `hermesui/`, `qa/`, docs, and Hermes UI tests. Do not resolve a backend conflict by keeping a Humanity Labs version; the upstream file wins.
 6. Update `UPSTREAM.json` to the new commit, tree, and tag.
 7. Reconcile frontend changes against the new upstream assets, preserving upstream browser fixes semantically.
 8. Run:
