@@ -5,12 +5,18 @@ ROOT = Path(__file__).resolve().parents[1]
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 
 
-def test_workspace_panel_is_absent_from_the_simplified_shell():
-    assert "html body .rightpanel," in CSS
-    assert "html body .workspace-panel-edge-toggle," in CSS
-    assert "html body .composer-workspace-files-btn," in CSS
-    assert "html body .workspace-toggle-btn," in CSS
-    assert "html body .mobile-files-btn{display:none!important;}" in CSS
+def test_workspace_panel_is_absent_only_from_the_dashboard_shell():
+    prefix = 'html[data-session-view="dashboard"] body '
+    assert f"{prefix}.rightpanel," in CSS
+    assert f"{prefix}.workspace-panel-edge-toggle," in CSS
+    assert f"{prefix}.composer-workspace-files-btn," in CSS
+    assert f"{prefix}.workspace-toggle-btn," in CSS
+    assert f"{prefix}.mobile-files-btn{{display:none!important;}}" in CSS
+    assert "html body .rightpanel," not in CSS
+
+
+def test_classic_view_keeps_the_upstream_workspace_panel_available():
+    assert 'html[data-session-view="classic"] body .rightpanel' not in CSS
 
 
 def test_workspace_selector_remains_usable_without_panel_button():

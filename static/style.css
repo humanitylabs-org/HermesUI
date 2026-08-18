@@ -2148,11 +2148,11 @@
   .rail{display:none!important;}
   .sidebar-nav{display:none!important;}
   /* HermesUI: remove the workspace browser from the simplified shell. */
-  html body .rightpanel,
-  html body .workspace-panel-edge-toggle,
-  html body .composer-workspace-files-btn,
-  html body .workspace-toggle-btn,
-  html body .mobile-files-btn{display:none!important;}
+  html[data-session-view="dashboard"] body .rightpanel,
+  html[data-session-view="dashboard"] body .workspace-panel-edge-toggle,
+  html[data-session-view="dashboard"] body .composer-workspace-files-btn,
+  html[data-session-view="dashboard"] body .workspace-toggle-btn,
+  html[data-session-view="dashboard"] body .mobile-files-btn{display:none!important;}
   .composer-workspace-chip{border-left:0!important;border-radius:999px!important;padding-left:12px!important;}
   .composer-footer.cf-burger .composer-workspace-group{display:none!important;}
   .sidebar .panel-view{margin-left:0!important;}
