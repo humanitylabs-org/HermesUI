@@ -204,6 +204,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         if: needs.changes.outputs.docs_only != 'true'
         with:
+          # The downstream boundary gate resolves its pinned upstream commit;
+          # a depth-1 shard checkout omits that object in the public history.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}

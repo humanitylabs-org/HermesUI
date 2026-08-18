@@ -28,3 +28,12 @@ def test_diff_fallbacks_and_ruff_gate_use_live_default_branch():
     tests_workflow = (WORKFLOWS / "tests.yml").read_text(encoding="utf-8")
     assert "scripts/ruff_lint.py --diff origin/main" in tests_workflow
     assert "scripts/ruff_lint.py --diff origin/hermes-ui" not in tests_workflow
+
+
+def test_each_tests_workflow_checkout_has_the_pinned_upstream_object():
+    tests_workflow = (WORKFLOWS / "tests.yml").read_text(encoding="utf-8")
+    checkout_count = tests_workflow.count("uses: actions/checkout@")
+    full_history_count = tests_workflow.count("fetch-depth: 0")
+
+    assert checkout_count == 3
+    assert full_history_count == checkout_count
