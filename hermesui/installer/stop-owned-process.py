@@ -14,6 +14,7 @@ import errno
 import os
 import re
 import select
+import shlex
 import shutil
 import signal
 import subprocess
@@ -78,10 +79,86 @@ def managed_python_executable(home: Path) -> tuple[Path, str]:
     return executable, managed_path
 
 
+def _agent_root_from_path(path: Path) -> Path | None:
+    """Return the containing Agent root only when run_agent.py proves it."""
+    for parent in (path, *path.parents):
+        if (parent / "run_agent.py").is_file():
+            return parent.resolve(strict=True)
+    return None
+
+
+def trusted_agent_roots(repo_root: Path, home: Path, managed_path: str, launch_python: Path) -> frozenset[Path]:
+    """Discover Agent roots independently of the target process environment."""
+    roots: set[Path] = set()
+    candidates = (
+        home / ".hermes" / "hermes-agent",
+        repo_root.parent / "hermes-agent",
+        home / "hermes-agent",
+        Path("/usr/local/lib/hermes-agent"),
+    )
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve(strict=True)
+        except (FileNotFoundError, OSError):
+            continue
+        if resolved.is_dir() and (resolved / "run_agent.py").is_file():
+            roots.add(resolved)
+
+    hermes = shutil.which("hermes", path=managed_path)
+    if hermes:
+        try:
+            with open(hermes, "r", encoding="utf-8", errors="replace") as handle:
+                lines = [handle.readline() for _ in range(20)]
+        except OSError:
+            lines = []
+        referenced: list[Path] = []
+        if lines and lines[0].startswith("#!"):
+            try:
+                fields = shlex.split(lines[0][2:].strip())
+            except ValueError:
+                fields = []
+            if fields:
+                interpreter = Path(fields[0])
+                if interpreter.is_absolute() and interpreter.name != "env":
+                    referenced.append(interpreter)
+            for line in lines[1:]:
+                try:
+                    tokens = shlex.split(line, comments=True)
+                except ValueError:
+                    continue
+                referenced.extend(Path(token) for token in tokens if token.startswith("/"))
+        for path in referenced:
+            root = _agent_root_from_path(path)
+            if root is not None:
+                roots.add(root)
+
+    probe = subprocess.run(
+        [
+            str(launch_python),
+            "-c",
+            "import importlib.util; s=importlib.util.find_spec('run_agent'); print(s.origin if s else '')",
+        ],
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=False,
+        env={"HOME": str(home), "PATH": managed_path},
+    )
+    if probe.returncode == 0:
+        origin = probe.stdout.strip().splitlines()
+        if len(origin) == 1 and origin[0]:
+            path = Path(origin[0])
+            if path.is_absolute() and path.name == "run_agent.py" and path.is_file():
+                root = _agent_root_from_path(path)
+                if root is not None:
+                    roots.add(root)
+    return frozenset(roots)
+
+
 def allowed_runtime_executables(
     repo_root: Path,
-    environ: dict[str, str],
     launch_python: Path,
+    agent_roots: frozenset[Path],
 ) -> frozenset[Path]:
     """Resolve only interpreters the unchanged bootstrap may exec into.
 
@@ -96,14 +173,7 @@ def allowed_runtime_executables(
         repo_root / ".venv" / "bin" / "python",
         repo_root / ".venv" / "Scripts" / "python.exe",
     ]
-    agent_dir_raw = environ.get("HERMES_WEBUI_AGENT_DIR", "").strip()
-    if agent_dir_raw:
-        agent_dir = Path(agent_dir_raw)
-        if not agent_dir.is_absolute():
-            raise RuntimeError("HermesUI agent directory is not absolute")
-        agent_dir = agent_dir.resolve(strict=True)
-        if not agent_dir.is_dir():
-            raise RuntimeError("HermesUI agent directory is not a directory")
+    for agent_dir in agent_roots:
         candidate_paths.extend(
             agent_dir / relative
             for relative in (
@@ -137,6 +207,7 @@ def verify_owned_process(
 
     environ = parse_environ(process_bytes(pid, "environ"))
     expected_python, managed_path = managed_python_executable(home)
+    agent_roots = trusted_agent_roots(repo_root.resolve(strict=True), home.resolve(strict=True), managed_path, expected_python)
     required_env = {
         "HERMESUI_MANAGED": "1",
         "HERMES_WEBUI_PYTHON": str(expected_python),
@@ -173,7 +244,15 @@ def verify_owned_process(
         raise RuntimeError("service process argv does not match the managed HermesUI bootstrap or server")
 
     executable = (proc / "exe").resolve(strict=True)
-    allowed_executables = allowed_runtime_executables(repo_root, environ, expected_python)
+    agent_dir_raw = environ.get("HERMES_WEBUI_AGENT_DIR", "").strip()
+    if agent_dir_raw:
+        agent_dir = Path(agent_dir_raw)
+        if not agent_dir.is_absolute():
+            raise RuntimeError("HermesUI agent directory is not absolute")
+        agent_dir = agent_dir.resolve(strict=True)
+        if agent_dir not in agent_roots:
+            raise RuntimeError("HermesUI agent directory was not independently discovered from the managed launch context")
+    allowed_executables = allowed_runtime_executables(repo_root, expected_python, agent_roots)
     if executable not in allowed_executables:
         raise RuntimeError("HermesUI executable is not an allowed upstream bootstrap interpreter")
     if not argv:
@@ -187,10 +266,7 @@ def verify_owned_process(
     if executable != argv_executable.resolve(strict=True):
         raise RuntimeError("HermesUI executable identity does not match argv")
     cwd = (proc / "cwd").resolve(strict=True)
-    allowed_cwds = {repo_root.resolve(strict=True)}
-    agent_dir_raw = environ.get("HERMES_WEBUI_AGENT_DIR", "").strip()
-    if agent_dir_raw:
-        allowed_cwds.add(Path(agent_dir_raw).resolve(strict=True))
+    allowed_cwds = {repo_root.resolve(strict=True), *agent_roots}
     if cwd not in allowed_cwds:
         raise RuntimeError("HermesUI working directory is outside the managed WebUI and Agent roots")
     if systemd_unit is not None:
