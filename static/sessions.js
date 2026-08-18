@@ -9537,9 +9537,7 @@ function navigateSession(dir){
 document.addEventListener('keydown',(e)=>{
   if(e.key!=='j'&&e.key!=='k') return;
   if(e.ctrlKey||e.metaKey||e.altKey) return;
-  if(typeof _isInteractiveSwipeTarget==='function'){
-    if(_isInteractiveSwipeTarget(e.target)) return;
-  }else return;
+  if(typeof _isInteractiveSwipeTarget==='function'&&_isInteractiveSwipeTarget(e.target)) return;
   e.preventDefault();
   navigateSession(e.key==='j'?1:-1);
 });
