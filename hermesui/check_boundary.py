@@ -30,6 +30,17 @@ DOWNSTREAM_EXACT = {
     "qa/tailnet-installer-smoke.sh",
     "qa/update-smoke.sh",
 }
+PINNED_NONSTATIC_SHA256 = {
+    # Inherited workflows change only downstream branch reachability and the
+    # exact test launchers needed for Hermes UI's replacement frontend contracts.
+    ".github/workflows/browser-smoke.yml": "637468a8018ea807e5f8c17128e503faad05ecfcd4bf7e39f62a5f7182560cc6",
+    ".github/workflows/conversation-lifecycle.yml": "3cffcd46072429cd509949f1136b67eea0416a52958ab83ef69940338d6a587d",
+    ".github/workflows/docker-smoke.yml": "7bc9f0acf11bdb0245678cb7600f7e61aead168ecdad60c6d6d02a98e2c373cc",
+    ".github/workflows/docs-ci.yml": "137bbc237ab13f3b6aab1f3f5c59c23706bc81843e152e3cc4dfae4c534163fb",
+    ".github/workflows/native-windows-startup.yml": "00d46bdcd5f5a6535d28882ceadeaa07041e94ba1292f43e55268914c4681d4b",
+    ".github/workflows/release.yml": "6f83c8e12ad3a6407b4fb18f806bcd3c4c7dc91e544e638c0cda5d6026b7c498",
+    ".github/workflows/tests.yml": "002ac5907ca3c6f511dbb7790cd7961eb3a41a7814a96a5542226795c2f3268a",
+}
 DOWNSTREAM_PREFIXES = ("hermesui/",)
 DOWNSTREAM_TEST_PREFIXES = (
     "tests/test_hermes_ui_",
@@ -52,6 +63,7 @@ def git(*args: str) -> str:
 def allowed_nonstatic(path: str) -> bool:
     return (
         path in DOWNSTREAM_EXACT
+        or path in PINNED_NONSTATIC_SHA256
         or path.startswith(DOWNSTREAM_PREFIXES)
         or path.startswith(DOWNSTREAM_TEST_PREFIXES)
     )
@@ -83,6 +95,13 @@ def main() -> int:
             for path in blocked:
                 print(f"- {path}")
             return 1
+
+        for path, expected_digest in PINNED_NONSTATIC_SHA256.items():
+            if path not in changed:
+                continue
+            actual_digest = hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+            if actual_digest != expected_digest:
+                raise RuntimeError(f"pinned downstream support digest is stale: {path}")
 
         manifest = json.loads(OVERLAY.read_text(encoding="utf-8"))
         if manifest.get("schema") != 1 or manifest.get("upstream_commit") != commit:

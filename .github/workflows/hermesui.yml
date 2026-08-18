@@ -51,6 +51,7 @@ jobs:
             tests/test_hermes_ui_session_dashboard.py \
             tests/test_hermes_ui_sessions_sidebar.py \
             tests/test_hermes_ui_settings_popup.py \
+            tests/test_hermes_ui_upstream_compatibility.py \
             tests/test_hermesui_subpath_login.py \
             tests/test_hermesui_subpath_share.py
       - name: Test upstream conversation lifecycle through Classic view

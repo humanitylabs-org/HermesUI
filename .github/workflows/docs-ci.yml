@@ -19,7 +19,7 @@ name: Docs CI
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, hermes-ui]
     paths:
       - '**/*.md'
       - '**/*.markdown'
@@ -28,7 +28,7 @@ on:
       - 'CHANGELOG*'
       - '**/README*'
   push:
-    branches: [master]
+    branches: [master, hermes-ui]
     paths:
       - '**/*.md'
       - '**/*.markdown'
@@ -46,12 +46,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
@@ -66,7 +67,7 @@ jobs:
           # LINE. We never echo untrusted names into another shell; downstream steps
           # read this file. Fall back to all tracked docs if the diff can't compute.
           if [ -n "${BASE_SHA:-}" ] && [ -n "${HEAD_SHA:-}" ]; then
-            git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || git fetch --no-tags origin master || true
+            git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || git fetch --no-tags origin hermes-ui || true
             RANGE="$BASE_SHA...$HEAD_SHA"
           else
             RANGE="${{ github.event.before }}...${{ github.sha }}"
@@ -101,7 +102,7 @@ jobs:
       # no untrusted filename ever reaches lychee's `eval`. Over-checking docs is
       # harmless. Informational only: continue-on-error keeps it from blocking.
       - name: Broken-link check (lychee)
-        uses: lycheeverse/lychee-action@v2
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2
         with:
           args: >-
             --no-progress

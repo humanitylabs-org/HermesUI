@@ -20,6 +20,9 @@ on:
       - '.github/workflows/native-windows-startup.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   native-windows-startup:
     name: start.ps1 path discovery (mock hermes-agent)
@@ -28,10 +31,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
 

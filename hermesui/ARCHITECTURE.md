@@ -10,7 +10,7 @@ Hermes UI is not a replacement backend for Hermes Agent. It is a frontend distri
 - `server.py`, `bootstrap.py`, and `mcp_server.py`
 - Python requirements, lockfiles, and package metadata
 - authentication, sessions, persistence, streaming, providers, and Hermes Agent integration
-- upstream Docker/runtime files and upstream CI workflows
+- upstream Docker/runtime files
 
 Hermes UI does not carry fixes for those files. Backend changes belong upstream or on a separate experiment branch that is never merged into the normal release line.
 
@@ -41,6 +41,12 @@ Frontend tests use downstream-specific names under `tests/test_hermes_ui_*` and 
 - does not enable Funnel or modify Hermes Agent data.
 
 The installer never patches files under `api/` or changes the upstream request/response contract.
+
+## Downstream verification and release wiring
+
+Hermes UI keeps Nesquena's test, browser, documentation, and Docker checks but wires the relevant read-only jobs to the downstream `hermes-ui` integration branch. Those workflow overrides are hash-pinned by `hermesui/check_boundary.py`; they do not change application runtime behavior.
+
+The inherited tag-triggered release and GHCR publisher is disabled on the downstream line. `.github/workflows/release.yml` is a read-only manual preflight for an exact reviewed commit. Publishing a tag, GitHub Release, package, image, website prompt, or deployment remains a separate human-approved action.
 
 ## Humanity Labs button
 

@@ -6,27 +6,32 @@ name: Conversation lifecycle (informational)
 # skipped entirely (GitHub treats a path-filtered no-match as "not triggered").
 on:
   pull_request:
-    branches: [master]
+    branches: [master, hermes-ui]
     paths:
       - 'static/**'
       - 'api/**.py'
       - 'server.py'
       - 'tests/browser_conversation_lifecycle.py'
+      - 'tests/test_hermes_ui_browser_conversation_lifecycle.py'
       - 'tests/browser_historical_transcript_hydration.py'
       - 'requirements*.txt'
       - 'pyproject.toml'
       - '.github/workflows/conversation-lifecycle.yml'
   push:
-    branches: [master]
+    branches: [master, hermes-ui]
     paths:
       - 'static/**'
       - 'api/**.py'
       - 'server.py'
       - 'tests/browser_conversation_lifecycle.py'
+      - 'tests/test_hermes_ui_browser_conversation_lifecycle.py'
       - 'tests/browser_historical_transcript_hydration.py'
       - 'requirements*.txt'
       - 'pyproject.toml'
       - '.github/workflows/conversation-lifecycle.yml'
+
+permissions:
+  contents: read
 
 jobs:
   live-to-final:
@@ -38,18 +43,20 @@ jobs:
       matrix:
         include:
           - name: normal
-            script: tests/browser_conversation_lifecycle.py
+            script: tests/test_hermes_ui_browser_conversation_lifecycle.py
             scenario: normal
           - name: terminal-error
-            script: tests/browser_conversation_lifecycle.py
+            script: tests/test_hermes_ui_browser_conversation_lifecycle.py
             scenario: terminal-error
           - name: historical-transcript-hydration
             script: tests/browser_historical_transcript_hydration.py
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -77,11 +84,11 @@ jobs:
           LIFECYCLE_ARTIFACT_DIR: lifecycle-artifacts
           LIFECYCLE_SCENARIO: normal
           LIFECYCLE_TEST_BITE: settle-worklog-frame-proof
-        run: python tests/browser_conversation_lifecycle.py
+        run: python tests/test_hermes_ui_browser_conversation_lifecycle.py
 
       - name: Upload failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: conversation-lifecycle-failure-${{ matrix.name }}
           path: lifecycle-artifacts

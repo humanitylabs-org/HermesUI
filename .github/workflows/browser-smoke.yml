@@ -9,17 +9,20 @@ name: Browser smoke
 # No secrets, no credentials: the server boots agent-free and the smoke script
 # strips every *_API_KEY from the environment before launch.
 #
-# Docs-only fast path: `browser-smoke` is a REQUIRED status check in the master
-# ruleset, and a skipped required check reports as pending forever (auto-merge
+# Docs-only fast path: `browser-smoke` is a REQUIRED status check on the protected
+# integration branch, and a skipped required check reports as pending forever (auto-merge
 # would hang). So on a docs/CHANGELOG/README-only change we keep the job running
 # and reporting green but short-circuit the expensive browser install + smoke.
 # Detection FAILS SAFE: any uncertainty or any non-doc path -> full smoke runs.
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, hermes-ui]
   push:
-    branches: [master]
+    branches: [master, hermes-ui]
+
+permissions:
+  contents: read
 
 jobs:
   changes:
@@ -27,9 +30,10 @@ jobs:
     outputs:
       docs_only: ${{ steps.detect.outputs.docs_only }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Detect docs-only change set
         id: detect
@@ -59,7 +63,7 @@ jobs:
             return 1
           }
           if [ -n "${BASE_SHA:-}" ] && [ -n "${HEAD_SHA:-}" ]; then
-            git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || git fetch --no-tags origin master || true
+            git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || git fetch --no-tags origin hermes-ui || true
             RANGE="$BASE_SHA...$HEAD_SHA"
           else
             RANGE="${{ github.event.before }}...${{ github.sha }}"
@@ -96,12 +100,14 @@ jobs:
         if: needs.changes.outputs.docs_only == 'true'
         run: echo "Docs-only change set — skipping browser smoke (no page-executable change)."
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         if: needs.changes.outputs.docs_only != 'true'
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         if: needs.changes.outputs.docs_only != 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
           cache: 'pip'
