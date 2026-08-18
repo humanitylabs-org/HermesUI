@@ -36,30 +36,68 @@
     if(typeof _messageIsRenderable==='function'&&!_messageIsRenderable(message)) return false;
     return !!rawText(message);
   };
-  const sessionMessages=()=>{
+  const messageSignature=message=>{
+    if(!message) return '';
+    return [
+      message.role||'',
+      message.id||message.message_id||message.event_id||'',
+      message.created_at||message.timestamp||'',
+      message._live?'1':'0',
+      rawText(message)
+    ].join('\u001f');
+  };
+  const appendMessageEntry=(cached,message,index)=>{
+    if(!isRenderable(message)) return;
+    const entry={message,index};
+    cached.entries.push(entry);
+    if(!cached.firstUser&&message.role==='user'&&cleanUserText(message)) cached.firstUser=entry;
+  };
+  const rebuildProjection=(messages)=>{
+    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:''};
+    for(let index=0;index<messages.length;index++) appendMessageEntry(cached,messages[index],index);
+    cached.length=messages.length;
+    cached.firstSignature=messages.length?messageSignature(messages[0]):'';
+    cached.tailSignature=messages.length?messageSignature(messages[messages.length-1]):'';
+    return cached;
+  };
+  const sessionProjection=()=>{
     const current=state();
     const messages=Array.isArray(current.messages)?current.messages:[];
     const session=current.session||{};
     const key=String(session.session_id||session.id||'__none__');
     let cached=messageEntryCache.get(key);
-    if(!cached||cached.source!==messages||messages.length<cached.length){
-      cached={source:messages,length:0,entries:[]};
-    }
-    if(messages.length>cached.length){
-      for(let index=cached.length;index<messages.length;index++){
-        const message=messages[index];
-        if(isRenderable(message)) cached.entries.push({message,index});
+    if(!cached||messages.length<cached.length){
+      cached=rebuildProjection(messages);
+    }else{
+      const firstSignature=messages.length?messageSignature(messages[0]):'';
+      const oldTailStillMatches=!cached.length||(
+        messages.length>=cached.length&&
+        messageSignature(messages[cached.length-1])===cached.tailSignature
+      );
+      if(firstSignature!==cached.firstSignature||!oldTailStillMatches){
+        if(messages.length===cached.length&&firstSignature===cached.firstSignature){
+          const index=messages.length-1;
+          cached.entries=cached.entries.filter(entry=>entry.index!==index);
+          appendMessageEntry(cached,messages[index],index);
+          cached.source=messages;
+          cached.tailSignature=messages.length?messageSignature(messages[index]):'';
+        }else{
+          cached=rebuildProjection(messages);
+        }
+      }else if(messages.length>cached.length){
+        for(let index=cached.length;index<messages.length;index++) appendMessageEntry(cached,messages[index],index);
+        cached.source=messages;
+        cached.length=messages.length;
+        cached.tailSignature=messages.length?messageSignature(messages[messages.length-1]):'';
+      }else{
+        cached.source=messages;
       }
-    }else if(messages.length&&cached.length===messages.length){
-      const index=messages.length-1;
-      cached.entries=cached.entries.filter(entry=>entry.index!==index);
-      if(isRenderable(messages[index])) cached.entries.push({message:messages[index],index});
     }
-    cached.length=messages.length;
     messageEntryCache.set(key,cached);
     while(messageEntryCache.size>20) messageEntryCache.delete(messageEntryCache.keys().next().value);
-    return cached.entries;
+    return cached;
   };
+  const sessionMessages=()=>sessionProjection().entries;
   const compact=(text,max=640)=>{
     const value=String(text||'').replace(/\r/g,'').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
     if(value.length<=max) return value;
@@ -79,23 +117,41 @@
     if(typeof renderMd==='function') element.innerHTML=renderMd(String(text||''));
     else element.textContent=String(text||'');
   };
-  const latestUserEntry=entries=>[...entries].reverse().find(entry=>entry.message.role==='user'&&cleanUserText(entry.message));
-  const latestAssistantEntry=entries=>[...entries].reverse().find(entry=>entry.message.role==='assistant'&&rawText(entry.message)&&!entry.message._live);
+  const latestMatchingEntry=(entries,predicate)=>{
+    for(let index=entries.length-1;index>=0;index--) if(predicate(entries[index])) return entries[index];
+    return undefined;
+  };
+  const latestUserEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='user'&&cleanUserText(entry.message));
+  const latestAssistantEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='assistant'&&rawText(entry.message)&&!entry.message._live);
 
   function latestRunUserEntries(entries){
     const current=state();
-    const users=entries.filter(entry=>entry.message.role==='user'&&cleanUserText(entry.message));
-    const assistants=entries.filter(entry=>entry.message.role==='assistant'&&rawText(entry.message)&&!entry.message._live);
-    const latestUser=users[users.length-1];
-    const latestAssistant=assistants[assistants.length-1];
+    const latestUser=latestUserEntry(entries);
+    const latestAssistant=latestAssistantEntry(entries);
     if(!latestUser) return [];
+    let boundary=-1;
     if(current.busy||current.activeStreamId||!latestAssistant||latestUser.index>latestAssistant.index){
-      const boundary=latestAssistant?latestAssistant.index:-1;
-      return users.filter(entry=>entry.index>boundary);
+      boundary=latestAssistant?latestAssistant.index:-1;
+    }else{
+      for(let index=entries.length-1;index>=0;index--){
+        const entry=entries[index];
+        if(entry.index>=latestAssistant.index) continue;
+        if(entry.message.role==='assistant'&&rawText(entry.message)&&!entry.message._live){
+          boundary=entry.index;
+          break;
+        }
+      }
     }
-    const previousAssistant=[...assistants].reverse().find(entry=>entry.index<latestAssistant.index);
-    const boundary=previousAssistant?previousAssistant.index:-1;
-    return users.filter(entry=>entry.index>boundary&&entry.index<latestAssistant.index);
+    const users=[];
+    const ceiling=latestAssistant&&!current.busy&&!current.activeStreamId&&latestUser.index<latestAssistant.index
+      ? latestAssistant.index
+      : Number.POSITIVE_INFINITY;
+    for(let index=entries.length-1;index>=0;index--){
+      const entry=entries[index];
+      if(entry.index<=boundary) break;
+      if(entry.index<ceiling&&entry.message.role==='user'&&cleanUserText(entry.message)) users.push(entry);
+    }
+    return users.reverse();
   }
 
   function activeRunKey(){
@@ -120,14 +176,14 @@
     return cleanUserText(runUsers[runUsers.length-1].message);
   }
 
-  function dashboardSessionSummary(entries){
-    const firstUser=entries.find(entry=>entry.message.role==='user'&&cleanUserText(entry.message));
+  function dashboardSessionSummary(projection){
+    const firstUser=projection.firstUser;
     const firstText=firstUser?cleanUserText(firstUser.message):'';
     return firstText||'No original request is available yet.';
   }
 
   function refreshDashboardSummary(){
-    setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(sessionMessages()));
+    setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(sessionProjection()));
     setText('sessionDashboardSummaryUpdated',`Placeholder refreshed ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'})}`);
   }
 
@@ -238,14 +294,20 @@
   function syncSessionDashboard(){
     const dashboard=byId('sessionDashboard');
     if(!dashboard) return;
+    const root=document.documentElement;
+    if(root&&root.dataset&&root.dataset.sessionView==='classic'){
+      dashboard.hidden=true;
+      return;
+    }
     const current=state();
-    const entries=sessionMessages();
+    const projection=sessionProjection();
+    const entries=projection.entries;
     const hasSession=!!(current.session&&entries.length);
     dashboard.hidden=!hasSession;
     if(!hasSession) return;
 
     const completed=dashboardCompleted(entries);
-    setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(entries));
+    setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(projection));
     setMarkdown('sessionDashboardInstruction',dashboardInstruction(entries));
     setMarkdown('sessionDashboardCompleted',completed||'Not completed yet.');
     showStatusSnapshot();

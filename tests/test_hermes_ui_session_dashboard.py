@@ -42,10 +42,10 @@ def test_dashboard_has_unboxed_original_request_and_exactly_three_cards():
 
 
 def test_session_summary_uses_original_request_as_frontend_only_placeholder():
-    assert "function dashboardSessionSummary(entries)" in DASHBOARD
-    assert "entries.find(entry=>entry.message.role==='user'&&cleanUserText(entry.message))" in DASHBOARD
+    assert "function dashboardSessionSummary(projection)" in DASHBOARD
+    assert "const firstUser=projection.firstUser" in DASHBOARD
     assert "return firstText||'No original request is available yet.'" in DASHBOARD
-    assert "setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(entries))" in DASHBOARD
+    assert "setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(projection))" in DASHBOARD
     assert "function refreshDashboardSummary()" in DASHBOARD
     assert "summaryRefresh.addEventListener('click',refreshDashboardSummary)" in DASHBOARD
     assert "Placeholder refreshed" in DASHBOARD
@@ -82,6 +82,71 @@ def test_dashboard_updates_on_existing_render_and_busy_boundaries():
     assert "requestAnimationFrame" in DASHBOARD
     assert "window.syncSessionDashboard=syncSessionDashboard" in DASHBOARD
     assert "sessionDashboardRefresh" in DASHBOARD
+
+
+def test_dashboard_projection_is_incremental_and_classic_view_skips_history_work():
+    node = shutil.which("node")
+    assert node is not None, "node is required for the dashboard performance regression"
+    harness = f"""
+const fs=require('fs');
+const vm=require('vm');
+const elements=new Map();
+function element(id){{
+  if(!elements.has(id)) elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},addEventListener(){{}}}});
+  return elements.get(id);
+}}
+let reads=0;
+global.window=global;
+global.document={{
+  readyState:'complete',
+  documentElement:{{dataset:{{sessionView:'dashboard'}}}},
+  getElementById:element,
+  addEventListener(){{}}
+}};
+global.S={{session:{{session_id:'long'}},messages:Array.from({{length:10000}},(_,i)=>({{
+  role:i%2?'assistant':'user',content:`message ${{i}}`,id:`m-${{i}}`
+}})),busy:false,activeStreamId:null}};
+global.msgContent=m=>{{reads++;return String(m&&m.content||'');}};
+global.renderMd=s=>String(s||'');
+global._stripWorkspaceDisplayPrefix=s=>String(s||'');
+global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');
+global._messageIsRenderable=()=>true;
+global._isContextCompactionMessage=()=>false;
+global._isPreservedCompressionTaskListMessage=()=>false;
+global._isRecoveryControlMessage=()=>false;
+global.INFLIGHT={{}};
+global.requestAnimationFrame=cb=>{{cb();return 1;}};
+global.queueMicrotask=cb=>cb();
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
+const afterInitial=reads;
+for(let i=0;i<20;i++) syncSessionDashboard();
+const repeated=reads-afterInitial;
+S.messages=[...S.messages];
+syncSessionDashboard();
+const copied=reads-afterInitial-repeated;
+S.messages.push({{role:'user',content:'new instruction',id:'m-10000'}});
+syncSessionDashboard();
+const appended=reads-afterInitial-repeated-copied;
+document.documentElement.dataset.sessionView='classic';
+const beforeClassic=reads;
+for(let i=0;i<20;i++) syncSessionDashboard();
+process.stdout.write(JSON.stringify({{
+  initial:afterInitial,
+  repeated,
+  copied,
+  appended,
+  classic:reads-beforeClassic,
+  hidden:element('sessionDashboard').hidden
+}}));
+"""
+    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
+    payload = json.loads(result.stdout)
+    assert payload["initial"] >= 10000
+    assert payload["repeated"] <= 300
+    assert payload["copied"] <= 15
+    assert payload["appended"] <= 20
+    assert payload["classic"] == 0
+    assert payload["hidden"] is True
 
 
 def test_status_refresh_is_manual_only():

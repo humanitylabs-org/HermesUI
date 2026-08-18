@@ -78,6 +78,51 @@ def managed_python_executable(home: Path) -> tuple[Path, str]:
     return executable, managed_path
 
 
+def allowed_runtime_executables(
+    repo_root: Path,
+    environ: dict[str, str],
+    launch_python: Path,
+) -> frozenset[Path]:
+    """Resolve only interpreters the unchanged bootstrap may exec into.
+
+    The launcher starts bootstrap.py with ``launch_python``. Upstream may then
+    replace that process with either the repository venv or the discovered
+    Hermes Agent venv after proving it can import both applications. Preserve
+    that upstream handoff without accepting an arbitrary executable path.
+    """
+
+    candidates = {launch_python.resolve(strict=True)}
+    candidate_paths = [
+        repo_root / ".venv" / "bin" / "python",
+        repo_root / ".venv" / "Scripts" / "python.exe",
+    ]
+    agent_dir_raw = environ.get("HERMES_WEBUI_AGENT_DIR", "").strip()
+    if agent_dir_raw:
+        agent_dir = Path(agent_dir_raw)
+        if not agent_dir.is_absolute():
+            raise RuntimeError("HermesUI agent directory is not absolute")
+        agent_dir = agent_dir.resolve(strict=True)
+        if not agent_dir.is_dir():
+            raise RuntimeError("HermesUI agent directory is not a directory")
+        candidate_paths.extend(
+            agent_dir / relative
+            for relative in (
+                Path("venv/bin/python"),
+                Path("venv/Scripts/python.exe"),
+                Path(".venv/bin/python"),
+                Path(".venv/Scripts/python.exe"),
+            )
+        )
+    for candidate in candidate_paths:
+        try:
+            resolved = candidate.resolve(strict=True)
+        except (FileNotFoundError, OSError):
+            continue
+        if resolved.is_file() and os.access(resolved, os.X_OK):
+            candidates.add(resolved)
+    return frozenset(candidates)
+
+
 def verify_owned_process(
     pid: int,
     repo_root: Path,
@@ -128,11 +173,26 @@ def verify_owned_process(
         raise RuntimeError("service process argv does not match the managed HermesUI bootstrap or server")
 
     executable = (proc / "exe").resolve(strict=True)
-    if executable != expected_python:
-        raise RuntimeError("HermesUI executable is not the exact managed Python interpreter")
-    argv_executable = shutil.which(argv[0], path=managed_path)
-    if argv_executable is None or executable != Path(argv_executable).resolve(strict=True):
-        raise RuntimeError("HermesUI executable identity does not match argv and PATH")
+    allowed_executables = allowed_runtime_executables(repo_root, environ, expected_python)
+    if executable not in allowed_executables:
+        raise RuntimeError("HermesUI executable is not an allowed upstream bootstrap interpreter")
+    if not argv:
+        raise RuntimeError("HermesUI process argv is empty")
+    argv_executable = Path(argv[0]) if Path(argv[0]).is_absolute() else None
+    if argv_executable is None:
+        resolved_from_path = shutil.which(argv[0], path=managed_path)
+        if resolved_from_path is None:
+            raise RuntimeError("HermesUI executable could not be resolved from argv and PATH")
+        argv_executable = Path(resolved_from_path)
+    if executable != argv_executable.resolve(strict=True):
+        raise RuntimeError("HermesUI executable identity does not match argv")
+    cwd = (proc / "cwd").resolve(strict=True)
+    allowed_cwds = {repo_root.resolve(strict=True)}
+    agent_dir_raw = environ.get("HERMES_WEBUI_AGENT_DIR", "").strip()
+    if agent_dir_raw:
+        allowed_cwds.add(Path(agent_dir_raw).resolve(strict=True))
+    if cwd not in allowed_cwds:
+        raise RuntimeError("HermesUI working directory is outside the managed WebUI and Agent roots")
     if systemd_unit is not None:
         if systemd_unit != "hermesui.service":
             raise RuntimeError("unexpected HermesUI systemd unit name")

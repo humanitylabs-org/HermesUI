@@ -31,7 +31,7 @@
       "upstream_sha256": "5eb65e2ee84e757f426cf1aa2b45a51104c3551f1651c75d6573ba8076401a69"
     },
     {
-      "hermesui_sha256": "70d4da44f77fb5cff0fc6e44010931f1295f11af7b58d19164b586e084b30a0e",
+      "hermesui_sha256": "d2f2b0cdfe7df329aebec89feb6757ccbdabf5ab3261db8a042db88c040d5b5c",
       "path": "static/session-dashboard.js",
       "upstream_sha256": null
     },
