@@ -35,16 +35,29 @@ def test_private_app_inventory_is_local_config_not_public_source():
     assert ".ts.net" not in JS
 
 
-def test_external_apps_open_safely_without_replacing_hermes_ui():
+def test_external_apps_switch_inside_the_private_shell_with_direct_open_fallback():
     assert "link.target='_blank'" in JS
     assert "link.rel='noopener noreferrer'" in JS
+    assert "link.addEventListener('click'" in JS
+    assert "activateApp(app)" in JS
     assert "link.dataset.tailnetAppId=app.id" in JS
+    assert "frameUrl.origin!==location.origin" in JS
     assert "url.protocol!=='https:'&&url.origin!==location.origin" in JS
 
 
-def test_rail_is_desktop_only_and_mobile_session_shell_stays_unchanged():
-    assert ".rail.tailnet-app-rail{display:none!important;}" in CSS
-    assert "@media(min-width:641px){.rail.tailnet-app-rail{display:flex!important;}}" in CSS
+def test_workspace_and_hermes_selector_are_wired_into_the_layout():
+    assert 'id="tailnetAppWorkspace"' in INDEX
+    assert 'id="tailnetAppFrame"' in INDEX
+    assert 'id="tailnetAppHome"' in INDEX
+    assert "data-tailnet-view" in JS
+
+
+def test_rail_is_persistent_and_the_external_workspace_is_responsive():
+    assert ".rail.tailnet-app-rail{display:flex!important;" in CSS
+    assert ".rail.tailnet-app-rail{display:none!important;}" not in CSS
+    assert "@media(min-width:1500px)" in CSS
+    assert "html[data-tailnet-view=\"external\"] .tailnet-app-workspace" in CSS
+    assert "html[data-tailnet-view=\"external\"] .layout > .sidebar" in CSS
     assert ".sidebar-nav{display:none!important;}" in CSS
 
 

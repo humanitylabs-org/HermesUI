@@ -2159,9 +2159,11 @@
   .dashboard-external-badge::after{content:'';position:absolute;right:-2px;top:-2px;width:5px;height:5px;border-top:1.5px solid var(--accent);border-right:1.5px solid var(--accent);}
   .sidebar-nav .dashboard-external-badge{right:8px;top:7px;width:8px;height:8px;}
   @media(min-width:641px){.rail{display:flex;}.sidebar > .sidebar-nav{display:none;}}
-  /* HermesUI: the desktop rail launches private Tailnet apps; WebUI panel tabs stay hidden. */
-  .rail.tailnet-app-rail{display:none!important;}
-  @media(min-width:641px){.rail.tailnet-app-rail{display:flex!important;}}
+  /* HermesUI: a persistent private-app selector replaces the old WebUI panel rail. */
+  .rail.tailnet-app-rail{display:flex!important;order:1;position:relative;z-index:240;}
+  .layout > .sidebar{order:2;}
+  .layout > .main{order:3;}
+  .layout > .rightpanel{order:4;}
   .sidebar-nav{display:none!important;}
   .tailnet-app-rail{gap:6px;padding-top:10px;}
   .tailnet-app-link{text-decoration:none;}
@@ -2171,6 +2173,21 @@
   .tailnet-app-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
   .tailnet-app-icon svg{width:20px;height:20px;display:block;}
   .tailnet-app-link[target="_blank"]::after{max-width:220px;overflow:hidden;text-overflow:ellipsis;}
+  .tailnet-app-workspace{order:0;min-width:0;min-height:0;overflow:hidden;background:var(--main-bg);border-right:1px solid var(--border);}
+  .tailnet-app-workspace[hidden]{display:none!important;}
+  .tailnet-app-workspace iframe{display:block;width:100%;height:100%;border:0;background:var(--main-bg);}
+  @media(min-width:1500px){
+    html[data-tailnet-view="external"] .tailnet-app-workspace{display:block;flex:0 1 50vw;width:50vw;max-width:50vw;}
+  }
+  @media(max-width:1499px){
+    html[data-tailnet-view="external"] .tailnet-app-workspace{display:block;order:2;flex:1 1 auto;width:auto;}
+    html[data-tailnet-view="external"] .layout > .sidebar,
+    html[data-tailnet-view="external"] .layout > .main,
+    html[data-tailnet-view="external"] .layout > .rightpanel{display:none!important;}
+  }
+  @media(max-width:640px){
+    html:not([data-tailnet-view="external"]) .sidebar{left:48px;width:calc(100vw - 48px);}
+  }
   /* HermesUI: remove the workspace browser from the simplified shell. */
   html body .rightpanel,
   html body .workspace-panel-edge-toggle,
