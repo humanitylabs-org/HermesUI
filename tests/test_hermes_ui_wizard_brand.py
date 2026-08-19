@@ -29,6 +29,20 @@ def test_wizard_hat_vector_family_is_present_and_identifiable():
     assert "wizard-tile" not in mark
 
 
+def test_legacy_icon_routes_are_exact_wizard_hat_aliases():
+    aliases = {
+        "favicon.svg": "wizard-hat.svg",
+        "favicon-512.svg": "wizard-hat.svg",
+        "favicon-32.png": "wizard-hat-32.png",
+        "favicon-192.png": "wizard-hat-192.png",
+        "favicon-512.png": "wizard-hat-512.png",
+        "apple-touch-icon.png": "wizard-hat-apple-touch.png",
+        "favicon.ico": "wizard-hat.ico",
+    }
+    for alias, canonical in aliases.items():
+        assert (STATIC / alias).read_bytes() == (STATIC / canonical).read_bytes()
+
+
 def test_all_visible_shell_brand_surfaces_use_the_wizard_hat():
     assert 'rel="icon" type="image/svg+xml" href="static/wizard-hat.svg"' in INDEX
     assert 'rel="shortcut icon" href="static/wizard-hat.ico"' in INDEX
