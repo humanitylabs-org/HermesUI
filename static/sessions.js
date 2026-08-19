@@ -2490,12 +2490,15 @@ async function _openSidebarSession(session, loadOpts={}){
     var _preResult=_hermesNotifySessionOpen(session.session_id, null, {preload:true, opts:loadOpts});
     if(_preResult&&_preResult.cancel===true) return;
   }
+  const wasMobileSessionPage=document.documentElement.dataset.mobileSessionView==='sessions';
+  let openedTarget=false;
   const setSessionContentLoading=window.__sessionSwipeNavigation&&window.__sessionSwipeNavigation.setContentLoading;
   if(typeof setSessionContentLoading==='function') setSessionContentLoading(true);
+  // A deliberate selection leaves the Sessions page immediately. The content
+  // area can then show the same mode-specific loading layout used by tabs and
+  // desktop switches instead of holding the list until the request finishes.
+  if(wasMobileSessionPage&&typeof closeMobileSidebar==='function') closeMobileSidebar(true);
   try{
-    // Keep the mobile Sessions page visible while the target is being resolved.
-    // It closes only after a real active session exists, so a failed load cannot
-    // strand the user on an empty chat shell.
     if(_isExternalSession(session)){
       try{await api('/api/session/import_cli',{method:'POST',body:JSON.stringify(_externalImportPayload(session))});}
       catch(_e){ /* import failed -- fall through to read-only view */ }
@@ -2504,7 +2507,7 @@ async function _openSidebarSession(session, loadOpts={}){
     // Tell loadSession to skip its pre-hook — we already ran it above.
     await loadSession(session.session_id, Object.assign({}, loadOpts, {_preloadNotified:true}));
     if(S.session&&S.session.session_id===session.session_id){
-      const wasMobileSessionPage=document.documentElement.dataset.mobileSessionView==='sessions';
+      openedTarget=true;
       if(typeof closeMobileSidebar==='function') closeMobileSidebar();
       // The first tab render may happen while the Sessions page still hides the
       // titlebar. Rebuild and center once more after revealing its final geometry.
@@ -2513,6 +2516,7 @@ async function _openSidebarSession(session, loadOpts={}){
     }
     renderSessionListFromCache();
   }finally{
+    if(wasMobileSessionPage&&!openedTarget&&typeof openMobileSessionPage==='function') openMobileSessionPage();
     if(typeof setSessionContentLoading==='function') setSessionContentLoading(false);
   }
 }

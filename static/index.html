@@ -495,27 +495,30 @@
       </section>
       <section class="session-switch-skeleton" id="sessionSwitchSkeleton" role="status" aria-label="Loading session content" hidden>
         <span class="sr-only">Loading session content</span>
-        <header class="session-switch-skeleton-original" aria-hidden="true">
-          <span class="session-switch-skeleton-label"></span>
-          <span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span>
-          <span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span>
-        </header>
-        <article class="session-switch-skeleton-card" aria-hidden="true">
-          <span class="session-switch-skeleton-label"></span>
-          <span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span>
-          <span class="session-switch-skeleton-line session-switch-skeleton-line--short"></span>
-        </article>
-        <article class="session-switch-skeleton-card" aria-hidden="true">
-          <span class="session-switch-skeleton-label"></span>
-          <span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span>
-          <span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span>
-        </article>
-        <article class="session-switch-skeleton-card" aria-hidden="true">
-          <span class="session-switch-skeleton-label"></span>
-          <span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span>
-          <span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span>
-          <span class="session-switch-skeleton-line session-switch-skeleton-line--short"></span>
-        </article>
+        <div class="session-switch-skeleton-classic" aria-hidden="true">
+          <article class="session-switch-skeleton-chat-row session-switch-skeleton-chat-row--user">
+            <div class="session-switch-skeleton-chat-role"><span class="session-switch-skeleton-avatar"></span><span class="session-switch-skeleton-role-line"></span></div>
+            <div class="session-switch-skeleton-chat-copy"><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span></div>
+          </article>
+          <article class="session-switch-skeleton-chat-row session-switch-skeleton-chat-row--assistant">
+            <div class="session-switch-skeleton-chat-role"><span class="session-switch-skeleton-avatar"></span><span class="session-switch-skeleton-role-line"></span></div>
+            <div class="session-switch-skeleton-chat-copy"><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--short"></span></div>
+          </article>
+          <article class="session-switch-skeleton-chat-row session-switch-skeleton-chat-row--user">
+            <div class="session-switch-skeleton-chat-role"><span class="session-switch-skeleton-avatar"></span><span class="session-switch-skeleton-role-line"></span></div>
+            <div class="session-switch-skeleton-chat-copy"><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--short"></span></div>
+          </article>
+          <article class="session-switch-skeleton-chat-row session-switch-skeleton-chat-row--assistant">
+            <div class="session-switch-skeleton-chat-role"><span class="session-switch-skeleton-avatar"></span><span class="session-switch-skeleton-role-line"></span></div>
+            <div class="session-switch-skeleton-chat-copy"><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span></div>
+          </article>
+        </div>
+        <div class="session-switch-skeleton-high-signal" aria-hidden="true">
+          <article class="session-switch-skeleton-pane"><span class="session-switch-skeleton-pane-label">Goal</span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span></article>
+          <article class="session-switch-skeleton-pane"><span class="session-switch-skeleton-pane-label">Status</span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span></article>
+          <article class="session-switch-skeleton-pane"><span class="session-switch-skeleton-pane-label">Last instruction</span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--short"></span></article>
+          <article class="session-switch-skeleton-pane"><span class="session-switch-skeleton-pane-label">Result</span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span></article>
+        </div>
       </section>
       <div class="empty-state" id="emptyState">
         <div class="empty-logo"><img class="wizard-brand-mark" src="static/wizard-hat-mark.svg" alt="" role="img" aria-label="Wizard hat" width="88" height="88"></div>

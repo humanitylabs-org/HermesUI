@@ -104,6 +104,9 @@
   let contentLoadingDepth=0;
   let pane=null;
   let surface=null;
+  let contentSurface=null;
+  let preview=null;
+  let swipeAnimating=false;
   let tabsViewport=null;
   let tabList=null;
   let tabSyncFrame=null;
@@ -215,6 +218,21 @@
     tabSyncFrame=window.requestAnimationFrame(()=>syncTabs(false));
   }
 
+  function loadingSkeletonMarkup(){
+    return '<span class="sr-only">Loading session content</span>'
+      +'<div class="session-switch-skeleton-classic" aria-hidden="true">'
+      +'<article class="session-switch-skeleton-chat-row session-switch-skeleton-chat-row--user"><div class="session-switch-skeleton-chat-role"><span class="session-switch-skeleton-avatar"></span><span class="session-switch-skeleton-role-line"></span></div><div class="session-switch-skeleton-chat-copy"><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span></div></article>'
+      +'<article class="session-switch-skeleton-chat-row session-switch-skeleton-chat-row--assistant"><div class="session-switch-skeleton-chat-role"><span class="session-switch-skeleton-avatar"></span><span class="session-switch-skeleton-role-line"></span></div><div class="session-switch-skeleton-chat-copy"><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--short"></span></div></article>'
+      +'<article class="session-switch-skeleton-chat-row session-switch-skeleton-chat-row--user"><div class="session-switch-skeleton-chat-role"><span class="session-switch-skeleton-avatar"></span><span class="session-switch-skeleton-role-line"></span></div><div class="session-switch-skeleton-chat-copy"><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--short"></span></div></article>'
+      +'<article class="session-switch-skeleton-chat-row session-switch-skeleton-chat-row--assistant"><div class="session-switch-skeleton-chat-role"><span class="session-switch-skeleton-avatar"></span><span class="session-switch-skeleton-role-line"></span></div><div class="session-switch-skeleton-chat-copy"><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span></div></article>'
+      +'</div><div class="session-switch-skeleton-high-signal" aria-hidden="true">'
+      +'<article class="session-switch-skeleton-pane"><span class="session-switch-skeleton-pane-label">Goal</span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span></article>'
+      +'<article class="session-switch-skeleton-pane"><span class="session-switch-skeleton-pane-label">Status</span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span></article>'
+      +'<article class="session-switch-skeleton-pane"><span class="session-switch-skeleton-pane-label">Last instruction</span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--short"></span></article>'
+      +'<article class="session-switch-skeleton-pane"><span class="session-switch-skeleton-pane-label">Result</span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span></article>'
+      +'</div>';
+  }
+
   function ensureContentSkeleton(){
     let skeleton=byId('sessionSwitchSkeleton');
     if(skeleton) return skeleton;
@@ -226,12 +244,82 @@
     skeleton.setAttribute('role','status');
     skeleton.setAttribute('aria-label','Loading session content');
     skeleton.hidden=true;
-    skeleton.innerHTML='<span class="sr-only">Loading session content</span><header class="session-switch-skeleton-original" aria-hidden="true"><span class="session-switch-skeleton-label"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span></header>'
-      +'<article class="session-switch-skeleton-card" aria-hidden="true"><span class="session-switch-skeleton-label"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--short"></span></article>'
-      +'<article class="session-switch-skeleton-card" aria-hidden="true"><span class="session-switch-skeleton-label"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span></article>'
-      +'<article class="session-switch-skeleton-card" aria-hidden="true"><span class="session-switch-skeleton-label"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--wide"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--medium"></span><span class="session-switch-skeleton-line session-switch-skeleton-line--short"></span></article>';
+    skeleton.innerHTML=loadingSkeletonMarkup();
     messages.insertBefore(skeleton,messages.firstElementChild||null);
     return skeleton;
+  }
+
+  function ensureSwipePreview(){
+    if(preview&&preview.isConnected) return preview;
+    if(!surface) return null;
+    const skeleton=ensureContentSkeleton();
+    if(!skeleton) return null;
+    preview=document.createElement('div');
+    preview.className='session-swipe-preview';
+    preview.setAttribute('aria-hidden','true');
+    const clone=skeleton.cloneNode(true);
+    clone.removeAttribute('id');
+    clone.removeAttribute('role');
+    clone.removeAttribute('aria-label');
+    clone.hidden=false;
+    clone.classList.add('session-swipe-preview-skeleton');
+    preview.appendChild(clone);
+    surface.appendChild(preview);
+    return preview;
+  }
+
+  function swipeWidth(){
+    return Math.max(1,contentSurface&&contentSurface.getBoundingClientRect().width||surface&&surface.getBoundingClientRect().width||window.innerWidth||1);
+  }
+
+  function resetSwipeVisual(){
+    swipeAnimating=false;
+    if(surface) surface.classList.remove('session-swipe-active');
+    if(contentSurface){
+      contentSurface.classList.remove('session-swipe-moving','session-swipe-settling');
+      contentSurface.style.transform='';
+    }
+    if(preview){
+      preview.classList.remove('is-visible','session-swipe-moving','session-swipe-settling');
+      preview.style.transform='translate3d(100%,0,0)';
+    }
+  }
+
+  function applySwipeVisual(dx,target,direction){
+    if(!contentSurface||!target||!direction){resetSwipeVisual();return;}
+    const swipePreview=ensureSwipePreview();
+    if(!swipePreview) return;
+    const width=swipeWidth();
+    dx=Math.max(-width,Math.min(width,dx));
+    const base=direction<0?width:-width;
+    surface.classList.add('session-swipe-active');
+    contentSurface.classList.remove('session-swipe-settling');
+    contentSurface.classList.add('session-swipe-moving');
+    preview.classList.remove('session-swipe-settling');
+    preview.classList.add('is-visible','session-swipe-moving');
+    contentSurface.style.transform=`translate3d(${dx}px,0,0)`;
+    preview.style.transform=`translate3d(${base+dx}px,0,0)`;
+  }
+
+  function animateSwipeTo(contentX,previewX){
+    if(!contentSurface||!preview) return Promise.resolve();
+    swipeAnimating=true;
+    contentSurface.classList.remove('session-swipe-moving');
+    preview.classList.remove('session-swipe-moving');
+    contentSurface.classList.add('session-swipe-settling');
+    preview.classList.add('session-swipe-settling','is-visible');
+    const place=()=>{
+      contentSurface.style.transform=`translate3d(${contentX}px,0,0)`;
+      preview.style.transform=`translate3d(${previewX}px,0,0)`;
+    };
+    if(reducedMotion()){place();return Promise.resolve();}
+    return new Promise(resolve=>{
+      let settled=false;
+      const done=()=>{if(settled)return;settled=true;resolve();};
+      contentSurface.addEventListener('transitionend',done,{once:true});
+      requestAnimationFrame(place);
+      setTimeout(done,240);
+    });
   }
 
   function setContentLoading(on){
@@ -283,11 +371,15 @@
   }
 
   function snapBack(){
+    const active=gesture;
     gesture=null;
+    if(!active||active.axis!=='horizontal'||!active.target){resetSwipeVisual();return;}
+    const width=swipeWidth();
+    void animateSwipeTo(0,active.direction<0?width:-width).then(resetSwipeVisual);
   }
 
   function start(event){
-    if(!enabled()||switching||gesture||!currentSid()) return;
+    if(!enabled()||switching||swipeAnimating||gesture||!currentSid()) return;
     if(event.pointerType&&event.pointerType!=='touch'&&event.pointerType!=='pen') return;
     if(event.button!==undefined&&event.button!==0) return;
     if(event.clientX<=EDGE_GUARD||event.clientX>=window.innerWidth-EDGE_GUARD) return;
@@ -331,12 +423,13 @@
     gesture.direction=dx<0?-1:1;
     gesture.target=adjacentSession(gesture.direction);
     gesture.dx=dx;
+    applySwipeVisual(dx,gesture.target,gesture.direction);
   }
 
   async function finish(event,cancelled){
     if(!gesture||(event.pointerId!==undefined&&event.pointerId!==gesture.pointerId)) return;
-    if(gesture.axis!=='horizontal'||cancelled){snapBack();return;}
     try{surface.releasePointerCapture(gesture.pointerId);}catch(_){}
+    if(gesture.axis!=='horizontal'||cancelled){snapBack();return;}
     const active=gesture;
     const distance=Math.abs(active.dx);
     const fast=Math.abs(active.velocityX)>=FLICK_VELOCITY&&distance>=FLICK_MIN_DISTANCE;
@@ -345,7 +438,17 @@
     if(!target||(!fast&&!far)){snapBack();return;}
 
     gesture=null;
-    await switchTarget(target,'mobile-session-swipe');
+    const width=swipeWidth();
+    await animateSwipeTo(active.direction<0?-width:width,0);
+    // Hand the fully-arrived preview to the real loading surface before its
+    // duplicate is removed, so even a slow request has no blank frame.
+    setContentLoading(true);
+    resetSwipeVisual();
+    try{
+      await switchTarget(target,'mobile-session-swipe');
+    }finally{
+      setContentLoading(false);
+    }
   }
 
   function cancel(){
@@ -355,7 +458,7 @@
 
   function onTabClick(event){
     const tab=event.target&&event.target.closest&&event.target.closest('.mobile-session-tab');
-    if(!tab||!tabList||!tabList.contains(tab)||switching) return;
+    if(!tab||!tabList||!tabList.contains(tab)||switching||swipeAnimating) return;
     const sid=String(tab.dataset.sid||'');
     if(!sid||sid===currentSid()){
       centerActiveTab(reducedMotion()?'auto':'smooth');
@@ -382,7 +485,8 @@
   function init(){
     pane=byId('mainChat');
     surface=pane&&pane.querySelector('.messages-shell');
-    if(!pane||!surface) return;
+    contentSurface=byId('messages');
+    if(!pane||!surface||!contentSurface) return;
     tabsViewport=byId('mobileSessionTabsViewport');
     tabList=byId('mobileSessionTabList');
     if(tabList){
@@ -404,6 +508,7 @@
     window.addEventListener('blur',cancel);
     window.addEventListener('resize',()=>{
       cancel();
+      resetSwipeVisual();
       setTabMetrics();
       centerActiveTab('auto');
     },{passive:true});

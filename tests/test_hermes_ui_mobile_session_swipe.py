@@ -22,7 +22,7 @@ def test_swipe_is_phone_and_coarse_pointer_only():
     assert "const PHONE_QUERY='(max-width: 640px)'" in SWIPE
     assert "const COARSE_QUERY='(pointer: coarse)'" in SWIPE
     assert "const enabled=()=>media(PHONE_QUERY)&&media(COARSE_QUERY)" in SWIPE
-    assert "if(!enabled()||switching||gesture||!currentSid()) return" in SWIPE
+    assert "if(!enabled()||switching||swipeAnimating||gesture||!currentSid()) return" in SWIPE
     assert "@media (max-width:640px) and (pointer:coarse){.messages-shell{touch-action:pan-y;}}" in CSS
 
 
@@ -43,7 +43,7 @@ def test_swipe_distinguishes_vertical_scroll_snap_and_commit():
     assert "const far=distance>=commitDistance()" in SWIPE
     assert "if(!target||(!fast&&!far)){snapBack();return;}" in SWIPE
     assert "await switchTarget(target,'mobile-session-swipe')" in SWIPE
-    assert "transformPane" not in SWIPE
+    assert "applySwipeVisual(dx,gesture.target,gesture.direction)" in SWIPE
     assert "Release to open" not in SWIPE
 
 
@@ -57,8 +57,10 @@ def test_swipe_does_not_start_on_edges_or_interactive_content():
 
 
 def test_swipe_and_tab_click_share_one_loading_experience():
-    assert ".session-swipe-preview{" not in CSS
-    assert "session-swipe-preview" not in SWIPE
+    assert ".session-swipe-preview{" in CSS
+    assert "function ensureSwipePreview()" in SWIPE
+    assert "cloneNode(true)" in SWIPE
+    assert "preview.setAttribute('aria-hidden','true')" in SWIPE
     assert "void switchTarget(sessionForSid(sid),'mobile-session-tab')" in SWIPE
     assert "await switchTarget(target,'mobile-session-swipe')" in SWIPE
     assert "setContentLoading(true)" in SWIPE
@@ -122,16 +124,36 @@ def test_selected_tab_uses_sidebar_style_gray_without_accent_line():
     assert '.mobile-session-tab[aria-selected="true"]::after' not in CSS
 
 
-def test_session_switch_loading_is_content_skeleton_only():
+def test_session_switch_loading_matches_classic_or_high_signal_layout():
     assert 'id="sessionSwitchSkeleton"' in INDEX
-    assert INDEX.count('class="session-switch-skeleton-card"') == 3
-    assert ".session-switch-skeleton:not([hidden]){display:grid;" in CSS
+    assert 'class="session-switch-skeleton-classic"' in INDEX
+    assert INDEX.count('class="session-switch-skeleton-chat-row') == 4
+    assert 'class="session-switch-skeleton-high-signal"' in INDEX
+    assert INDEX.count('class="session-switch-skeleton-pane"') == 4
+    for label in ("Goal", "Status", "Last instruction", "Result"):
+        assert f'<span class="session-switch-skeleton-pane-label">{label}</span>' in INDEX
+    assert 'html[data-session-view="classic"] .session-switch-skeleton-high-signal' in CSS
+    assert 'html[data-session-view="dashboard"] .session-switch-skeleton-classic' in CSS
+    assert ".session-switch-skeleton-high-signal{height:100%;min-height:0;display:grid;grid-template-rows:repeat(4,minmax(0,1fr))" in CSS
     assert ".messages.session-switch-loading > .session-dashboard" in CSS
     assert "animation:skeletonSheen 1.25s ease-in-out infinite" in CSS
     assert "messages.setAttribute('aria-busy',visible?'true':'false')" in SWIPE
     assert "function ensureContentSkeleton()" in SWIPE
     assert "const skeleton=ensureContentSkeleton()" in SWIPE
     assert "if(skeleton) skeleton.hidden=!visible" in SWIPE
+
+
+def test_partial_swipe_reveals_an_adjacent_view_specific_loading_surface():
+    assert "function applySwipeVisual(dx,target,direction)" in SWIPE
+    assert "const base=direction<0?width:-width" in SWIPE
+    assert "contentSurface.style.transform=`translate3d(${dx}px,0,0)`" in SWIPE
+    assert "preview.style.transform=`translate3d(${base+dx}px,0,0)`" in SWIPE
+    assert "surface.classList.add('session-swipe-active')" in SWIPE
+    assert "await animateSwipeTo(active.direction<0?-width:width,0)" in SWIPE
+    assert ".messages-shell.session-swipe-active{overflow:hidden;}" in CSS
+    assert ".messages.session-swipe-moving" in CSS
+    assert ".session-swipe-preview.session-swipe-moving" in CSS
+    assert "pointer-events:none" in CSS[CSS.index(".session-swipe-preview{"):CSS.index("}", CSS.index(".session-swipe-preview{"))]
 
 
 def test_desktop_sidebar_and_keyboard_session_switches_use_the_same_skeleton():
@@ -144,9 +166,12 @@ def test_desktop_sidebar_and_keyboard_session_switches_use_the_same_skeleton():
 
 def test_mobile_session_selection_recenters_after_revealing_the_tab_strip():
     open_start = SESSIONS.index("async function _openSidebarSession")
-    close_position = SESSIONS.index("closeMobileSidebar()", open_start)
+    close_position = SESSIONS.index("closeMobileSidebar(true)", open_start)
+    load_position = SESSIONS.index("await loadSession", open_start)
     sync_position = SESSIONS.index("syncSessionTabs(true)", open_start)
     render_position = SESSIONS.index("renderSessionListFromCache()", open_start)
     assert "const wasMobileSessionPage=document.documentElement.dataset.mobileSessionView==='sessions';" in SESSIONS
+    assert "if(wasMobileSessionPage&&typeof closeMobileSidebar==='function') closeMobileSidebar(true);" in SESSIONS
     assert "if(wasMobileSessionPage&&typeof syncSessionTabs==='function') syncSessionTabs(true);" in SESSIONS
-    assert close_position < sync_position < render_position
+    assert close_position < load_position < sync_position < render_position
+    assert "if(wasMobileSessionPage&&!openedTarget&&typeof openMobileSessionPage==='function') openMobileSessionPage();" in SESSIONS
