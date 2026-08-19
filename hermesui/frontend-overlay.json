@@ -56,7 +56,7 @@
       "upstream_sha256": "087f2a5d42fa71bceaa650138875d2cb1ed41129ef58f0d749072eec0d395c2f"
     },
     {
-      "hermesui_sha256": "1dac17b3f2d739e1d06fd15ed674636b0eda617b2403bafd58b49037b6fc46b5",
+      "hermesui_sha256": "61fec13d793b476c024984e92fd39305f008a56be30bf6846814386c74fc59ff",
       "path": "static/style.css",
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },

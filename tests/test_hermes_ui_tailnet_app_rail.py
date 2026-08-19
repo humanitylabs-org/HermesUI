@@ -55,8 +55,9 @@ def test_workspace_and_hermes_selector_are_wired_into_the_layout():
 def test_rail_is_persistent_and_the_external_workspace_is_responsive():
     assert ".rail.tailnet-app-rail{display:flex!important;" in CSS
     assert ".rail.tailnet-app-rail{display:none!important;}" not in CSS
-    assert "@media(min-width:900px)" in CSS
-    assert "@media(max-width:899px)" in CSS
+    assert "@media(min-width:1296px)" in CSS
+    assert "@media(max-width:1295px)" in CSS
+    assert "@media(min-width:900px)" not in CSS
     assert "@media(min-width:1500px)" not in CSS
     assert "flex:0 0 50vw;width:50vw;max-width:50vw" in CSS
     assert "html[data-tailnet-view=\"external\"] .tailnet-app-workspace" in CSS

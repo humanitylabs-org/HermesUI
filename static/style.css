@@ -2176,10 +2176,12 @@
   .tailnet-app-workspace{order:0;min-width:0;min-height:0;overflow:hidden;background:var(--main-bg);border-right:1px solid var(--border);}
   .tailnet-app-workspace[hidden]{display:none!important;}
   .tailnet-app-workspace iframe{display:block;width:100%;height:100%;border:0;background:var(--main-bg);}
-  @media(min-width:900px){
+  /* Split mode needs 50vw external + 48px rail + 180px sidebar + 420px main.
+     1296px is the first width where those minimums fit without clipping. */
+  @media(min-width:1296px){
     html[data-tailnet-view="external"] .tailnet-app-workspace{display:block;flex:0 0 50vw;width:50vw;max-width:50vw;}
   }
-  @media(max-width:899px){
+  @media(max-width:1295px){
     html[data-tailnet-view="external"] .tailnet-app-workspace{display:block;order:2;flex:1 1 auto;width:auto;}
     html[data-tailnet-view="external"] .layout > .sidebar,
     html[data-tailnet-view="external"] .layout > .main,
