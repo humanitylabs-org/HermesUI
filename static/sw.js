@@ -40,8 +40,8 @@ const SHELL_ASSETS = [
   './static/vendor/smd.min.js' + VQ,
   './static/vendor/katex/0.16.22/katex.min.css' + VQ,
   './static/vendor/katex/0.16.22/katex.min.js' + VQ,
-  './static/favicon.svg',
-  './static/favicon-32.png',
+  './static/wizard-hat.svg',
+  './static/wizard-hat-32.png',
   './manifest.json',
 ];
 
