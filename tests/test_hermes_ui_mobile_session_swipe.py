@@ -70,7 +70,7 @@ def test_swipe_and_tab_click_share_one_loading_experience():
     assert "const reducedMotion=()=>media('(prefers-reduced-motion: reduce)')" in SWIPE
 
 
-def test_mobile_browser_tabs_are_scrollable_and_share_switch_loading():
+def test_mobile_tabs_are_a_coupled_pager_and_share_switch_loading():
     for element_id in (
         "mobileSessionTabsViewport",
         "mobileSessionTabsTrack",
@@ -85,13 +85,15 @@ def test_mobile_browser_tabs_are_scrollable_and_share_switch_loading():
     assert "tabList.replaceChildren(...sessions.map(session=>buildTab(session,activeSid)))" in SWIPE
     assert "tabList.addEventListener('click',onTabClick)" in SWIPE
     assert "centerActiveTab" in SWIPE
-    assert "transformTabs" not in SWIPE
     assert "switchTarget(target,'mobile-session-swipe')" in SWIPE
     assert ".mobile-session-tabs{display:none;}" in CSS
     assert ".mobile-session-tabs{display:block;" in CSS
     assert ".mobile-session-tabs-viewport{position:relative;width:100%;" in CSS
-    assert "overflow-x:auto" in CSS
-    assert "scroll-snap-type:x proximity" in CSS
+    viewport_rule = CSS[CSS.index(".mobile-session-tabs-viewport{"):]
+    viewport_rule = viewport_rule[: viewport_rule.index("}") + 1]
+    assert "overflow:hidden" in viewport_rule
+    assert "touch-action:pan-y" in viewport_rule
+    assert "scroll-snap-type" not in viewport_rule
     assert '.mobile-session-tab[aria-selected="true"]' in CSS
     assert ".app-titlebar-new-chat.mobile-session-new-tab{" in CSS
 
@@ -155,11 +157,23 @@ def test_partial_swipe_reveals_an_adjacent_view_specific_loading_surface():
     assert "contentSurface.style.transform=`translate3d(${dx}px,0,0)`" in SWIPE
     assert "preview.style.transform=`translate3d(${base+dx}px,0,0)`" in SWIPE
     assert "surface.classList.add('session-swipe-active')" in SWIPE
-    assert "await animateSwipeTo(active.direction<0?-width:width,0)" in SWIPE
+    assert "await animateSwipeTo(active.direction<0?-width:width,0,targetTabLeft)" in SWIPE
     assert ".messages-shell.session-swipe-active{overflow:hidden;}" in CSS
     assert ".messages.session-swipe-moving" in CSS
     assert ".session-swipe-preview.session-swipe-moving" in CSS
     assert "pointer-events:none" in CSS[CSS.index(".session-swipe-preview{"):CSS.index("}", CSS.index(".session-swipe-preview{"))]
+
+
+def test_tab_header_and_chat_use_the_same_swipe_progress():
+    assert "tabsViewport.addEventListener('pointerdown',start,{passive:true})" in SWIPE
+    assert "surface.addEventListener('pointerdown',start,{passive:true})" in SWIPE
+    assert "const fromTabs=!!(tabsViewport&&event.target&&tabsViewport.contains(event.target))" in SWIPE
+    assert "if(fromTabs&&event.target.closest&&event.target.closest('.mobile-session-new-tab')) return" in SWIPE
+    assert "const progress=Math.min(1,Math.abs(dx)/swipeWidth())" in SWIPE
+    assert "setTabScroll(gesture.tabStartScrollLeft+(targetLeft-gesture.tabStartScrollLeft)*progress)" in SWIPE
+    assert "applyTabSwipeProgress(dx,target)" in SWIPE
+    assert "active.tabStartScrollLeft" in SWIPE
+    assert "suppressTabClickUntil=performance.now()+450" in SWIPE
 
 
 def test_desktop_sidebar_and_keyboard_session_switches_use_the_same_skeleton():

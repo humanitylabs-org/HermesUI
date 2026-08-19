@@ -76,7 +76,7 @@
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "25d3b61b9111f9714f8843946bd176809cfca11f43e999946334c4b1e945fa54",
+      "hermesui_sha256": "c7dcaff010c3f08189c3e20f23bab301ce8f47b67dea20dd5468d895d3235e76",
       "path": "static/session-swipe-navigation.js",
       "upstream_sha256": null
     },
@@ -96,7 +96,7 @@
       "upstream_sha256": "087f2a5d42fa71bceaa650138875d2cb1ed41129ef58f0d749072eec0d395c2f"
     },
     {
-      "hermesui_sha256": "8d3b982ee9bdbf37f36265b70880cff8f3a92c0b5a3931e6906556ce9540cce6",
+      "hermesui_sha256": "d0b2017bd34b6f0d81380e896e4b5219a1928d262967bede47a7b8054c3eb318",
       "path": "static/style.css",
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },

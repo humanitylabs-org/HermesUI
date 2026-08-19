@@ -115,6 +115,7 @@
   let pendingTabSync=false;
   let tabSignature='';
   let lastActiveSid=null;
+  let suppressTabClickUntil=0;
 
 
   function setTabMetrics(){
@@ -272,9 +273,60 @@
     return Math.max(1,contentSurface&&contentSurface.getBoundingClientRect().width||surface&&surface.getBoundingClientRect().width||window.innerWidth||1);
   }
 
+  function clampTabScroll(left){
+    if(!tabsViewport) return 0;
+    const max=Math.max(0,tabsViewport.scrollWidth-tabsViewport.clientWidth);
+    return Math.max(0,Math.min(max,Number(left)||0));
+  }
+
+  function setTabScroll(left){
+    if(tabsViewport) tabsViewport.scrollLeft=clampTabScroll(left);
+  }
+
+  function tabScrollForSession(session){
+    if(!tabsViewport||!tabList||!session) return null;
+    const sid=String(session.session_id||'');
+    const tab=[...tabList.querySelectorAll('.mobile-session-tab')]
+      .find(item=>String(item.dataset.sid||'')===sid);
+    if(!tab) return null;
+    const viewportRect=tabsViewport.getBoundingClientRect();
+    const tabRect=tab.getBoundingClientRect();
+    return clampTabScroll(tabsViewport.scrollLeft+(tabRect.left+tabRect.width/2)-(viewportRect.left+viewportRect.width/2));
+  }
+
+  function applyTabSwipeProgress(dx,target){
+    if(!tabsViewport||!gesture) return;
+    if(!target){setTabScroll(gesture.tabStartScrollLeft);return;}
+    const targetLeft=tabScrollForSession(target);
+    if(targetLeft===null) return;
+    const progress=Math.min(1,Math.abs(dx)/swipeWidth());
+    tabsViewport.classList.add('session-tab-swipe-active');
+    setTabScroll(gesture.tabStartScrollLeft+(targetLeft-gesture.tabStartScrollLeft)*progress);
+  }
+
+  function animateTabScrollTo(left){
+    if(!tabsViewport||left===null||left===undefined) return Promise.resolve();
+    const startLeft=tabsViewport.scrollLeft;
+    const endLeft=clampTabScroll(left);
+    if(reducedMotion()||Math.abs(endLeft-startLeft)<.5){setTabScroll(endLeft);return Promise.resolve();}
+    return new Promise(resolve=>{
+      const started=performance.now();
+      const duration=180;
+      const step=now=>{
+        const progress=Math.min(1,(now-started)/duration);
+        const eased=1-Math.pow(1-progress,3);
+        setTabScroll(startLeft+(endLeft-startLeft)*eased);
+        if(progress<1) requestAnimationFrame(step);
+        else resolve();
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
   function resetSwipeVisual(){
     swipeAnimating=false;
     if(surface) surface.classList.remove('session-swipe-active');
+    if(tabsViewport) tabsViewport.classList.remove('session-tab-swipe-active');
     if(contentSurface){
       contentSurface.classList.remove('session-swipe-moving','session-swipe-settling');
       contentSurface.style.transform='';
@@ -286,7 +338,11 @@
   }
 
   function applySwipeVisual(dx,target,direction){
-    if(!contentSurface||!target||!direction){resetSwipeVisual();return;}
+    if(!contentSurface||!target||!direction){
+      if(gesture) setTabScroll(gesture.tabStartScrollLeft);
+      resetSwipeVisual();
+      return;
+    }
     const swipePreview=ensureSwipePreview();
     if(!swipePreview) return;
     const width=swipeWidth();
@@ -299,9 +355,10 @@
     preview.classList.add('is-visible','session-swipe-moving');
     contentSurface.style.transform=`translate3d(${dx}px,0,0)`;
     preview.style.transform=`translate3d(${base+dx}px,0,0)`;
+    applyTabSwipeProgress(dx,target);
   }
 
-  function animateSwipeTo(contentX,previewX){
+  function animateSwipeTo(contentX,previewX,tabLeft=null){
     if(!contentSurface||!preview) return Promise.resolve();
     swipeAnimating=true;
     contentSurface.classList.remove('session-swipe-moving');
@@ -312,14 +369,16 @@
       contentSurface.style.transform=`translate3d(${contentX}px,0,0)`;
       preview.style.transform=`translate3d(${previewX}px,0,0)`;
     };
-    if(reducedMotion()){place();return Promise.resolve();}
-    return new Promise(resolve=>{
+    const tabAnimation=animateTabScrollTo(tabLeft);
+    if(reducedMotion()){place();return tabAnimation;}
+    const contentAnimation=new Promise(resolve=>{
       let settled=false;
       const done=()=>{if(settled)return;settled=true;resolve();};
       contentSurface.addEventListener('transitionend',done,{once:true});
       requestAnimationFrame(place);
       setTimeout(done,240);
     });
+    return Promise.all([contentAnimation,tabAnimation]).then(()=>undefined);
   }
 
   function setContentLoading(on){
@@ -375,7 +434,7 @@
     gesture=null;
     if(!active||active.axis!=='horizontal'||!active.target){resetSwipeVisual();return;}
     const width=swipeWidth();
-    void animateSwipeTo(0,active.direction<0?width:-width).then(resetSwipeVisual);
+    void animateSwipeTo(0,active.direction<0?width:-width,active.tabStartScrollLeft).then(resetSwipeVisual);
   }
 
   function start(event){
@@ -383,7 +442,9 @@
     if(event.pointerType&&event.pointerType!=='touch'&&event.pointerType!=='pen') return;
     if(event.button!==undefined&&event.button!==0) return;
     if(event.clientX<=EDGE_GUARD||event.clientX>=window.innerWidth-EDGE_GUARD) return;
-    if(event.target&&event.target.closest&&event.target.closest(INTERACTIVE_SELECTOR)) return;
+    const fromTabs=!!(tabsViewport&&event.target&&tabsViewport.contains(event.target));
+    if(fromTabs&&event.target.closest&&event.target.closest('.mobile-session-new-tab')) return;
+    if(!fromTabs&&event.target&&event.target.closest&&event.target.closest(INTERACTIVE_SELECTOR)) return;
     const selection=typeof window.getSelection==='function'?window.getSelection():null;
     if(selection&&selection.type==='Range'&&!selection.isCollapsed) return;
     gesture={
@@ -397,6 +458,9 @@
       axis:'pending',
       target:null,
       direction:0,
+      captureTarget:event.currentTarget||surface,
+      startedInTabs:fromTabs,
+      tabStartScrollLeft:tabsViewport?tabsViewport.scrollLeft:0,
     };
   }
 
@@ -410,7 +474,8 @@
       if(Math.max(absX,absY)<LOCK_DISTANCE) return;
       if(absY>absX*1.12){gesture=null;return;}
       gesture.axis='horizontal';
-      try{surface.setPointerCapture(event.pointerId);}catch(_){}
+      if(gesture.startedInTabs) suppressTabClickUntil=performance.now()+450;
+      try{gesture.captureTarget.setPointerCapture(event.pointerId);}catch(_){}
     }
     if(gesture.axis!=='horizontal') return;
     if(event.cancelable) event.preventDefault();
@@ -428,7 +493,7 @@
 
   async function finish(event,cancelled){
     if(!gesture||(event.pointerId!==undefined&&event.pointerId!==gesture.pointerId)) return;
-    try{surface.releasePointerCapture(gesture.pointerId);}catch(_){}
+    try{gesture.captureTarget.releasePointerCapture(gesture.pointerId);}catch(_){}
     if(gesture.axis!=='horizontal'||cancelled){snapBack();return;}
     const active=gesture;
     const distance=Math.abs(active.dx);
@@ -439,7 +504,8 @@
 
     gesture=null;
     const width=swipeWidth();
-    await animateSwipeTo(active.direction<0?-width:width,0);
+    const targetTabLeft=tabScrollForSession(target);
+    await animateSwipeTo(active.direction<0?-width:width,0,targetTabLeft);
     // Hand the fully-arrived preview to the real loading surface before its
     // duplicate is removed, so even a slow request has no blank frame.
     setContentLoading(true);
@@ -457,6 +523,11 @@
   }
 
   function onTabClick(event){
+    if(performance.now()<suppressTabClickUntil){
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const tab=event.target&&event.target.closest&&event.target.closest('.mobile-session-tab');
     if(!tab||!tabList||!tabList.contains(tab)||switching||swipeAnimating) return;
     const sid=String(tab.dataset.sid||'');
@@ -493,6 +564,7 @@
       tabList.addEventListener('click',onTabClick);
       tabList.addEventListener('keydown',onTabKeydown);
     }
+    if(tabsViewport) tabsViewport.addEventListener('pointerdown',start,{passive:true});
     syncTabs(true);
     const title=byId('appTitlebarTitle');
     const list=byId('sessionList');

@@ -3255,26 +3255,26 @@
       transform:translateX(-100%);transition:transform .25s ease;will-change:transform;}
     .sidebar.mobile-open{transform:translateX(0);}
     .sidebar .resize-handle{display:none;}
-    /* Mobile browser-style session tabs. The row scrolls independently, while
-       blank edge gutters let the first/last real tab sit clearly at a boundary. */
+    /* Mobile session pager. Tabs and chat share one horizontal gesture; the
+       tab row never scrolls independently from the session beneath it. */
     .app-titlebar{height:52px;justify-content:flex-start;gap:3px;padding-left:max(2px,env(safe-area-inset-left,0));padding-right:max(4px,env(safe-area-inset-right,0));overflow:hidden;}
     .app-titlebar-left{flex:0 0 44px;min-width:44px;}
     .app-titlebar-profile{display:none!important;}
     .app-titlebar-hamburger{display:flex;}
     .app-titlebar-inner,.app-titlebar-spacer,.app-titlebar-reload{display:none!important;}
     .mobile-session-tabs{display:block;flex:1 1 auto;min-width:0;height:46px;-webkit-app-region:no-drag;}
-    .mobile-session-tabs-viewport{position:relative;width:100%;min-width:0;height:44px;overflow-x:auto;overflow-y:hidden;overflow-anchor:none;overscroll-behavior-inline:contain;scroll-snap-type:x proximity;scroll-padding-inline:var(--mobile-session-tab-gutter,20%);scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;isolation:isolate;}
+    .mobile-session-tabs-viewport{position:relative;width:100%;min-width:0;height:44px;overflow:hidden;overflow-anchor:none;overscroll-behavior-inline:contain;scrollbar-width:none;touch-action:pan-y;isolation:isolate;}
     .mobile-session-tabs-viewport::-webkit-scrollbar{display:none;}
     .mobile-session-tabs-track{display:flex;align-items:flex-end;gap:4px;width:max-content;min-width:100%;height:44px;transform:translate3d(0,0,0);}
     .mobile-session-tabs-track::before{content:'';flex:0 0 var(--mobile-session-tab-gutter,20%);height:1px;}
     .mobile-session-tabs-track::after{content:'';flex:0 0 var(--mobile-session-end-gutter,calc(50% - 20px));height:1px;}
     .mobile-session-tab-list{display:flex;align-items:flex-end;gap:4px;flex:0 0 auto;height:44px;}
-    .mobile-session-tab{position:relative;flex:0 0 var(--mobile-session-tab-width,60vw);width:var(--mobile-session-tab-width,60vw);height:40px;display:flex;align-items:center;justify-content:center;scroll-snap-align:center;border:1px solid var(--border);border-bottom-color:var(--border);border-radius:11px 11px 0 0;background:color-mix(in srgb,var(--surface) 72%,var(--sidebar));color:var(--muted);padding:0 13px;font:inherit;font-size:11px;font-weight:600;line-height:1;cursor:pointer;overflow:hidden;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-sizing:border-box;box-shadow:0 -1px 5px rgba(0,0,0,.05);transition:color .14s,border-color .14s,background .14s,box-shadow .14s;}
+    .mobile-session-tab{position:relative;flex:0 0 var(--mobile-session-tab-width,60vw);width:var(--mobile-session-tab-width,60vw);height:40px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-bottom-color:var(--border);border-radius:11px 11px 0 0;background:color-mix(in srgb,var(--surface) 72%,var(--sidebar));color:var(--muted);padding:0 13px;font:inherit;font-size:11px;font-weight:600;line-height:1;cursor:pointer;overflow:hidden;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-sizing:border-box;box-shadow:0 -1px 5px rgba(0,0,0,.05);transition:color .14s,border-color .14s,background .14s,box-shadow .14s;}
     .mobile-session-tab[aria-selected="true"]{z-index:2;background:var(--surface-subtle-hover,var(--hover-bg));border-color:var(--border);border-bottom-color:var(--border);color:var(--text);font-weight:800;box-shadow:none;}
     .mobile-session-tab-title{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     .mobile-session-tab.has-session-state .mobile-session-tab-title{max-width:calc(100% - 26px);}
     .mobile-session-tab-state{position:absolute;right:10px;top:50%;transform:translateY(-50%);}
-    .app-titlebar-new-chat.mobile-session-new-tab{display:inline-flex;align-items:center;justify-content:center;flex:0 0 40px;width:40px;height:40px;scroll-snap-align:center;margin-bottom:0;padding:0;border:1px solid var(--border);border-bottom-color:var(--border);border-radius:11px 11px 0 0;background:color-mix(in srgb,var(--surface) 72%,var(--sidebar));color:var(--muted);box-shadow:0 -1px 5px rgba(0,0,0,.05);}
+    .app-titlebar-new-chat.mobile-session-new-tab{display:inline-flex;align-items:center;justify-content:center;flex:0 0 40px;width:40px;height:40px;margin-bottom:0;padding:0;border:1px solid var(--border);border-bottom-color:var(--border);border-radius:11px 11px 0 0;background:color-mix(in srgb,var(--surface) 72%,var(--sidebar));color:var(--muted);box-shadow:0 -1px 5px rgba(0,0,0,.05);}
     .app-titlebar-new-chat.mobile-session-new-tab:hover,.app-titlebar-new-chat.mobile-session-new-tab:focus-visible{background:var(--hover-bg);color:var(--text);}
     .app-titlebar-new-chat.mobile-session-new-tab:disabled{opacity:.45;cursor:wait;}
     .system-health-panel.insights-card{gap:10px;padding:12px;}
