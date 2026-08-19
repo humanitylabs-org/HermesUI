@@ -2342,7 +2342,8 @@
   html[data-session-view="dashboard"] .session-view-action--classic,
   html[data-session-view="classic"] .session-view-action--dashboard{display:inline-flex;}
   .messages{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0;position:relative;z-index:0;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior-y:contain;overflow-anchor:auto;}
-  .session-dashboard{width:min(860px,calc(100% - 40px));max-width:calc(100% - 40px);min-width:0;margin:0 auto;padding:58px 0 40px;box-sizing:border-box;grid-template-columns:minmax(0,1fr);gap:12px;}
+  .session-dashboard{width:100%;max-width:none;height:100%;min-height:0;margin:0;padding:0;box-sizing:border-box;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:0;overflow:hidden;align-self:stretch;}
+  html[data-session-view="dashboard"] .messages{overflow:hidden;}
   html[data-session-view="dashboard"] .session-dashboard:not([hidden]){display:grid;}
   html[data-session-view="dashboard"] #msgInner,
   html[data-session-view="dashboard"] #liveRunStatus,
@@ -2365,11 +2366,13 @@
   .session-switch-skeleton-line--wide{width:88%;}
   .session-switch-skeleton-line--medium{width:64%;}
   .session-switch-skeleton-line--short{width:38%;}
-  .session-dashboard-original{min-width:0;max-width:100%;padding:2px 4px 16px;box-sizing:border-box;overflow-x:clip;}
-  .session-dashboard-original .session-dashboard-label{margin-bottom:10px;}
-  .session-dashboard-card{min-width:0;max-width:100%;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;box-sizing:border-box;overflow-x:clip;box-shadow:0 1px 2px rgba(0,0,0,.04);}
-  .session-dashboard-card--status{border-color:var(--border2);}
-  .session-dashboard-card--completed[data-empty="1"]{opacity:.72;}
+  .session-dashboard-section{min-width:0;min-height:0;max-width:100%;padding:24px;box-sizing:border-box;overflow:auto;background:transparent;border:0;border-radius:0;box-shadow:none;}
+  .session-dashboard-section:nth-child(-n+2){padding-top:56px;}
+  .session-dashboard-section:nth-child(odd){border-right:1px solid var(--border);}
+  .session-dashboard-section:nth-child(-n+2){border-bottom:1px solid var(--border);}
+  .session-dashboard-section--completed[data-empty="1"]{opacity:.72;}
+  .session-dashboard-section--original{overflow:auto;}
+  .session-dashboard-section--original .session-dashboard-label{margin-bottom:10px;}
   .session-dashboard-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;}
   .session-dashboard-status-heading{display:flex;align-items:center;gap:8px;min-width:0;}
   .session-dashboard-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
@@ -2387,11 +2390,11 @@
   .session-dashboard-copy .markdown-table-wrap,.session-dashboard-copy table{min-width:0;max-width:100%;}
   .session-dashboard-copy .markdown-table-wrap{overflow-x:auto;}
   .session-dashboard-copy img,.session-dashboard-copy video,.session-dashboard-copy svg{max-width:100%;height:auto;}
-  .session-dashboard-copy--original{font-size:15px;line-height:1.65;max-height:260px;overflow-x:clip;overflow-y:auto;padding-right:4px;}
-  .session-dashboard-copy--verbatim{max-height:190px;overflow-x:clip;overflow-y:auto;}
+  .session-dashboard-copy--original{font-size:15px;line-height:1.65;max-height:none;overflow:visible;padding-right:4px;}
+  .session-dashboard-copy--verbatim{max-height:none;overflow:visible;}
   .session-dashboard-copy--verbatim blockquote{margin:8px 0;padding:8px 10px;border-left:2px solid var(--border2);border-radius:0 8px 8px 0;background:var(--surface-subtle,var(--hover-bg));color:var(--muted);font-style:italic;}
   .session-dashboard-copy--verbatim blockquote p{margin:0;}
-  .session-dashboard-copy--result{max-height:42vh;overflow-x:clip;overflow-y:auto;}
+  .session-dashboard-copy--result{max-height:none;overflow:visible;}
   .session-dashboard-refresh{border:1px solid var(--border2);border-radius:8px;background:transparent;color:var(--muted);padding:6px 9px;font:inherit;font-size:11px;font-weight:600;cursor:pointer;}
   .session-dashboard-refresh:hover{color:var(--text);background:var(--hover-bg);}
   .session-dashboard-updated{margin-top:8px;font-size:10px;color:var(--muted);opacity:.7;}
@@ -3180,12 +3183,17 @@
 
   @media(max-width:640px){
     .session-view-switcher{right:10px;top:8px;}
-    .session-dashboard,.session-switch-skeleton{width:calc(100% - 20px);padding:52px 0 24px;gap:9px;}
-    .session-dashboard-original{padding:0 4px 11px;}
+    .session-switch-skeleton{width:calc(100% - 20px);padding:52px 0 24px;gap:9px;}
+    .session-dashboard{height:auto;min-height:100%;grid-template-columns:minmax(0,1fr);grid-template-rows:none;overflow:visible;}
+    html[data-session-view="dashboard"] .messages{overflow-y:auto;overflow-x:hidden;}
+    .session-dashboard-section{min-height:190px;padding:20px 18px;overflow:visible;}
+    .session-dashboard-section:nth-child(-n+2){padding-top:20px;}
+    .session-dashboard-section:first-child{padding-top:52px;}
+    .session-dashboard-section:nth-child(odd){border-right:0;}
+    .session-dashboard-section:nth-child(-n+2){border-bottom:1px solid var(--border);}
+    .session-dashboard-section:nth-child(3){border-bottom:1px solid var(--border);}
     .session-switch-skeleton-original{padding:0 4px 11px;}
     .session-switch-skeleton-card{min-height:102px;border-radius:12px;padding:15px 16px;}
-    .session-dashboard-copy--original{max-height:220px;}
-    .session-dashboard-card{border-radius:12px;padding:15px 16px;}
     /* Mobile PWA reflow guard (#3976): a one-frame GPU-promotion transform that
        _forceMobileViewportReflow() toggles via html.viewport-reflow to force a
        repaint after visualViewport/keyboard geometry changes. overflow-x:clip

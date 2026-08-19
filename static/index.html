@@ -26,7 +26,7 @@
 <script>(function(){try{var s=document.documentElement.dataset.skin||'default',t=localStorage.getItem('hermes-theme')||'dark';if(s==='e-ink')t='light';else if(t==='system')t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';var c=s==='e-ink'?'#ffffff':(t==='dark'?'#141425':'#FAF7F0');document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute('content',c);m.removeAttribute('media');});}catch(e){}})()</script>
 <script>(function(){try{document.documentElement.dataset.workspacePanel=localStorage.getItem('hermes-webui-workspace-panel')==='open'?'open':'closed';}catch(e){document.documentElement.dataset.workspacePanel='closed';}})()</script>
 <script>(function(){try{if(localStorage.getItem('hermes-webui-sidebar-collapsed')==='1')document.documentElement.dataset.sidebarCollapsed='1';}catch(e){}})()</script>
-<script>(function(){try{var q=new URLSearchParams(location.search).get('session_view');var v=(q==='classic'||q==='dashboard')?q:localStorage.getItem('hermes-session-view');v=v==='classic'?'classic':'dashboard';localStorage.setItem('hermes-session-view',v);document.documentElement.dataset.sessionView=v;}catch(e){document.documentElement.dataset.sessionView='dashboard';}})()</script>
+<script>(function(){try{var q=new URLSearchParams(location.search).get('session_view'),saved=localStorage.getItem('hermes-session-view'),v=q==='classic'?'classic':(q==='high-signal'||q==='dashboard')?'dashboard':saved;v=v==='dashboard'?'dashboard':'classic';localStorage.setItem('hermes-session-view',v);document.documentElement.dataset.sessionView=v;}catch(e){document.documentElement.dataset.sessionView='classic';}})()</script>
 <link rel="preload" href="static/pwa-startup.js?v=__WEBUI_VERSION__" as="script">
 <script src="static/pwa-startup.js?v=__WEBUI_VERSION__"></script>
 <script>window.__HERMES_CONFIG__={maxUploadBytes:__MAX_UPLOAD_BYTES__,csrfToken:__CSRF_TOKEN_JSON__};</script>
@@ -453,8 +453,8 @@
     <div id="mainChat" class="main-view">
     <div class="messages-shell">
       <div class="session-view-switcher" aria-label="Session view">
-        <a class="session-view-action session-view-action--classic" href="?session_view=classic" onclick="try{localStorage.setItem('hermes-session-view','classic')}catch(e){};location.reload();return false">Classic view</a>
-        <a class="session-view-action session-view-action--dashboard" href="?session_view=dashboard" onclick="try{localStorage.setItem('hermes-session-view','dashboard')}catch(e){};location.reload();return false">Dashboard view</a>
+        <a class="session-view-action session-view-action--classic" href="?session_view=classic" onclick="try{localStorage.setItem('hermes-session-view','classic')}catch(e){};location.reload();return false">Classic View</a>
+        <a class="session-view-action session-view-action--dashboard" href="?session_view=high-signal" onclick="try{localStorage.setItem('hermes-session-view','dashboard')}catch(e){};location.reload();return false">High Signal Mode</a>
       </div>
       <button id="jumpToSessionStartBtn" class="session-jump-btn session-jump-btn--start" aria-label="Jump to beginning of session" data-i18n-aria-label="session_jump_start_label" data-i18n-title="session_jump_start_label" onclick="jumpToSessionStart()" style="display:none"><span aria-hidden="true">↑</span><span data-i18n="session_jump_start">Start</span></button>
       <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" style="display:none" onclick="scrollToBottom()" aria-label="Scroll to bottom" data-i18n-aria-label="session_jump_end_label" data-i18n-title="session_jump_end_label"><span aria-hidden="true">↓</span><span class="session-jump-btn__text" data-i18n="session_jump_end">End</span></button>
@@ -464,20 +464,20 @@
         aria-label="Toggle conversation outline"
         aria-controls="outlinePanelWrapper">&#9776;</button>
     <div class="messages" id="messages">
-      <section class="session-dashboard" id="sessionDashboard" aria-label="Session dashboard" hidden>
-        <header class="session-dashboard-original">
+      <section class="session-dashboard" id="sessionDashboard" aria-label="High Signal Mode" hidden>
+        <article class="session-dashboard-section session-dashboard-section--original">
           <div class="session-dashboard-card-head">
             <div class="session-dashboard-label">Original request</div>
             <button type="button" class="session-dashboard-refresh" id="sessionDashboardSummaryRefresh">Refresh summary</button>
           </div>
           <div class="session-dashboard-copy session-dashboard-copy--original" id="sessionDashboardOriginalRequest"></div>
           <div class="session-dashboard-updated" id="sessionDashboardSummaryUpdated">Original request placeholder</div>
-        </header>
-        <article class="session-dashboard-card">
+        </article>
+        <article class="session-dashboard-section session-dashboard-section--instruction">
           <div class="session-dashboard-label">Last instruction</div>
           <div class="session-dashboard-copy session-dashboard-copy--verbatim" id="sessionDashboardInstruction"></div>
         </article>
-        <article class="session-dashboard-card session-dashboard-card--status">
+        <article class="session-dashboard-section session-dashboard-section--status">
           <div class="session-dashboard-card-head">
             <div class="session-dashboard-status-heading">
               <div class="session-dashboard-label">Current status</div>
@@ -488,7 +488,7 @@
           <div class="session-dashboard-copy" id="sessionDashboardStatus" aria-live="polite"></div>
           <div class="session-dashboard-updated" id="sessionDashboardUpdated"></div>
         </article>
-        <article class="session-dashboard-card session-dashboard-card--completed" id="sessionDashboardCompletedCard">
+        <article class="session-dashboard-section session-dashboard-section--completed" id="sessionDashboardCompletedCard">
           <div class="session-dashboard-label">Completed result</div>
           <div class="session-dashboard-copy session-dashboard-copy--result" id="sessionDashboardCompleted"></div>
         </article>

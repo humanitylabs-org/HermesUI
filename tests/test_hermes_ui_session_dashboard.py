@@ -10,7 +10,7 @@ DASHBOARD = (ROOT / "static" / "session-dashboard.js").read_text(encoding="utf-8
 COMMANDS = (ROOT / "static" / "commands.js").read_text(encoding="utf-8")
 
 
-def test_dashboard_is_frontend_only_and_keeps_classic_escape_hatch():
+def test_high_signal_mode_is_frontend_only_and_keeps_classic_escape_hatch():
     assert "static/session-dashboard.js" in INDEX
     assert "hermes-session-view','classic'" in INDEX
     assert 'data-session-view="dashboard"' in CSS
@@ -19,7 +19,22 @@ def test_dashboard_is_frontend_only_and_keeps_classic_escape_hatch():
     assert "/api/" not in DASHBOARD
 
 
-def test_dashboard_has_unboxed_original_request_and_exactly_three_cards():
+def test_fresh_install_defaults_to_classic_and_preserves_saved_high_signal_choice():
+    assert "localStorage.getItem('hermes-session-view')" in INDEX
+    assert "v=v==='dashboard'?'dashboard':'classic'" in INDEX
+    assert "document.documentElement.dataset.sessionView='classic'" in INDEX
+    assert "localStorage.setItem('hermes-session-view',v)" in INDEX
+    assert "q==='high-signal'" in INDEX
+
+
+def test_visible_mode_name_is_high_signal_not_dashboard():
+    assert ">High Signal Mode</a>" in INDEX
+    assert ">Dashboard view</a>" not in INDEX
+    assert 'aria-label="High Signal Mode"' in INDEX
+    assert 'href="?session_view=high-signal"' in INDEX
+
+
+def test_high_signal_mode_has_exactly_four_full_space_sections():
     for element_id in (
         "sessionDashboardOriginalRequest",
         "sessionDashboardSummaryRefresh",
@@ -33,12 +48,24 @@ def test_dashboard_has_unboxed_original_request_and_exactly_three_cards():
         assert f'id="{element_id}"' in INDEX
     assert '<div class="session-dashboard-label">Original request</div>' in INDEX
     assert '>Refresh summary</button>' in INDEX
-    assert 'class="session-dashboard-original"' in INDEX
-    assert 'session-dashboard-card session-dashboard-card--goal' not in INDEX
-    assert INDEX.count('<article class="session-dashboard-card') == 3
+    assert INDEX.count('<article class="session-dashboard-section') == 4
+    assert 'session-dashboard-section--original' in INDEX
+    assert 'session-dashboard-section--instruction' in INDEX
+    assert 'session-dashboard-section--status' in INDEX
+    assert 'session-dashboard-section--completed' in INDEX
+    assert '<header class="session-dashboard-original">' not in INDEX
+    assert '<article class="session-dashboard-card' not in INDEX
     assert "sessionDashboardSteersCard" not in INDEX
     assert INDEX.index('id="sessionDashboardInstruction"') < INDEX.index('id="sessionDashboardStatus"')
     assert INDEX.index('id="sessionDashboardStatus"') < INDEX.index('id="sessionDashboardCompleted"')
+    assert ".session-dashboard{width:100%;max-width:none;height:100%" in CSS
+    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in CSS
+    assert "grid-template-rows:repeat(2,minmax(0,1fr))" in CSS
+    assert ".session-dashboard-section{min-width:0;min-height:0" in CSS
+    assert "border-radius:0" in CSS
+    assert "box-shadow:none" in CSS
+    assert ".session-dashboard-section:nth-child(odd){border-right:1px solid var(--border);}" in CSS
+    assert ".session-dashboard-section:nth-child(-n+2){border-bottom:1px solid var(--border);}" in CSS
 
 
 def test_session_summary_uses_original_request_as_frontend_only_placeholder():
@@ -50,7 +77,7 @@ def test_session_summary_uses_original_request_as_frontend_only_placeholder():
     assert "summaryRefresh.addEventListener('click',refreshDashboardSummary)" in DASHBOARD
     assert "Placeholder refreshed" in DASHBOARD
     assert "compression_anchor_summary" not in DASHBOARD
-    assert ".session-dashboard-original{" in CSS
+    assert ".session-dashboard-section--original{" in CSS
     assert ".session-dashboard-copy--original{" in CSS
 
 
@@ -223,8 +250,8 @@ def test_dashboard_uses_existing_markdown_renderer():
 
 
 def test_dashboard_long_markdown_is_contained_without_page_width_overflow():
-    assert "grid-template-columns:minmax(0,1fr)" in CSS
-    assert ".session-dashboard-card{min-width:0;max-width:100%" in CSS
+    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in CSS
+    assert ".session-dashboard-section{min-width:0;min-height:0" in CSS
     assert ".session-dashboard-copy{min-width:0;max-width:100%" in CSS
     assert ".session-dashboard-copy pre{display:block;width:100%;min-width:0;max-width:100%;overflow-x:auto" in CSS
     assert ".session-dashboard-copy pre{background:var(--code-bg)" in CSS
@@ -232,7 +259,7 @@ def test_dashboard_long_markdown_is_contained_without_page_width_overflow():
     assert ".session-dashboard-copy .pre-header+pre" in CSS
     assert ".session-dashboard-copy a,.session-dashboard-copy code:not(pre code)" in CSS
     assert ".session-dashboard-copy .markdown-table-wrap{overflow-x:auto;}" in CSS
-    assert ".session-dashboard-copy--result{max-height:42vh;overflow-x:clip;overflow-y:auto;}" in CSS
+    assert ".session-dashboard-copy--result{max-height:none;overflow:visible;}" in CSS
 
 
 def test_turn_badge_uses_only_explicit_existing_runtime_values():
