@@ -26,12 +26,15 @@
     if(!raw||typeof raw!=='object'||raw.enabled===false)return null;
     const id=typeof raw.id==='string'?raw.id.trim():'';
     const label=typeof raw.label==='string'?raw.label.trim():'';
+    const href=typeof raw.href==='string'?raw.href.trim():'';
+    const frameHref=typeof raw.frameHref==='string'?raw.frameHref.trim():'';
     if(!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id)||!label||label.length>48)return null;
+    if(!href||!frameHref)return null;
     let url;
     let frameUrl;
     try{
-      url=new URL(raw.href,document.baseURI||location.href);
-      frameUrl=new URL(raw.frameHref,location.origin);
+      url=new URL(href,document.baseURI||location.href);
+      frameUrl=new URL(frameHref,location.origin);
     }catch(_){return null;}
     if(url.protocol!=='https:'&&url.origin!==location.origin)return null;
     if(frameUrl.origin!==location.origin)return null;

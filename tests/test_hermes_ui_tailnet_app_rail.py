@@ -1,3 +1,6 @@
+import json
+import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -6,12 +9,37 @@ INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 JS = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
 GITIGNORE = (ROOT / ".gitignore").read_text(encoding="utf-8")
+README = (ROOT / "README.md").read_text(encoding="utf-8")
 
 
 def _rail_markup() -> str:
     start = INDEX.index('<nav class="rail tailnet-app-rail"')
     end = INDEX.index("</nav>", start)
     return INDEX[start:end]
+
+
+def _clean_app(raw):
+    node = shutil.which("node")
+    assert node, "Node.js is required for the Tailnet app parser contract test"
+    start = JS.index("  function cleanApp(raw){")
+    end = JS.index("\n  function closeSessionsOverlay", start)
+    clean_app_source = JS[start:end]
+    harness = f"""
+const document={{baseURI:'https://host.example/hermesUI/'}};
+const location=new URL('https://host.example/hermesUI/');
+const ICONS={{apps:'icon',link:'icon'}};
+{clean_app_source}
+const result=cleanApp(JSON.parse(process.argv[1]));
+process.stdout.write(JSON.stringify(result));
+"""
+    proc = subprocess.run(
+        [node, "-e", harness, json.dumps(raw)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)
 
 
 def test_old_webui_panel_tabs_are_not_in_the_desktop_rail():
@@ -43,6 +71,45 @@ def test_external_apps_switch_inside_the_private_shell_with_direct_open_fallback
     assert "link.dataset.tailnetAppId=app.id" in JS
     assert "frameUrl.origin!==location.origin" in JS
     assert "url.protocol!=='https:'&&url.origin!==location.origin" in JS
+
+
+def test_documented_app_entry_normalizes_to_direct_and_embedded_destinations():
+    assert '"frameHref": "/tailnet-frame/?app=private-app"' in README
+    app = _clean_app(
+        {
+            "id": "private-app",
+            "label": "Private App",
+            "href": "https://device.example.ts.net/private-app/",
+            "frameHref": "/tailnet-frame/?app=private-app",
+            "icon": "apps",
+        }
+    )
+    assert app == {
+        "id": "private-app",
+        "label": "Private App",
+        "href": "https://device.example.ts.net/private-app/",
+        "frameHref": "https://host.example/tailnet-frame/?app=private-app",
+        "icon": "apps",
+    }
+    assert "frame.src=app.frameHref" in JS
+
+
+def test_required_app_urls_are_rejected_before_url_coercion():
+    valid = {
+        "id": "private-app",
+        "label": "Private App",
+        "href": "https://device.example.ts.net/private-app/",
+        "frameHref": "/tailnet-frame/?app=private-app",
+        "icon": "apps",
+    }
+    for field in ("href", "frameHref"):
+        missing = dict(valid)
+        missing.pop(field)
+        assert _clean_app(missing) is None
+        for invalid in (None, "", "   ", 42):
+            malformed = {**valid, field: invalid}
+            assert _clean_app(malformed) is None
+    assert _clean_app({**valid, "frameHref": "https://other.example/frame"}) is None
 
 
 def test_workspace_and_hermes_selector_are_wired_into_the_layout():

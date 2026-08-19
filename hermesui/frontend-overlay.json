@@ -106,7 +106,7 @@
       "upstream_sha256": "cfdc35b1dd3f20f9ef8e885008dd76c3bcd2fe3deb61c1708f2e6d88514e2ff8"
     },
     {
-      "hermesui_sha256": "801e306c3b119dc81a6423974849700b3581cafb0289f055d155b73d820631a9",
+      "hermesui_sha256": "22618e2a9c1d84052ccb4befb9fefac53118ff0d686295f3c9487eb3a94f16eb",
       "path": "static/tailnet-app-rail.js",
       "upstream_sha256": null
     },
