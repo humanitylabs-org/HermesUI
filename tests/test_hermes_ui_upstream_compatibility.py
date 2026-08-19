@@ -24,7 +24,7 @@ def test_replacement_manifest_is_exact_pinned_and_has_real_downstream_coverage()
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
     assert manifest["upstream_commit"] == upstream["commit"]
-    assert len(replacements) == 25
+    assert len(replacements) == 40
     nodeids = [entry["nodeid"] for entry in replacements]
     assert len(nodeids) == len(set(nodeids))
     assert all(nodeid.startswith("tests/test_") for nodeid in nodeids)
@@ -43,10 +43,15 @@ def test_previously_uncovered_replacements_have_dedicated_contract_tests():
     dedicated = ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
     expected = {
         "tests/test_issue3227_help_tab.py::test_help_pane_present",
+        "tests/test_issue4856_mobile_transcript_unscrollable.py::test_mobile_inner_does_not_become_scroll_container",
+        "tests/test_issue4856_mobile_transcript_unscrollable.py::test_mobile_inner_must_not_set_overflow_y_auto_or_scroll",
+        "tests/test_logs_ui_static.py::test_logs_tab_is_wired_between_insights_and_settings_in_rail_and_mobile_nav",
+        "tests/test_mobile_layout.py::test_rightpanel_mobile_slide_over_css",
         "tests/test_mobile_layout.py::test_titlebar_reload_button_visibility_css_contract",
         "tests/test_pwa_manifest_sw.py::TestSessionManifestRoute::test_session_manifest_json_has_hermes_name",
         "tests/test_pwa_manifest_sw.py::TestSessionManifestRoute::test_session_manifest_webmanifest_is_parseable_json",
         "tests/test_pwa_manifest_sw.py::TestRootManifestRoute::test_root_manifest_json_has_hermes_name_and_512_icon",
+        "tests/test_transcript_scroll_invariant.py::test_overflow_x_clip_is_the_chosen_horizontal_clip",
     }
     assert {nodeid for nodeid, covered_by in replacements.items() if covered_by == dedicated} == expected
 
@@ -55,9 +60,15 @@ def test_replacements_only_cover_frontend_contract_families():
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     allowed_files = {
         "test_issue3227_help_tab.py",
+        "test_6808_appearance_bootstrap_no_fabricated_choice.py",
+        "test_css_tooltips.py",
+        "test_dashboard_link_ui.py",
         "test_issue4391_settings_shortcut.py",
         "test_issue4553_mobile_transcript_overflow.py",
+        "test_issue4856_mobile_transcript_unscrollable.py",
+        "test_issue5545_three_panel_layout.py",
         "test_issue5759_composer_focus_shortcut.py",
+        "test_logs_ui_static.py",
         "test_mobile_layout.py",
         "test_mobile_sidebar_header_icon_align.py",
         "test_pwa_manifest_sw.py",
@@ -65,8 +76,11 @@ def test_replacements_only_cover_frontend_contract_families():
         "test_real_steer.py",
         "test_session_batch_select.py",
         "test_session_public_share_static.py",
+        "test_sidebar_collapse_toggle.py",
         "test_sidebar_search_highlights.py",
         "test_sidebar_unassigned_filter.py",
+        "test_transcript_scroll_invariant.py",
+        "test_workspace_panel_session_list.py",
     }
     actual_files = {
         entry["nodeid"].split("::", 1)[0].rsplit("/", 1)[-1]

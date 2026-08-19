@@ -126,6 +126,21 @@
   }
   /* ── Skin: Default (gold — matches base) ── */
   /* No overrides needed — :root and .dark already use gold accent */
+  /* ── Skin: E-Ink (HermesUI default) ──
+     Maximum-contrast near-monochrome palette restored from the original
+     trusted local E-Ink extension. The duplicate dark selector prevents a
+     first-paint flash before boot.js forces this light-only skin's scheme. */
+  :root[data-skin="e-ink"],
+  :root.dark[data-skin="e-ink"]{
+    color-scheme:light;
+    --bg:#ffffff;--surface:#ffffff;--surface2:#f4f4f4;--surface-subtle:#f4f4f4;
+    --text:#000000;--text2:#1a1a1a;--muted:#3a3a3a;
+    --accent:#000000;--accent2:#000000;--accent-hover:#000000;--accent-text:#000000;--accent-contrast:#ffffff;
+    --accent-bg:#eaeaea;--accent-bg-strong:#cccccc;--accent-rgb:0, 0, 0;
+    --border:#000000;--border2:#555555;--hover-bg:#eaeaea;
+    --code-bg:#f4f4f4;--code-text:#000000;--sidebar:#ffffff;--sidebar-text:#000000;
+    --user-bubble:#eaeaea;--assistant-bubble:#ffffff;--link:#000000;
+  }
   /* ── Skin: Ares (red) ── */
   :root[data-skin="ares"]{--accent:#C0392B;--accent-hover:#A93226;--accent-bg:rgba(192,57,43,0.08);--accent-bg-strong:rgba(192,57,43,0.15);--accent-text:#922B21;}
   :root.dark[data-skin="ares"]{--accent:#FF4444;--accent-hover:#CC3333;--accent-bg:rgba(255,68,68,0.08);--accent-bg-strong:rgba(255,68,68,0.15);--accent-text:#FF4444;}
@@ -1555,6 +1570,8 @@
   .system-health-bar-fill{height:100%;width:0%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--accent-hover));transition:width .25s ease;}
   .system-health-foot{font-size:11px;color:var(--muted);line-height:1.45;opacity:.82;}
   .app-titlebar-icon{display:inline-flex;align-items:center;color:var(--accent);}
+  .app-titlebar-icon .wizard-brand-icon{display:block;width:16px;height:16px;border-radius:4px;}
+  .share-brand .wizard-brand-icon{width:18px;height:18px;}
   .app-titlebar-title{font-size:12px;font-weight:600;color:var(--text);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60vw;}
   .app-titlebar-sub{font-size:10px;color:var(--muted);background:var(--hover-bg);padding:2px 7px;border-radius:4px;font-family:var(--font-mono);white-space:nowrap;flex-shrink:0;}
   .app-titlebar-sub[hidden]{display:none;}
@@ -2144,9 +2161,37 @@
   .dashboard-external-badge::after{content:'';position:absolute;right:-2px;top:-2px;width:5px;height:5px;border-top:1.5px solid var(--accent);border-right:1.5px solid var(--accent);}
   .sidebar-nav .dashboard-external-badge{right:8px;top:7px;width:8px;height:8px;}
   @media(min-width:641px){.rail{display:flex;}.sidebar > .sidebar-nav{display:none;}}
-  /* HermesUI: chat-only shell; Settings lives at the bottom of the chat sidebar. */
-  .rail{display:none!important;}
+  /* HermesUI: a persistent private-app selector replaces the old WebUI panel rail. */
+  .rail.tailnet-app-rail{display:flex!important;order:1;position:relative;z-index:240;}
+  .layout > .sidebar{order:2;}
+  .layout > .main{order:3;}
+  .layout > .rightpanel{order:4;}
   .sidebar-nav{display:none!important;}
+  .tailnet-app-rail{gap:6px;padding-top:10px;}
+  .tailnet-app-link{text-decoration:none;}
+  .tailnet-app-home-icon{display:block;border-radius:6px;}
+  .tailnet-app-divider{width:24px;height:1px;margin:2px 0 1px;background:var(--border);flex:0 0 auto;}
+  .tailnet-app-links{display:contents;}
+  .tailnet-app-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
+  .tailnet-app-icon svg{width:20px;height:20px;display:block;}
+  .tailnet-app-link[target="_blank"]::after{max-width:220px;overflow:hidden;text-overflow:ellipsis;}
+  .tailnet-app-workspace{order:0;min-width:0;min-height:0;overflow:hidden;background:var(--main-bg);border-right:1px solid var(--border);}
+  .tailnet-app-workspace[hidden]{display:none!important;}
+  .tailnet-app-workspace iframe{display:block;width:100%;height:100%;border:0;background:var(--main-bg);}
+  /* Split mode needs 50vw external + 48px rail + 180px sidebar + 420px main.
+     1296px is the first width where those minimums fit without clipping. */
+  @media(min-width:1296px){
+    html[data-tailnet-view="external"] .tailnet-app-workspace{display:block;flex:0 0 50vw;width:50vw;max-width:50vw;}
+  }
+  @media(max-width:1295px){
+    html[data-tailnet-view="external"] .tailnet-app-workspace{display:block;order:2;flex:1 1 auto;width:auto;}
+    html[data-tailnet-view="external"] .layout > .sidebar,
+    html[data-tailnet-view="external"] .layout > .main,
+    html[data-tailnet-view="external"] .layout > .rightpanel{display:none!important;}
+  }
+  @media(max-width:640px){
+    html:not([data-tailnet-view="external"]) .sidebar{left:48px;width:calc(100vw - 48px);}
+  }
   /* HermesUI: remove the workspace browser from the simplified shell. */
   html[data-session-view="dashboard"] body .rightpanel,
   html[data-session-view="dashboard"] body .workspace-panel-edge-toggle,
@@ -2297,7 +2342,8 @@
   html[data-session-view="dashboard"] .session-view-action--classic,
   html[data-session-view="classic"] .session-view-action--dashboard{display:inline-flex;}
   .messages{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0;position:relative;z-index:0;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior-y:contain;overflow-anchor:auto;}
-  .session-dashboard{width:min(860px,calc(100% - 40px));max-width:calc(100% - 40px);min-width:0;margin:0 auto;padding:58px 0 40px;box-sizing:border-box;grid-template-columns:minmax(0,1fr);gap:12px;}
+  .session-dashboard{width:100%;max-width:none;height:100%;min-height:0;margin:0;padding:0;box-sizing:border-box;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:0;overflow:hidden;align-self:stretch;}
+  html[data-session-view="dashboard"] .messages{overflow:hidden;}
   html[data-session-view="dashboard"] .session-dashboard:not([hidden]){display:grid;}
   html[data-session-view="dashboard"] #msgInner,
   html[data-session-view="dashboard"] #liveRunStatus,
@@ -2320,11 +2366,13 @@
   .session-switch-skeleton-line--wide{width:88%;}
   .session-switch-skeleton-line--medium{width:64%;}
   .session-switch-skeleton-line--short{width:38%;}
-  .session-dashboard-original{min-width:0;max-width:100%;padding:2px 4px 16px;box-sizing:border-box;overflow-x:clip;}
-  .session-dashboard-original .session-dashboard-label{margin-bottom:10px;}
-  .session-dashboard-card{min-width:0;max-width:100%;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;box-sizing:border-box;overflow-x:clip;box-shadow:0 1px 2px rgba(0,0,0,.04);}
-  .session-dashboard-card--status{border-color:var(--border2);}
-  .session-dashboard-card--completed[data-empty="1"]{opacity:.72;}
+  .session-dashboard-section{min-width:0;min-height:0;max-width:100%;padding:24px;box-sizing:border-box;overflow:auto;background:transparent;border:0;border-radius:0;box-shadow:none;}
+  .session-dashboard-section:nth-child(-n+2){padding-top:56px;}
+  .session-dashboard-section:nth-child(odd){border-right:1px solid var(--border);}
+  .session-dashboard-section:nth-child(-n+2){border-bottom:1px solid var(--border);}
+  .session-dashboard-section--completed[data-empty="1"]{opacity:.72;}
+  .session-dashboard-section--original{overflow:auto;}
+  .session-dashboard-section--original .session-dashboard-label{margin-bottom:10px;}
   .session-dashboard-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;}
   .session-dashboard-status-heading{display:flex;align-items:center;gap:8px;min-width:0;}
   .session-dashboard-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
@@ -2342,11 +2390,11 @@
   .session-dashboard-copy .markdown-table-wrap,.session-dashboard-copy table{min-width:0;max-width:100%;}
   .session-dashboard-copy .markdown-table-wrap{overflow-x:auto;}
   .session-dashboard-copy img,.session-dashboard-copy video,.session-dashboard-copy svg{max-width:100%;height:auto;}
-  .session-dashboard-copy--original{font-size:15px;line-height:1.65;max-height:260px;overflow-x:clip;overflow-y:auto;padding-right:4px;}
-  .session-dashboard-copy--verbatim{max-height:190px;overflow-x:clip;overflow-y:auto;}
+  .session-dashboard-copy--original{font-size:15px;line-height:1.65;max-height:none;overflow:visible;padding-right:4px;}
+  .session-dashboard-copy--verbatim{max-height:none;overflow:visible;}
   .session-dashboard-copy--verbatim blockquote{margin:8px 0;padding:8px 10px;border-left:2px solid var(--border2);border-radius:0 8px 8px 0;background:var(--surface-subtle,var(--hover-bg));color:var(--muted);font-style:italic;}
   .session-dashboard-copy--verbatim blockquote p{margin:0;}
-  .session-dashboard-copy--result{max-height:42vh;overflow-x:clip;overflow-y:auto;}
+  .session-dashboard-copy--result{max-height:none;overflow:visible;}
   .session-dashboard-refresh{border:1px solid var(--border2);border-radius:8px;background:transparent;color:var(--muted);padding:6px 9px;font:inherit;font-size:11px;font-weight:600;cursor:pointer;}
   .session-dashboard-refresh:hover{color:var(--text);background:var(--hover-bg);}
   .session-dashboard-updated{margin-top:8px;font-size:10px;color:var(--muted);opacity:.7;}
@@ -2637,23 +2685,15 @@
   .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:40px;color:var(--muted);}
   .empty-state.no-suggestions .suggestion-grid{display:none}
   .empty-state.no-welcome{display:none}
-  /* Empty-state brand mark: a free-breathing winged caduceus with a soft
-     "spirit" bloom behind it — no app-icon tile. Glow + mark gradient are
-     tuned separately for dark vs light themes (see --logo-glow / .hm-g* below). */
+  /* Empty-state wizard-hat mark: the transparent brand mark gets room to
+     breathe here instead of repeating the app-icon tile. */
   .empty-logo{position:relative;display:flex;align-items:center;justify-content:center;margin-bottom:10px;background:none;border:none;border-radius:0;box-shadow:none;}
   .empty-logo::before{content:"";position:absolute;left:50%;top:50%;width:190px;height:190px;transform:translate(-50%,-50%);border-radius:50%;background:var(--logo-glow);z-index:0;pointer-events:none;}
-  .empty-logo svg{position:relative;z-index:1;width:88px;height:88px;display:block;}
-  /* Light themes (default :root): deeper, richer gradient holds contrast on
-     a pale background; cooler, restrained bloom. */
-  :root .empty-logo .hm-g0{stop-color:#0AA6CC;}
-  :root .empty-logo .hm-g1{stop-color:#1E63D6;}
+  .empty-logo .wizard-brand-mark{position:relative;z-index:1;width:88px;height:88px;display:block;filter:drop-shadow(0 4px 12px rgba(30,99,214,.18));}
   :root{--logo-glow:radial-gradient(circle,rgba(30,99,214,0.15) 0%,rgba(10,166,204,0.07) 45%,transparent 70%);}
-  /* Dark themes: bright cyan→blue mark with a luminous bloom. */
-  :root.dark .empty-logo .hm-g0{stop-color:#08EBF1;}
-  :root.dark .empty-logo .hm-g1{stop-color:#3889FD;}
   :root.dark{--logo-glow:radial-gradient(circle,rgba(8,235,241,0.20) 0%,rgba(56,137,253,0.15) 38%,transparent 72%);}
   @media (prefers-reduced-motion: no-preference){
-    .empty-logo svg{animation:emptyLogoRise .5s ease-out both;}
+    .empty-logo .wizard-brand-mark{animation:emptyLogoRise .5s ease-out both;}
     @keyframes emptyLogoRise{from{opacity:0;transform:translateY(6px) scale(.96);}to{opacity:1;transform:none;}}
   }
   .empty-state h2{font-size:20px;color:var(--text);font-weight:700;letter-spacing:-.02em;}
@@ -3143,12 +3183,17 @@
 
   @media(max-width:640px){
     .session-view-switcher{right:10px;top:8px;}
-    .session-dashboard,.session-switch-skeleton{width:calc(100% - 20px);padding:52px 0 24px;gap:9px;}
-    .session-dashboard-original{padding:0 4px 11px;}
+    .session-switch-skeleton{width:calc(100% - 20px);padding:52px 0 24px;gap:9px;}
+    .session-dashboard{height:auto;min-height:100%;grid-template-columns:minmax(0,1fr);grid-template-rows:none;overflow:visible;}
+    html[data-session-view="dashboard"] .messages{overflow-y:auto;overflow-x:hidden;}
+    .session-dashboard-section{min-height:190px;padding:20px 18px;overflow:visible;}
+    .session-dashboard-section:nth-child(-n+2){padding-top:20px;}
+    .session-dashboard-section:first-child{padding-top:52px;}
+    .session-dashboard-section:nth-child(odd){border-right:0;}
+    .session-dashboard-section:nth-child(-n+2){border-bottom:1px solid var(--border);}
+    .session-dashboard-section:nth-child(3){border-bottom:1px solid var(--border);}
     .session-switch-skeleton-original{padding:0 4px 11px;}
     .session-switch-skeleton-card{min-height:102px;border-radius:12px;padding:15px 16px;}
-    .session-dashboard-copy--original{max-height:220px;}
-    .session-dashboard-card{border-radius:12px;padding:15px 16px;}
     /* Mobile PWA reflow guard (#3976): a one-frame GPU-promotion transform that
        _forceMobileViewportReflow() toggles via html.viewport-reflow to force a
        repaint after visualViewport/keyboard geometry changes. overflow-x:clip

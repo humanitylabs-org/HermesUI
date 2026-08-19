@@ -19,7 +19,7 @@
       "url": "./?source=pwa&action=new-chat",
       "icons": [
         {
-          "src": "static/favicon-192.png",
+          "src": "static/wizard-hat-192.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -28,26 +28,40 @@
   ],
   "icons": [
     {
-      "src": "static/favicon.svg",
+      "src": "static/wizard-hat.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "static/favicon-32.png",
+      "src": "static/wizard-hat-32.png",
       "sizes": "32x32",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "static/favicon-192.png",
+      "src": "static/wizard-hat-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "static/favicon-512.png",
+      "src": "static/wizard-hat-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "static/wizard-hat-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "static/wizard-hat-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

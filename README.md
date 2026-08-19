@@ -14,6 +14,29 @@ The intended one-button flow on humanitylabs.org gives the user's AI the reviewe
 
 See [the architecture contract](hermesui/ARCHITECTURE.md) and [upstream refresh procedure](docs/UPSTREAM-MAINTENANCE.md).
 
+## Tailnet app rail
+
+Hermes UI keeps itself first in a persistent Tailnet app rail. Additional private apps are loaded from an optional per-installation `static/tailnet-apps.json`; the repository ignores this local file so private hostnames cannot enter an ordinary `git add -A`. An ordinary click selects the app inside Hermes UI through its same-origin `frameHref`: side by side with Hermes on wide screens and in the main workspace on narrow screens. A modified click or explicit direct-open action uses the app's HTTPS `href` in a separate browser tab.
+
+The local file uses this shape:
+
+```json
+{
+  "version": 1,
+  "apps": [
+    {
+      "id": "private-app",
+      "label": "Private App",
+      "href": "https://device.example.ts.net/private-app/",
+      "frameHref": "/tailnet-frame/?app=private-app",
+      "icon": "apps"
+    }
+  ]
+}
+```
+
+Both URLs are required. `href` is the canonical direct destination and must use HTTPS, except for same-origin development links. `frameHref` must resolve to the Hermes UI origin and should point to the trusted local frame route for that app. Apps that cannot be embedded should not be added until that route is available; their direct `href` remains the modified-click fallback. Accepted icon names are `pipeline`, `apps`, `draw`, `browser`, `terminal`, and `monitor`; malformed, duplicate, and unsafe entries are ignored. The rail remains available on mobile while the selected app replaces the main workspace beside it.
+
 ---
 
 # Upstream Hermes Web UI documentation
