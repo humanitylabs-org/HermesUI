@@ -1,7 +1,7 @@
 {
   "files": [
     {
-      "hermesui_sha256": "0a64b65f72f1d849f2ad3983004c6b5fd8640f712dd868735cbc0b1db85d93d1",
+      "hermesui_sha256": "d553858a7f96a672bca6aa8ec15890b3665ca3b3346dc9c37af95a06e9485e3f",
       "path": "static/apple-touch-icon.png",
       "upstream_sha256": "049445ab220cb4a564ab226420337f7995826bba623ccdd6b83020515204dcf1"
     },
@@ -16,32 +16,32 @@
       "upstream_sha256": "12a0bf61f16d13018c6fef940fa58c4f1aa38cf8079105aa28aeb6b3ba05b8fd"
     },
     {
-      "hermesui_sha256": "31b7edb3fa78d3089a62ce40c4caa205cc9520c516b5b8bb7e6a07746f2d5780",
+      "hermesui_sha256": "f68f64c861f8698072249a3cfeca25d99de603cd743dde74fb7d653b46a9f61c",
       "path": "static/favicon-192.png",
       "upstream_sha256": "2afc2b92e03ff0b3d291c673266cd2ea3fec5768409a749ede210675917b3f66"
     },
     {
-      "hermesui_sha256": "9dda3f39335f80436b4e4c267ba77a0ee331c8fb59f879f57d0906e9e340fe68",
+      "hermesui_sha256": "fa4753c4822964d303a0c547db56ca5027da02b1fd8930d263fb036b13f8046a",
       "path": "static/favicon-32.png",
       "upstream_sha256": "5353edc27577606ff1d324fe75dc9939dc6ae43eccee747ec9b0f66accd7248d"
     },
     {
-      "hermesui_sha256": "0a64b65f72f1d849f2ad3983004c6b5fd8640f712dd868735cbc0b1db85d93d1",
+      "hermesui_sha256": "d553858a7f96a672bca6aa8ec15890b3665ca3b3346dc9c37af95a06e9485e3f",
       "path": "static/favicon-512.png",
       "upstream_sha256": "771a8e1b322eb6afa12198ffc6fe220132c8474afb60dd9f00814fe82f9b574f"
     },
     {
-      "hermesui_sha256": "161a4bcadf0e6ffe4972a821a0245295eef49e368e177f0a1bf13c8df35952cc",
+      "hermesui_sha256": "3e3acf418eb40fe2b6d0177cccdf2d5a57f50ad7f6d2ef6f91d06e9de66c44bb",
       "path": "static/favicon-512.svg",
       "upstream_sha256": "52ace924247213ddb9018447506622e209363b42ac4942e433cde3046cfc568e"
     },
     {
-      "hermesui_sha256": "d0c36775be508a96d205558f9ff4884fa3b1036ec6a6d7f81967182e30e079f5",
+      "hermesui_sha256": "eac1f5d8934b17b0d2059d8c1492ba3d8b2bf0359f9294e5a6c65449d908908a",
       "path": "static/favicon.ico",
       "upstream_sha256": "5ad3f993b7f0f1bec78311e00db60f1f289c892c173d332fbd82b9998e4995ff"
     },
     {
-      "hermesui_sha256": "161a4bcadf0e6ffe4972a821a0245295eef49e368e177f0a1bf13c8df35952cc",
+      "hermesui_sha256": "3e3acf418eb40fe2b6d0177cccdf2d5a57f50ad7f6d2ef6f91d06e9de66c44bb",
       "path": "static/favicon.svg",
       "upstream_sha256": "b883cc5f4e2fa5ee01cc87e1ed1546ba9ab47079632ce692a77cfa65178bb6d6"
     },
@@ -111,37 +111,37 @@
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "31b7edb3fa78d3089a62ce40c4caa205cc9520c516b5b8bb7e6a07746f2d5780",
+      "hermesui_sha256": "f68f64c861f8698072249a3cfeca25d99de603cd743dde74fb7d653b46a9f61c",
       "path": "static/wizard-hat-192.png",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "9dda3f39335f80436b4e4c267ba77a0ee331c8fb59f879f57d0906e9e340fe68",
+      "hermesui_sha256": "fa4753c4822964d303a0c547db56ca5027da02b1fd8930d263fb036b13f8046a",
       "path": "static/wizard-hat-32.png",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "0a64b65f72f1d849f2ad3983004c6b5fd8640f712dd868735cbc0b1db85d93d1",
+      "hermesui_sha256": "d553858a7f96a672bca6aa8ec15890b3665ca3b3346dc9c37af95a06e9485e3f",
       "path": "static/wizard-hat-512.png",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "0a64b65f72f1d849f2ad3983004c6b5fd8640f712dd868735cbc0b1db85d93d1",
+      "hermesui_sha256": "d553858a7f96a672bca6aa8ec15890b3665ca3b3346dc9c37af95a06e9485e3f",
       "path": "static/wizard-hat-apple-touch.png",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "2f536b1f8f3d6ef6398b9238fd0d06d08d5fe35da97a4c946e7e53f9f05b51a7",
+      "hermesui_sha256": "37616ed38cd5437c05e1499bd7c48ab834173d1a9fad7fc0936e59dba188d3bb",
       "path": "static/wizard-hat-mark.svg",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "d0c36775be508a96d205558f9ff4884fa3b1036ec6a6d7f81967182e30e079f5",
+      "hermesui_sha256": "eac1f5d8934b17b0d2059d8c1492ba3d8b2bf0359f9294e5a6c65449d908908a",
       "path": "static/wizard-hat.ico",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "161a4bcadf0e6ffe4972a821a0245295eef49e368e177f0a1bf13c8df35952cc",
+      "hermesui_sha256": "3e3acf418eb40fe2b6d0177cccdf2d5a57f50ad7f6d2ef6f91d06e9de66c44bb",
       "path": "static/wizard-hat.svg",
       "upstream_sha256": null
     }
