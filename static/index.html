@@ -159,8 +159,11 @@
   </button>
 </header>
 <div class="layout">
+  <section class="tailnet-app-workspace" id="tailnetAppWorkspace" aria-label="Selected Tailnet app" hidden>
+    <iframe id="tailnetAppFrame" title="Selected Tailnet app" loading="eager" referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
+  </section>
   <nav class="rail tailnet-app-rail" aria-label="Tailnet apps">
-    <a class="rail-btn tailnet-app-link active has-tooltip" href="./" data-tooltip="Hermes UI" aria-label="Hermes UI" aria-current="page">
+    <a class="rail-btn tailnet-app-link active has-tooltip" id="tailnetAppHome" href="./" data-tooltip="Hermes UI" aria-label="Hermes UI" aria-current="page">
       <img class="tailnet-app-home-icon" src="static/favicon.svg" alt="" width="22" height="22">
     </a>
     <div class="tailnet-app-divider" aria-hidden="true"></div>
