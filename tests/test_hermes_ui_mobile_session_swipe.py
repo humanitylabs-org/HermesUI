@@ -137,6 +137,12 @@ def test_session_switch_loading_matches_classic_or_high_signal_layout():
     assert ".session-switch-skeleton-high-signal{height:100%;min-height:0;display:grid;grid-template-rows:repeat(4,minmax(0,1fr))" in CSS
     assert ".messages.session-switch-loading > .session-dashboard" in CSS
     assert "animation:skeletonSheen 1.25s ease-in-out infinite" in CSS
+    reduced_motion_rule = (
+        "@media (prefers-reduced-motion:reduce){\n"
+        "    .session-switch-skeleton-avatar,.session-switch-skeleton-role-line,.session-switch-skeleton-line{animation:none;}"
+    )
+    assert reduced_motion_rule in CSS
+    assert CSS.index(reduced_motion_rule) > CSS.index(".session-switch-skeleton-avatar,.session-switch-skeleton-role-line,.session-switch-skeleton-line{background:")
     assert "messages.setAttribute('aria-busy',visible?'true':'false')" in SWIPE
     assert "function ensureContentSkeleton()" in SWIPE
     assert "const skeleton=ensureContentSkeleton()" in SWIPE

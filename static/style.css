@@ -2391,6 +2391,9 @@
   .session-switch-skeleton-pane:not(:last-child){border-bottom:1px solid var(--border);}
   .session-switch-skeleton-pane-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:1px;}
   .session-switch-skeleton-avatar,.session-switch-skeleton-role-line,.session-switch-skeleton-line{background:linear-gradient(90deg,color-mix(in srgb,var(--text) 8%,transparent) 0%,color-mix(in srgb,var(--text) 8%,transparent) 30%,color-mix(in srgb,var(--text) 20%,transparent) 50%,color-mix(in srgb,var(--text) 8%,transparent) 70%,color-mix(in srgb,var(--text) 8%,transparent) 100%);background-size:220% 100%;animation:skeletonSheen 1.25s ease-in-out infinite;}
+  @media (prefers-reduced-motion:reduce){
+    .session-switch-skeleton-avatar,.session-switch-skeleton-role-line,.session-switch-skeleton-line{animation:none;}
+  }
   .session-switch-skeleton-line{display:block;border-radius:999px;height:13px;}
   .session-switch-skeleton-line--wide{width:88%;}
   .session-switch-skeleton-line--medium{width:64%;}
