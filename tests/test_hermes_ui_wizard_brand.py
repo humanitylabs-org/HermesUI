@@ -23,8 +23,13 @@ def test_wizard_hat_vector_family_is_present_and_identifiable():
     mark = (STATIC / "wizard-hat-mark.svg").read_text(encoding="utf-8")
     for source in (tile, mark):
         assert 'data-brand="wizard-hat"' in source
+        assert 'data-artwork="crooked-crown-v4"' in source
         assert "wizard-mark" in source
         assert "wizard-star" in source
+        assert "wizard-crown" in source
+        assert "wizard-band" in source
+        assert "wizard-brim-shape" in source
+        assert "wizard-glow" not in source
     assert "wizard-tile" in tile
     assert "wizard-tile" not in mark
 
