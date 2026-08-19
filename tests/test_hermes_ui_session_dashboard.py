@@ -34,7 +34,7 @@ def test_visible_mode_name_is_high_signal_not_dashboard():
     assert 'href="?session_view=high-signal"' in INDEX
 
 
-def test_high_signal_mode_has_exactly_four_full_space_sections():
+def test_high_signal_mode_has_exactly_four_vertically_stacked_full_space_sections():
     for element_id in (
         "sessionDashboardOriginalRequest",
         "sessionDashboardSummaryRefresh",
@@ -46,8 +46,11 @@ def test_high_signal_mode_has_exactly_four_full_space_sections():
         "sessionDashboardRefresh",
     ):
         assert f'id="{element_id}"' in INDEX
-    assert '<div class="session-dashboard-label">Original request</div>' in INDEX
-    assert '>Refresh summary</button>' in INDEX
+    for label in ("Goal", "Status", "Last instruction", "Result"):
+        assert f'<div class="session-dashboard-label">{label}</div>' in INDEX
+    for stale_label in ("Original request", "Current status", "Completed result"):
+        assert f'<div class="session-dashboard-label">{stale_label}</div>' not in INDEX
+    assert ">Refresh goal</button>" in INDEX
     assert INDEX.count('<article class="session-dashboard-section') == 4
     assert 'session-dashboard-section--original' in INDEX
     assert 'session-dashboard-section--instruction' in INDEX
@@ -56,22 +59,30 @@ def test_high_signal_mode_has_exactly_four_full_space_sections():
     assert '<header class="session-dashboard-original">' not in INDEX
     assert '<article class="session-dashboard-card' not in INDEX
     assert "sessionDashboardSteersCard" not in INDEX
-    assert INDEX.index('id="sessionDashboardInstruction"') < INDEX.index('id="sessionDashboardStatus"')
-    assert INDEX.index('id="sessionDashboardStatus"') < INDEX.index('id="sessionDashboardCompleted"')
+    assert INDEX.index('id="sessionDashboardOriginalRequest"') < INDEX.index('id="sessionDashboardStatus"')
+    assert INDEX.index('id="sessionDashboardStatus"') < INDEX.index('id="sessionDashboardInstruction"')
+    assert INDEX.index('id="sessionDashboardInstruction"') < INDEX.index('id="sessionDashboardCompleted"')
     assert ".session-dashboard{width:100%;max-width:none;height:100%" in CSS
-    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in CSS
-    assert "grid-template-rows:repeat(2,minmax(0,1fr))" in CSS
+    dashboard_rule_start = CSS.index(".session-dashboard{")
+    dashboard_rule = CSS[dashboard_rule_start:CSS.index("}", dashboard_rule_start)]
+    assert "grid-template-columns:minmax(0,1fr)" in dashboard_rule
+    assert "grid-template-rows:repeat(4,minmax(0,1fr))" in dashboard_rule
+    assert "grid-template-columns:repeat(2,minmax(0,1fr))" not in dashboard_rule
+    assert "grid-template-rows:repeat(2,minmax(0,1fr))" not in dashboard_rule
     assert ".session-dashboard-section{min-width:0;min-height:0" in CSS
     assert "border-radius:0" in CSS
     assert "box-shadow:none" in CSS
-    assert ".session-dashboard-section:nth-child(odd){border-right:1px solid var(--border);}" in CSS
-    assert ".session-dashboard-section:nth-child(-n+2){border-bottom:1px solid var(--border);}" in CSS
+    assert ".session-dashboard-section:not(:last-child){border-bottom:1px solid var(--border);}" in CSS
+    assert ".session-dashboard-section:nth-child(odd){border-right" not in CSS
 
 
 def test_session_summary_uses_original_request_as_frontend_only_placeholder():
     assert "function dashboardSessionSummary(projection)" in DASHBOARD
+    assert "typeof _messagesTruncated!=='undefined'" in DASHBOARD
+    assert "typeof _oldestIdx!=='undefined'" in DASHBOARD
+    assert "The goal is not loaded yet. Switch to Classic view and load earlier messages to see it." in DASHBOARD
     assert "const firstUser=projection.firstUser" in DASHBOARD
-    assert "return firstText||'No original request is available yet.'" in DASHBOARD
+    assert "return firstText||'No goal is available yet.'" in DASHBOARD
     assert "setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(projection))" in DASHBOARD
     assert "function refreshDashboardSummary()" in DASHBOARD
     assert "summaryRefresh.addEventListener('click',refreshDashboardSummary)" in DASHBOARD
@@ -79,6 +90,55 @@ def test_session_summary_uses_original_request_as_frontend_only_placeholder():
     assert "compression_anchor_summary" not in DASHBOARD
     assert ".session-dashboard-section--original{" in CSS
     assert ".session-dashboard-copy--original{" in CSS
+
+
+def test_truncated_tail_is_never_labeled_as_the_original_request():
+    node = shutil.which("node")
+    assert node is not None, "node is required for the dashboard provenance regression"
+    harness = f"""
+const fs=require('fs');
+const vm=require('vm');
+const elements=new Map();
+function element(id){{
+  if(!elements.has(id)) elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},addEventListener(){{}}}});
+  return elements.get(id);
+}}
+global.window=global;
+global.document={{
+  readyState:'complete',
+  documentElement:{{dataset:{{sessionView:'dashboard'}}}},
+  getElementById:element,
+  addEventListener(){{}}
+}};
+global.S={{session:{{session_id:'long',message_count:80}},messages:Array.from({{length:30}},(_,i)=>({{
+  role:i%2?'assistant':'user',content:`TAIL user ${{i}}`,id:`m-${{i+50}}`
+}})),busy:false,activeStreamId:null}};
+global.msgContent=m=>String(m&&m.content||'');
+global.renderMd=s=>String(s||'');
+global._stripWorkspaceDisplayPrefix=s=>String(s||'');
+global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');
+global._messageIsRenderable=()=>true;
+global._isContextCompactionMessage=()=>false;
+global._isPreservedCompressionTaskListMessage=()=>false;
+global._isRecoveryControlMessage=()=>false;
+global.INFLIGHT={{}};
+global.requestAnimationFrame=cb=>{{cb();return 1;}};
+global.queueMicrotask=cb=>cb();
+let _messagesTruncated=true;
+let _oldestIdx=50;
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
+syncSessionDashboard();
+process.stdout.write(JSON.stringify({{
+  original:element('sessionDashboardOriginalRequest').innerHTML,
+  tailWasMisrepresented:element('sessionDashboardOriginalRequest').innerHTML.includes('TAIL user'),
+}}));
+"""
+    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "original": "The goal is not loaded yet. Switch to Classic view and load earlier messages to see it.",
+        "tailWasMisrepresented": False,
+    }
 
 
 def test_dashboard_reads_existing_session_state_without_mutating_messages():
@@ -250,7 +310,7 @@ def test_dashboard_uses_existing_markdown_renderer():
 
 
 def test_dashboard_long_markdown_is_contained_without_page_width_overflow():
-    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in CSS
+    assert "grid-template-columns:minmax(0,1fr)" in CSS
     assert ".session-dashboard-section{min-width:0;min-height:0" in CSS
     assert ".session-dashboard-copy{min-width:0;max-width:100%" in CSS
     assert ".session-dashboard-copy pre{display:block;width:100%;min-width:0;max-width:100%;overflow-x:auto" in CSS

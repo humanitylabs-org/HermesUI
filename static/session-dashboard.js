@@ -177,9 +177,14 @@
   }
 
   function dashboardSessionSummary(projection){
+    const openingOffset=typeof _oldestIdx!=='undefined'?Number(_oldestIdx):0;
+    const openingIsMissing=(typeof _messagesTruncated!=='undefined'&&!!_messagesTruncated)||(
+      Number.isFinite(openingOffset)&&openingOffset>0
+    );
+    if(openingIsMissing) return 'The goal is not loaded yet. Switch to Classic view and load earlier messages to see it.';
     const firstUser=projection.firstUser;
     const firstText=firstUser?cleanUserText(firstUser.message):'';
-    return firstText||'No original request is available yet.';
+    return firstText||'No goal is available yet.';
   }
 
   function refreshDashboardSummary(){

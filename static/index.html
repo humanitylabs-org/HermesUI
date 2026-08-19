@@ -162,7 +162,7 @@
   </section>
   <nav class="rail tailnet-app-rail" aria-label="Tailnet apps">
     <a class="rail-btn tailnet-app-link active has-tooltip" id="tailnetAppHome" href="./" data-tooltip="Hermes UI" aria-label="Hermes UI" aria-current="page">
-      <img class="tailnet-app-home-icon" src="static/wizard-hat.svg" alt="" width="22" height="22">
+      <img class="tailnet-app-home-icon" src="static/wizard-hat.svg" alt="" width="34" height="34">
     </a>
     <div class="tailnet-app-divider" aria-hidden="true"></div>
     <div class="tailnet-app-links" id="tailnetAppLinks"></div>
@@ -467,20 +467,16 @@
       <section class="session-dashboard" id="sessionDashboard" aria-label="High Signal Mode" hidden>
         <article class="session-dashboard-section session-dashboard-section--original">
           <div class="session-dashboard-card-head">
-            <div class="session-dashboard-label">Original request</div>
-            <button type="button" class="session-dashboard-refresh" id="sessionDashboardSummaryRefresh">Refresh summary</button>
+            <div class="session-dashboard-label">Goal</div>
+            <button type="button" class="session-dashboard-refresh" id="sessionDashboardSummaryRefresh">Refresh goal</button>
           </div>
           <div class="session-dashboard-copy session-dashboard-copy--original" id="sessionDashboardOriginalRequest"></div>
-          <div class="session-dashboard-updated" id="sessionDashboardSummaryUpdated">Original request placeholder</div>
-        </article>
-        <article class="session-dashboard-section session-dashboard-section--instruction">
-          <div class="session-dashboard-label">Last instruction</div>
-          <div class="session-dashboard-copy session-dashboard-copy--verbatim" id="sessionDashboardInstruction"></div>
+          <div class="session-dashboard-updated" id="sessionDashboardSummaryUpdated">Goal placeholder</div>
         </article>
         <article class="session-dashboard-section session-dashboard-section--status">
           <div class="session-dashboard-card-head">
             <div class="session-dashboard-status-heading">
-              <div class="session-dashboard-label">Current status</div>
+              <div class="session-dashboard-label">Status</div>
               <span class="session-dashboard-turn" id="sessionDashboardTurn" hidden></span>
             </div>
             <button type="button" class="session-dashboard-refresh" id="sessionDashboardRefresh">Refresh status</button>
@@ -488,8 +484,12 @@
           <div class="session-dashboard-copy" id="sessionDashboardStatus" aria-live="polite"></div>
           <div class="session-dashboard-updated" id="sessionDashboardUpdated"></div>
         </article>
+        <article class="session-dashboard-section session-dashboard-section--instruction">
+          <div class="session-dashboard-label">Last instruction</div>
+          <div class="session-dashboard-copy session-dashboard-copy--verbatim" id="sessionDashboardInstruction"></div>
+        </article>
         <article class="session-dashboard-section session-dashboard-section--completed" id="sessionDashboardCompletedCard">
-          <div class="session-dashboard-label">Completed result</div>
+          <div class="session-dashboard-label">Result</div>
           <div class="session-dashboard-copy session-dashboard-copy--result" id="sessionDashboardCompleted"></div>
         </article>
       </section>

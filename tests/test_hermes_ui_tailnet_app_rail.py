@@ -26,6 +26,10 @@ def test_hermes_ui_is_the_first_and_current_rail_item():
     assert rail.index('data-tooltip="Hermes UI"') < rail.index('id="tailnetAppLinks"')
     assert 'aria-current="page"' in rail
     assert 'href="./"' in rail
+    assert 'class="tailnet-app-home-icon"' in rail
+    assert 'width="34" height="34"' in rail
+    assert ".tailnet-app-home-icon{display:block;width:34px;height:34px" in CSS
+    assert ".tailnet-app-icon{width:20px;height:20px" in CSS
 
 
 def test_private_app_inventory_is_local_config_not_public_source():
@@ -63,6 +67,16 @@ def test_rail_is_persistent_and_the_external_workspace_is_responsive():
     assert "html[data-tailnet-view=\"external\"] .tailnet-app-workspace" in CSS
     assert "html[data-tailnet-view=\"external\"] .layout > .sidebar" in CSS
     assert ".sidebar-nav{display:none!important;}" in CSS
+
+
+def test_external_app_is_the_only_mobile_content_beside_the_persistent_selector():
+    assert '@media(max-width:640px),(pointer:coarse)' in CSS
+    assert 'html[data-tailnet-view="external"] .app-titlebar{display:none!important;}' in CSS
+    assert 'html[data-tailnet-view="external"] .tailnet-app-workspace{display:block;order:2;flex:1 1 auto;width:auto;max-width:none;}' in CSS
+    assert 'html[data-tailnet-view="external"] .layout > .sidebar' in CSS
+    assert 'html[data-tailnet-view="external"] .layout > .main' in CSS
+    assert 'html[data-tailnet-view="external"] .layout > .rightpanel{display:none!important;}' in CSS
+    assert 'html[data-tailnet-view="external"] .tailnet-app-rail' in CSS
 
 
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
