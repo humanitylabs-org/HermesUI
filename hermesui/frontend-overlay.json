@@ -1,7 +1,7 @@
 {
   "files": [
     {
-      "hermesui_sha256": "d553858a7f96a672bca6aa8ec15890b3665ca3b3346dc9c37af95a06e9485e3f",
+      "hermesui_sha256": "3be29c0d7bb1039a9631ab9e0f185b1eea329b0793a47750643faa14ff9be97b",
       "path": "static/apple-touch-icon.png",
       "upstream_sha256": "049445ab220cb4a564ab226420337f7995826bba623ccdd6b83020515204dcf1"
     },
@@ -16,32 +16,32 @@
       "upstream_sha256": "12a0bf61f16d13018c6fef940fa58c4f1aa38cf8079105aa28aeb6b3ba05b8fd"
     },
     {
-      "hermesui_sha256": "f68f64c861f8698072249a3cfeca25d99de603cd743dde74fb7d653b46a9f61c",
+      "hermesui_sha256": "b67af6c929f20a774dba6fafc4e8acb11f22888a2403c5fb8657d5ceb119c3fd",
       "path": "static/favicon-192.png",
       "upstream_sha256": "2afc2b92e03ff0b3d291c673266cd2ea3fec5768409a749ede210675917b3f66"
     },
     {
-      "hermesui_sha256": "fa4753c4822964d303a0c547db56ca5027da02b1fd8930d263fb036b13f8046a",
+      "hermesui_sha256": "85831e2286e80d2c7b207f4490e7e55cd0c42e8f208e7a6be7b6fda4c6d181db",
       "path": "static/favicon-32.png",
       "upstream_sha256": "5353edc27577606ff1d324fe75dc9939dc6ae43eccee747ec9b0f66accd7248d"
     },
     {
-      "hermesui_sha256": "d553858a7f96a672bca6aa8ec15890b3665ca3b3346dc9c37af95a06e9485e3f",
+      "hermesui_sha256": "dc917599e20b171470d4a590696282c88bb48da20e5eda0502914a7b284dbd97",
       "path": "static/favicon-512.png",
       "upstream_sha256": "771a8e1b322eb6afa12198ffc6fe220132c8474afb60dd9f00814fe82f9b574f"
     },
     {
-      "hermesui_sha256": "3e3acf418eb40fe2b6d0177cccdf2d5a57f50ad7f6d2ef6f91d06e9de66c44bb",
+      "hermesui_sha256": "505c29f47fc20e495726762f0f721983ea94f92bbd0932ea71cf422d557dbadf",
       "path": "static/favicon-512.svg",
       "upstream_sha256": "52ace924247213ddb9018447506622e209363b42ac4942e433cde3046cfc568e"
     },
     {
-      "hermesui_sha256": "eac1f5d8934b17b0d2059d8c1492ba3d8b2bf0359f9294e5a6c65449d908908a",
+      "hermesui_sha256": "7c4d4c41f64f3b547dfa1c9b496fa57e23955fbe0fa56d053a87544ef72c5ca4",
       "path": "static/favicon.ico",
       "upstream_sha256": "5ad3f993b7f0f1bec78311e00db60f1f289c892c173d332fbd82b9998e4995ff"
     },
     {
-      "hermesui_sha256": "3e3acf418eb40fe2b6d0177cccdf2d5a57f50ad7f6d2ef6f91d06e9de66c44bb",
+      "hermesui_sha256": "505c29f47fc20e495726762f0f721983ea94f92bbd0932ea71cf422d557dbadf",
       "path": "static/favicon.svg",
       "upstream_sha256": "b883cc5f4e2fa5ee01cc87e1ed1546ba9ab47079632ce692a77cfa65178bb6d6"
     },
@@ -56,7 +56,7 @@
       "upstream_sha256": "6b96bb1b4124bbc46158efc9d45bf5278b4ea6219ddf946ee3160123255da6b9"
     },
     {
-      "hermesui_sha256": "b1337b7396d1ec3c57fb3bf992f727ae468fb8c81f3651c8948c72a576335fc7",
+      "hermesui_sha256": "1f3e52cb10a320f7678d918b35cab4a1d6d25cd6c3dec54fdb0a51e057042a81",
       "path": "static/manifest.json",
       "upstream_sha256": "da3e24d84ae91fba3f8ba51f48d51d277b4f6d443506e888a178ac7d1fed1c6a"
     },
@@ -101,7 +101,7 @@
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },
     {
-      "hermesui_sha256": "1f737c0981ae9a7eab4df8df740805ed662f944dd9c80a05f072abe29580fb56",
+      "hermesui_sha256": "ce24c91f9d8aa54c3f6f1186dcb1c59f09bb852505552b46e423cc760365d345",
       "path": "static/sw.js",
       "upstream_sha256": "cfdc35b1dd3f20f9ef8e885008dd76c3bcd2fe3deb61c1708f2e6d88514e2ff8"
     },
@@ -111,37 +111,52 @@
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "f68f64c861f8698072249a3cfeca25d99de603cd743dde74fb7d653b46a9f61c",
+      "hermesui_sha256": "b67af6c929f20a774dba6fafc4e8acb11f22888a2403c5fb8657d5ceb119c3fd",
       "path": "static/wizard-hat-192.png",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "fa4753c4822964d303a0c547db56ca5027da02b1fd8930d263fb036b13f8046a",
+      "hermesui_sha256": "85831e2286e80d2c7b207f4490e7e55cd0c42e8f208e7a6be7b6fda4c6d181db",
       "path": "static/wizard-hat-32.png",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "d553858a7f96a672bca6aa8ec15890b3665ca3b3346dc9c37af95a06e9485e3f",
+      "hermesui_sha256": "dc917599e20b171470d4a590696282c88bb48da20e5eda0502914a7b284dbd97",
       "path": "static/wizard-hat-512.png",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "d553858a7f96a672bca6aa8ec15890b3665ca3b3346dc9c37af95a06e9485e3f",
+      "hermesui_sha256": "3be29c0d7bb1039a9631ab9e0f185b1eea329b0793a47750643faa14ff9be97b",
       "path": "static/wizard-hat-apple-touch.png",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "37616ed38cd5437c05e1499bd7c48ab834173d1a9fad7fc0936e59dba188d3bb",
+      "hermesui_sha256": "505c29f47fc20e495726762f0f721983ea94f92bbd0932ea71cf422d557dbadf",
       "path": "static/wizard-hat-mark.svg",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "eac1f5d8934b17b0d2059d8c1492ba3d8b2bf0359f9294e5a6c65449d908908a",
+      "hermesui_sha256": "e8a4d139c3655848fc20959e8e377f20cc49f3dc9d95ed1042b32c2821da2ba6",
+      "path": "static/wizard-hat-maskable-192.png",
+      "upstream_sha256": null
+    },
+    {
+      "hermesui_sha256": "3be29c0d7bb1039a9631ab9e0f185b1eea329b0793a47750643faa14ff9be97b",
+      "path": "static/wizard-hat-maskable-512.png",
+      "upstream_sha256": null
+    },
+    {
+      "hermesui_sha256": "fbde3ed59d1a4f03c0bc602770501ed6eb88dc4a437e3a5d2081dee9f6ffc5e5",
+      "path": "static/wizard-hat-source.png",
+      "upstream_sha256": null
+    },
+    {
+      "hermesui_sha256": "7c4d4c41f64f3b547dfa1c9b496fa57e23955fbe0fa56d053a87544ef72c5ca4",
       "path": "static/wizard-hat.ico",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "3e3acf418eb40fe2b6d0177cccdf2d5a57f50ad7f6d2ef6f91d06e9de66c44bb",
+      "hermesui_sha256": "505c29f47fc20e495726762f0f721983ea94f92bbd0932ea71cf422d557dbadf",
       "path": "static/wizard-hat.svg",
       "upstream_sha256": null
     }
