@@ -1,7 +1,7 @@
 {
   "files": [
     {
-      "hermesui_sha256": "1838cf032b010b45cd1aac1d049f9301f7084b1f47fbbda1535e1613d5e5c3b5",
+      "hermesui_sha256": "238025967a1a5fd34bdd8dfbec2a2ccba996cef8f37821b159118c11593670a3",
       "path": "static/boot.js",
       "upstream_sha256": "258ccc7b8a3be5c07f1081f0a50961c27ec0fdd0f7bb3eaed2b0a6a1ec8954f0"
     },
@@ -11,7 +11,7 @@
       "upstream_sha256": "12a0bf61f16d13018c6fef940fa58c4f1aa38cf8079105aa28aeb6b3ba05b8fd"
     },
     {
-      "hermesui_sha256": "a5d7bc42e520d1f826290a5b29f304661184c43050e9d1cc804b2cbc9571a4c6",
+      "hermesui_sha256": "7b671b609483c3be4da547aa44575240a7809a582106b794984530eb61c4c34b",
       "path": "static/index.html",
       "upstream_sha256": "4850e0f609c56ef5619dcb023f95398224b053fcca6b1125d4f8a2923f9b2a3c"
     },
@@ -56,7 +56,7 @@
       "upstream_sha256": "087f2a5d42fa71bceaa650138875d2cb1ed41129ef58f0d749072eec0d395c2f"
     },
     {
-      "hermesui_sha256": "2584dfaebaf85044fc323dc6d0182f5efc25b318d573c584489eb06c0063456f",
+      "hermesui_sha256": "5f5d0b3088a7b332accc8ae023bd673e60055017173570b9d1da66a72f967bca",
       "path": "static/style.css",
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },

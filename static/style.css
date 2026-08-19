@@ -126,6 +126,21 @@
   }
   /* ── Skin: Default (gold — matches base) ── */
   /* No overrides needed — :root and .dark already use gold accent */
+  /* ── Skin: E-Ink (HermesUI default) ──
+     Maximum-contrast near-monochrome palette restored from the original
+     trusted local E-Ink extension. The duplicate dark selector prevents a
+     first-paint flash before boot.js forces this light-only skin's scheme. */
+  :root[data-skin="e-ink"],
+  :root.dark[data-skin="e-ink"]{
+    color-scheme:light;
+    --bg:#ffffff;--surface:#ffffff;--surface2:#f4f4f4;--surface-subtle:#f4f4f4;
+    --text:#000000;--text2:#1a1a1a;--muted:#3a3a3a;
+    --accent:#000000;--accent2:#000000;--accent-hover:#000000;--accent-text:#000000;--accent-contrast:#ffffff;
+    --accent-bg:#eaeaea;--accent-bg-strong:#cccccc;--accent-rgb:0, 0, 0;
+    --border:#000000;--border2:#555555;--hover-bg:#eaeaea;
+    --code-bg:#f4f4f4;--code-text:#000000;--sidebar:#ffffff;--sidebar-text:#000000;
+    --user-bubble:#eaeaea;--assistant-bubble:#ffffff;--link:#000000;
+  }
   /* ── Skin: Ares (red) ── */
   :root[data-skin="ares"]{--accent:#C0392B;--accent-hover:#A93226;--accent-bg:rgba(192,57,43,0.08);--accent-bg-strong:rgba(192,57,43,0.15);--accent-text:#922B21;}
   :root.dark[data-skin="ares"]{--accent:#FF4444;--accent-hover:#CC3333;--accent-bg:rgba(255,68,68,0.08);--accent-bg-strong:rgba(255,68,68,0.15);--accent-text:#FF4444;}

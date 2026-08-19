@@ -2627,7 +2627,10 @@ const _THEMES=[
   {name:'Dark', value:'dark', colors:['#0D0D1A','#141425','#FFD700']},
   {name:'System', value:'system', colors:['#FEFCF7','#0D0D1A','#B8860B']},
 ];
+const _HERMESUI_DEFAULT_SKIN='e-ink';
+const _HERMESUI_DEFAULT_SKIN_MIGRATION_KEY='hermesui-eink-default-v1';
 const _SKINS=[
+  {name:'E-Ink', value:'e-ink', scheme:'light', colors:['#000000','#ffffff','#000000']},
   {name:'Default',  colors:['#FFD700','#FFBF00','#CD7F32']},
   {name:'Ares',     colors:['#FF4444','#CC3333','#992222']},
   {name:'Mono',     colors:['#CCCCCC','#999999','#666666']},
@@ -2711,7 +2714,7 @@ function _findSkinEntry(key){
 function _activeSkinScheme(){
   const key=(document.documentElement.dataset.skin||'default').toLowerCase();
   const skin=_findSkinEntry(key);
-  const scheme=skin&&skin._extScheme;
+  const scheme=skin&&(skin.scheme||skin._extScheme);
   return scheme==='light'||scheme==='dark'?scheme:'';
 }
 
@@ -3339,6 +3342,12 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
     const srvAppearance=_normalizeAppearance(s.theme,s.skin);
     const lsTheme=(localStorage.getItem('hermes-theme')||'').trim().toLowerCase();
     const lsSkin=(localStorage.getItem('hermes-skin')||'').trim().toLowerCase();
+    // HermesUI is a frontend-only overlay, so its opinionated E-Ink default is
+    // stored in the browser rather than added to the upstream backend enum.
+    // A fresh browser adopts E-Ink only when the server is still on upstream's
+    // uncustomized `default`; any real server-side skin choice remains intact.
+    const useHermesUiDefault=!lsSkin&&srvAppearance.skin==='default';
+    if(useHermesUiDefault) srvAppearance.skin=_HERMESUI_DEFAULT_SKIN;
     const lsAppearance=_normalizeAppearance(lsTheme||null,lsSkin||null);
     // An unknown non-default persisted skin is most likely an extension-provided
     // skin (registerHermesSkin) whose extension script hasn't registered it yet
@@ -3347,13 +3356,17 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
     // re-apply it once it loads. Without this, the boot sync would clobber the
     // saved choice before the extension runs.
     const lsSkinIsPendingExt=!!lsSkin&&lsSkin!=='default'&&!_VALID_SKINS.has(lsSkin)&&!_LEGACY_THEME_MAP[lsSkin];
-    const lsHasExplicitSkin=lsSkin&&lsSkin!=='default';
+    const hasHermesUiDefaultMigration=localStorage.getItem(_HERMESUI_DEFAULT_SKIN_MIGRATION_KEY)==='1';
+    // After migration, a local `default` means the user deliberately switched
+    // back to upstream Default, so it must be treated as an explicit choice.
+    const lsHasExplicitSkin=!!lsSkin&&(lsSkin!=='default'||hasHermesUiDefaultMigration);
     const lsHasExplicitTheme=lsTheme&&['system','light','dark'].includes(lsTheme);
     const theme=lsHasExplicitTheme?lsAppearance.theme:srvAppearance.theme;
     const skin=lsHasExplicitSkin?(lsSkinIsPendingExt?lsSkin:lsAppearance.skin):srvAppearance.skin;
     localStorage.setItem('hermes-theme',theme);
     _applyTheme(theme);
     localStorage.setItem('hermes-skin',skin);
+    if(useHermesUiDefault) localStorage.setItem(_HERMESUI_DEFAULT_SKIN_MIGRATION_KEY,'1');
     _applySkin(skin);
     // Reconcile: if localStorage and server disagree, push localStorage
     // values to the server so the next refresh won't revert. Skip the push for a
