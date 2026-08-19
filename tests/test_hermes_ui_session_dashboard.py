@@ -70,10 +70,17 @@ def test_high_signal_mode_has_exactly_four_vertically_stacked_full_space_section
     assert "grid-template-columns:repeat(2,minmax(0,1fr))" not in dashboard_rule
     assert "grid-template-rows:repeat(2,minmax(0,1fr))" not in dashboard_rule
     assert ".session-dashboard-section{min-width:0;min-height:0" in CSS
+    assert "display:flex;flex-direction:column" in CSS
+    assert "overflow:hidden" in CSS[CSS.index(".session-dashboard-section{"):CSS.index("}", CSS.index(".session-dashboard-section{"))]
     assert "border-radius:0" in CSS
     assert "box-shadow:none" in CSS
     assert ".session-dashboard-section:not(:last-child){border-bottom:1px solid var(--border);}" in CSS
     assert ".session-dashboard-section:nth-child(odd){border-right" not in CSS
+    assert ".session-dashboard-copy{min-width:0;max-width:100%;flex:1 1 auto;min-height:0" in CSS
+    assert "overflow-y:auto" in CSS[CSS.index(".session-dashboard-copy{"):CSS.index("}", CSS.index(".session-dashboard-copy{"))]
+    assert ".session-dashboard{height:auto;min-height:100%" not in CSS
+    assert 'html[data-session-view="dashboard"] .messages{overflow-y:auto' not in CSS
+    assert ".session-dashboard-section{min-height:190px" not in CSS
 
 
 def test_session_summary_uses_original_request_as_frontend_only_placeholder():
@@ -319,7 +326,9 @@ def test_dashboard_long_markdown_is_contained_without_page_width_overflow():
     assert ".session-dashboard-copy .pre-header+pre" in CSS
     assert ".session-dashboard-copy a,.session-dashboard-copy code:not(pre code)" in CSS
     assert ".session-dashboard-copy .markdown-table-wrap{overflow-x:auto;}" in CSS
-    assert ".session-dashboard-copy--result{max-height:none;overflow:visible;}" in CSS
+    assert ".session-dashboard-copy--result{max-height:none;}" in CSS
+    assert ".session-dashboard-copy--original{font-size:15px;line-height:1.65;max-height:none" in CSS
+    assert "overflow:visible" not in CSS[CSS.index(".session-dashboard-copy--original{"):CSS.index("}", CSS.index(".session-dashboard-copy--original{"))]
 
 
 def test_turn_badge_uses_only_explicit_existing_runtime_values():
