@@ -6,6 +6,7 @@ INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 JS = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
 BOOT = (ROOT / "static" / "boot.js").read_text(encoding="utf-8")
+SWIPE = (ROOT / "static" / "session-swipe-navigation.js").read_text(encoding="utf-8")
 GITIGNORE = (ROOT / ".gitignore").read_text(encoding="utf-8")
 
 
@@ -80,7 +81,13 @@ def test_external_app_is_the_only_mobile_content_beside_the_persistent_selector(
     assert 'html[data-tailnet-view="external"] .tailnet-app-rail' in CSS
 
 
-def test_mobile_hermes_hamburger_sits_beside_the_app_selector_and_closes_reliably():
+def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
+    assert (
+        '.rail.tailnet-app-rail{position:fixed;left:0;top:0;bottom:0;width:48px;'
+        'height:100%;height:100dvh;box-sizing:border-box;'
+        in CSS
+    )
+    assert '.layout{margin-left:48px;width:calc(100% - 48px);}' in CSS
     assert (
         'html:not([data-tailnet-view="external"]) .app-titlebar{'
         'margin-left:48px;width:calc(100% - 48px);box-sizing:border-box;}'
@@ -97,8 +104,15 @@ def test_mobile_hermes_hamburger_sits_beside_the_app_selector_and_closes_reliabl
         in CSS
     )
     assert INDEX.index('id="btnHamburger"') < INDEX.index('id="mobileSessionTabs"')
-    assert "if(isOpen){closeMobileSidebar(true);}" in BOOT
-    assert 'onclick="closeMobileSidebar(true)"' in INDEX
+    assert "function openMobileSessionPage()" in BOOT
+    assert "openMobileSessionPage();" in BOOT
+    assert "document.documentElement.dataset.mobileSessionView='sessions';" in BOOT
+    assert "if(_mobileSessionSelectionRequired())return openMobileSessionPage();" in BOOT
+    assert "if(typeof openMobileSessionPage==='function') openMobileSessionPage();" in BOOT
+    assert "if(typeof syncMobileSessionNavigation==='function') syncMobileSessionNavigation();" in SWIPE
+    assert 'html[data-mobile-session-view="sessions"] .app-titlebar{display:none!important;}' in CSS
+    assert '.sidebar.mobile-session-page .mobile-sidebar-close{display:none!important;}' in CSS
+    assert '.sidebar.mobile-session-page .panel-view{margin-left:0;}' in CSS
 
 
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():

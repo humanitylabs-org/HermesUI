@@ -2202,9 +2202,15 @@
     html[data-tailnet-view="external"] .tailnet-app-rail{padding-top:max(10px,env(safe-area-inset-top,0px));padding-bottom:max(8px,env(safe-area-inset-bottom,0px));}
   }
   @media(max-width:640px){
+    .rail.tailnet-app-rail{position:fixed;left:0;top:0;bottom:0;width:48px;height:100%;height:100dvh;box-sizing:border-box;padding-top:max(10px,env(safe-area-inset-top,0px));padding-bottom:max(8px,env(safe-area-inset-bottom,0px));}
+    .layout{margin-left:48px;width:calc(100% - 48px);}
     html:not([data-tailnet-view="external"]) .app-titlebar{margin-left:48px;width:calc(100% - 48px);box-sizing:border-box;}
     html:not([data-tailnet-view="external"]) .sidebar{left:48px;width:calc(100vw - 48px);transform:translateX(calc(-100% - 48px));}
     html:not([data-tailnet-view="external"]) .sidebar.mobile-open{transform:translateX(0);}
+    html[data-mobile-session-view="sessions"] .app-titlebar{display:none!important;}
+    .sidebar.mobile-session-page .mobile-sidebar-close{display:none!important;}
+    .sidebar.mobile-session-page .panel-view{margin-left:0;}
+    .sidebar.mobile-session-page .panel-head{padding-right:12px;}
   }
   /* HermesUI: remove the workspace browser from the simplified shell. */
   html body .rightpanel,

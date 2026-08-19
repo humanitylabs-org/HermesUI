@@ -396,19 +396,27 @@ function syncWorkspacePanelUI(){
 }
 
 function toggleMobileSidebar(){
-  const sidebar=document.querySelector('.sidebar');
-  if(!sidebar)return;
-  const isOpen=sidebar.classList.contains('mobile-open');
-  if(isOpen){closeMobileSidebar(true);}
-  else{
-    try{if(typeof _syncMobileSidebarPanelFromMainView==='function')_syncMobileSidebarPanelFromMainView();}catch(_){}
-    openMobileSidebar(true);
-  }
+  openMobileSessionPage();
 }
 function _mobileSessionSelectionRequired(){
   let isPhone=false;
   try{isPhone=window.matchMedia('(max-width:640px)').matches;}catch(_){isPhone=window.innerWidth<=640;}
   return isPhone&&!(S.session&&S.session.session_id);
+}
+function openMobileSessionPage(){
+  const sidebar=document.querySelector('.sidebar');
+  if(!sidebar)return false;
+  let isPhone=false;
+  try{isPhone=window.matchMedia('(max-width:640px)').matches;}catch(_){isPhone=window.innerWidth<=640;}
+  if(!isPhone)return false;
+  // Sessions is a real mobile page, not a drawer with a second back button.
+  // The chat panel switch is synchronous even though switchPanel is async.
+  const entering=!sidebar.classList.contains('mobile-session-page');
+  if(entering){try{if(typeof switchPanel==='function')switchPanel('chat');}catch(_){}}
+  sidebar.classList.remove('mobile-panel-drawer');
+  sidebar.classList.add('mobile-session-page','mobile-open');
+  document.documentElement.dataset.mobileSessionView='sessions';
+  return true;
 }
 function openMobileSidebar(skipPanelSync=false){
   const sidebar=document.querySelector('.sidebar');
@@ -421,18 +429,24 @@ function openMobileSidebar(skipPanelSync=false){
   }
   sidebar.classList.remove('mobile-session-page');
   sidebar.classList.add('mobile-panel-drawer','mobile-open');
+  delete document.documentElement.dataset.mobileSessionView;
   return true;
 }
 function closeMobileSidebar(){
   const force=arguments[0]===true;
   if(!force&&_mobileSessionSelectionRequired()){
-    openMobileSidebar();
+    openMobileSessionPage();
     return false;
   }
   const sidebar=document.querySelector('.sidebar');
   const overlay=$('mobileOverlay');
   if(sidebar)sidebar.classList.remove('mobile-open','mobile-session-page','mobile-panel-drawer');
   if(overlay)overlay.classList.remove('visible');
+  delete document.documentElement.dataset.mobileSessionView;
+  return true;
+}
+function syncMobileSessionNavigation(){
+  if(_mobileSessionSelectionRequired())return openMobileSessionPage();
   return true;
 }
 
@@ -3679,7 +3693,7 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
   await renderSessionList();
   // HermesUI mobile shell: the Sessions panel is always the initial page. It stays
   // open until the user chooses a real session or creates an actual Untitled one.
-  if(typeof openMobileSidebar==='function') openMobileSidebar();
+  if(typeof openMobileSessionPage==='function') openMobileSessionPage();
   await _workspaceListReady;
   await _onboardingReady;
   _initResizePanels();

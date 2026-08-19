@@ -186,6 +186,7 @@
   function syncTabs(forceCenter=false){
     tabSyncFrame=null;
     if(!tabList||!tabsViewport) return;
+    if(typeof syncMobileSessionNavigation==='function') syncMobileSessionNavigation();
     setTabMetrics();
     const activeSid=currentSid();
     const sessions=tabSessions();
