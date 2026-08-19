@@ -65,7 +65,7 @@ def _maskable_background(size: int) -> Image.Image:
             t = min(1.0, distance / max_distance)
             # Ease the vignette so the center remains rich rather than flat.
             t = t * t * (3.0 - 2.0 * t)
-            px[x, y] = tuple(round(a + (b - a) * t) for a, b in zip(inner, outer)) + (255,)
+            px[x, y] = tuple(round(a + (b - a) * t) for a, b in zip(inner, outer, strict=True)) + (255,)
     return image
 
 
