@@ -140,3 +140,13 @@ def test_desktop_sidebar_and_keyboard_session_switches_use_the_same_skeleton():
     assert "if(typeof setSessionContentLoading==='function') setSessionContentLoading(true)" in SESSIONS
     assert "if(typeof setSessionContentLoading==='function') setSessionContentLoading(false)" in SESSIONS
     assert "_openSidebarSession(session,{source:'keyboard-session-navigation'})" in SESSIONS
+
+
+def test_mobile_session_selection_recenters_after_revealing_the_tab_strip():
+    open_start = SESSIONS.index("async function _openSidebarSession")
+    close_position = SESSIONS.index("closeMobileSidebar()", open_start)
+    sync_position = SESSIONS.index("syncSessionTabs(true)", open_start)
+    render_position = SESSIONS.index("renderSessionListFromCache()", open_start)
+    assert "const wasMobileSessionPage=document.documentElement.dataset.mobileSessionView==='sessions';" in SESSIONS
+    assert "if(wasMobileSessionPage&&typeof syncSessionTabs==='function') syncSessionTabs(true);" in SESSIONS
+    assert close_position < sync_position < render_position

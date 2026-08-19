@@ -2503,7 +2503,14 @@ async function _openSidebarSession(session, loadOpts={}){
     await _ensureSidebarSessionProfile(session);
     // Tell loadSession to skip its pre-hook — we already ran it above.
     await loadSession(session.session_id, Object.assign({}, loadOpts, {_preloadNotified:true}));
-    if(S.session&&S.session.session_id===session.session_id&&typeof closeMobileSidebar==='function') closeMobileSidebar();
+    if(S.session&&S.session.session_id===session.session_id){
+      const wasMobileSessionPage=document.documentElement.dataset.mobileSessionView==='sessions';
+      if(typeof closeMobileSidebar==='function') closeMobileSidebar();
+      // The first tab render may happen while the Sessions page still hides the
+      // titlebar. Rebuild and center once more after revealing its final geometry.
+      const syncSessionTabs=window.__sessionSwipeNavigation&&window.__sessionSwipeNavigation.syncTabs;
+      if(wasMobileSessionPage&&typeof syncSessionTabs==='function') syncSessionTabs(true);
+    }
     renderSessionListFromCache();
   }finally{
     if(typeof setSessionContentLoading==='function') setSessionContentLoading(false);
