@@ -58,6 +58,7 @@ def test_rail_is_persistent_and_the_external_workspace_is_responsive():
     assert "@media(min-width:900px)" in CSS
     assert "@media(max-width:899px)" in CSS
     assert "@media(min-width:1500px)" not in CSS
+    assert "flex:0 0 50vw;width:50vw;max-width:50vw" in CSS
     assert "html[data-tailnet-view=\"external\"] .tailnet-app-workspace" in CSS
     assert "html[data-tailnet-view=\"external\"] .layout > .sidebar" in CSS
     assert ".sidebar-nav{display:none!important;}" in CSS
