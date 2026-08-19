@@ -14,6 +14,28 @@ The intended one-button flow on humanitylabs.org gives the user's AI the reviewe
 
 See [the architecture contract](hermesui/ARCHITECTURE.md) and [upstream refresh procedure](docs/UPSTREAM-MAINTENANCE.md).
 
+## Tailnet app rail
+
+On desktop, Hermes UI keeps itself first in a narrow Tailnet app rail. Additional private apps are loaded from an optional per-installation `static/tailnet-apps.json`; the repository ignores this local file so private hostnames cannot enter an ordinary `git add -A`. Each configured app opens in a separate browser tab so Hermes UI stays available as the launcher, including when another app forbids iframe embedding.
+
+The local file uses this shape:
+
+```json
+{
+  "version": 1,
+  "apps": [
+    {
+      "id": "private-app",
+      "label": "Private App",
+      "href": "https://device.example.ts.net/private-app/",
+      "icon": "apps"
+    }
+  ]
+}
+```
+
+Accepted icon names are `pipeline`, `apps`, `draw`, `browser`, `terminal`, and `monitor`. Additional links must use HTTPS, except same-origin development links; malformed, duplicate, and unsafe entries are ignored. The desktop rail remains hidden on mobile so the existing hamburger and chat layout stay unchanged.
+
 ---
 
 # Upstream Hermes Web UI documentation

@@ -19,6 +19,7 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 # in the WebUI backend/runtime. All upstream-owned application changes must stay in
 # static/ and must be recorded in frontend-overlay.json.
 DOWNSTREAM_EXACT = {
+    ".gitignore",
     ".github/workflows/hermesui.yml",
     "NOTICE.md",
     "README.md",
