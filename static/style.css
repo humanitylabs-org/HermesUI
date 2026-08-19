@@ -2159,9 +2159,18 @@
   .dashboard-external-badge::after{content:'';position:absolute;right:-2px;top:-2px;width:5px;height:5px;border-top:1.5px solid var(--accent);border-right:1.5px solid var(--accent);}
   .sidebar-nav .dashboard-external-badge{right:8px;top:7px;width:8px;height:8px;}
   @media(min-width:641px){.rail{display:flex;}.sidebar > .sidebar-nav{display:none;}}
-  /* HermesUI: chat-only shell; Settings lives at the bottom of the chat sidebar. */
-  .rail{display:none!important;}
+  /* HermesUI: the desktop rail launches private Tailnet apps; WebUI panel tabs stay hidden. */
+  .rail.tailnet-app-rail{display:none!important;}
+  @media(min-width:641px){.rail.tailnet-app-rail{display:flex!important;}}
   .sidebar-nav{display:none!important;}
+  .tailnet-app-rail{gap:6px;padding-top:10px;}
+  .tailnet-app-link{text-decoration:none;}
+  .tailnet-app-home-icon{display:block;border-radius:6px;}
+  .tailnet-app-divider{width:24px;height:1px;margin:2px 0 1px;background:var(--border);flex:0 0 auto;}
+  .tailnet-app-links{display:contents;}
+  .tailnet-app-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
+  .tailnet-app-icon svg{width:20px;height:20px;display:block;}
+  .tailnet-app-link[target="_blank"]::after{max-width:220px;overflow:hidden;text-overflow:ellipsis;}
   /* HermesUI: remove the workspace browser from the simplified shell. */
   html body .rightpanel,
   html body .workspace-panel-edge-toggle,

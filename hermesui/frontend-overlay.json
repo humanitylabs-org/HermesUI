@@ -11,7 +11,7 @@
       "upstream_sha256": "12a0bf61f16d13018c6fef940fa58c4f1aa38cf8079105aa28aeb6b3ba05b8fd"
     },
     {
-      "hermesui_sha256": "7b671b609483c3be4da547aa44575240a7809a582106b794984530eb61c4c34b",
+      "hermesui_sha256": "1a9aebb67a4fee069755df3c72ded1b650c6b07e89d06d839231b1b69560e482",
       "path": "static/index.html",
       "upstream_sha256": "4850e0f609c56ef5619dcb023f95398224b053fcca6b1125d4f8a2923f9b2a3c"
     },
@@ -56,7 +56,7 @@
       "upstream_sha256": "087f2a5d42fa71bceaa650138875d2cb1ed41129ef58f0d749072eec0d395c2f"
     },
     {
-      "hermesui_sha256": "5f5d0b3088a7b332accc8ae023bd673e60055017173570b9d1da66a72f967bca",
+      "hermesui_sha256": "c88b12aaefffa830d7bb8d01cb2cf79a20dbeabe2cb1511114259b9cf7e95c22",
       "path": "static/style.css",
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },
@@ -64,6 +64,11 @@
       "hermesui_sha256": "926c6cb795cd4e251c32f222b6e61f160bbb4748501f18860c4022964113b339",
       "path": "static/sw.js",
       "upstream_sha256": "cfdc35b1dd3f20f9ef8e885008dd76c3bcd2fe3deb61c1708f2e6d88514e2ff8"
+    },
+    {
+      "hermesui_sha256": "4bdce2ac253f9029c451e7a7a463357ebc9ed4ff27d9f0a14c57b42aa7c584fd",
+      "path": "static/tailnet-app-rail.js",
+      "upstream_sha256": null
     }
   ],
   "schema": 1,
