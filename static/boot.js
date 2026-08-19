@@ -399,7 +399,7 @@ function toggleMobileSidebar(){
   const sidebar=document.querySelector('.sidebar');
   if(!sidebar)return;
   const isOpen=sidebar.classList.contains('mobile-open');
-  if(isOpen){closeMobileSidebar();}
+  if(isOpen){closeMobileSidebar(true);}
   else{
     try{if(typeof _syncMobileSidebarPanelFromMainView==='function')_syncMobileSidebarPanelFromMainView();}catch(_){}
     openMobileSidebar(true);

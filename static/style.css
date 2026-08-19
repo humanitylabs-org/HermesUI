@@ -2202,7 +2202,9 @@
     html[data-tailnet-view="external"] .tailnet-app-rail{padding-top:max(10px,env(safe-area-inset-top,0px));padding-bottom:max(8px,env(safe-area-inset-bottom,0px));}
   }
   @media(max-width:640px){
-    html:not([data-tailnet-view="external"]) .sidebar{left:48px;width:calc(100vw - 48px);}
+    html:not([data-tailnet-view="external"]) .app-titlebar{margin-left:48px;width:calc(100% - 48px);box-sizing:border-box;}
+    html:not([data-tailnet-view="external"]) .sidebar{left:48px;width:calc(100vw - 48px);transform:translateX(calc(-100% - 48px));}
+    html:not([data-tailnet-view="external"]) .sidebar.mobile-open{transform:translateX(0);}
   }
   /* HermesUI: remove the workspace browser from the simplified shell. */
   html body .rightpanel,

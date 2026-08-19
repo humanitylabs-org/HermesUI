@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 JS = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
+BOOT = (ROOT / "static" / "boot.js").read_text(encoding="utf-8")
 GITIGNORE = (ROOT / ".gitignore").read_text(encoding="utf-8")
 
 
@@ -77,6 +78,27 @@ def test_external_app_is_the_only_mobile_content_beside_the_persistent_selector(
     assert 'html[data-tailnet-view="external"] .layout > .main' in CSS
     assert 'html[data-tailnet-view="external"] .layout > .rightpanel{display:none!important;}' in CSS
     assert 'html[data-tailnet-view="external"] .tailnet-app-rail' in CSS
+
+
+def test_mobile_hermes_hamburger_sits_beside_the_app_selector_and_closes_reliably():
+    assert (
+        'html:not([data-tailnet-view="external"]) .app-titlebar{'
+        'margin-left:48px;width:calc(100% - 48px);box-sizing:border-box;}'
+        in CSS
+    )
+    assert (
+        'html:not([data-tailnet-view="external"]) .sidebar{left:48px;'
+        'width:calc(100vw - 48px);transform:translateX(calc(-100% - 48px));}'
+        in CSS
+    )
+    assert (
+        'html:not([data-tailnet-view="external"]) .sidebar.mobile-open{'
+        'transform:translateX(0);}'
+        in CSS
+    )
+    assert INDEX.index('id="btnHamburger"') < INDEX.index('id="mobileSessionTabs"')
+    assert "if(isOpen){closeMobileSidebar(true);}" in BOOT
+    assert 'onclick="closeMobileSidebar(true)"' in INDEX
 
 
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
