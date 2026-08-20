@@ -107,8 +107,27 @@ def test_frame_ancestors_is_evaluated_against_exact_hermes_origin():
         ["frame-ancestors https://*.tail6adf1a.ts.net:443"],
         "https://example.com",
     )
+    assert not checker.csp_blocks_parent(
+        ["frame-ancestors https://*.tail6adf1a.ts.net:443/"],
+        "https://example.com",
+    )
     assert checker.csp_blocks_parent(
         ["frame-ancestors https://*.tail6adf1a.ts.net:8443"],
+        "https://example.com",
+    )
+    for invalid_source in (
+        f"https://user@{checker.PARENT_ORIGIN.removeprefix('https://')}",
+        f"{checker.PARENT_ORIGIN}/hermesUI/",
+        f"{checker.PARENT_ORIGIN}?unexpected=1",
+        f"{checker.PARENT_ORIGIN}#unexpected",
+        "https://*.tail6adf1a.ts.net:443/hermesUI/",
+    ):
+        assert checker.csp_blocks_parent(
+            [f"frame-ancestors {invalid_source}"],
+            "https://example.com",
+        )
+    assert not checker.csp_blocks_parent(
+        [f"frame-ancestors {checker.PARENT_ORIGIN}/"],
         "https://example.com",
     )
     assert not checker.csp_blocks_parent(["frame-ancestors https:"], "https://example.com")

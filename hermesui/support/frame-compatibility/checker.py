@@ -150,6 +150,14 @@ def source_allows_parent(source: str, document_origin: str) -> bool:
     if lowered.startswith("https://*."):
         try:
             parsed_source = urlsplit(lowered.replace("https://*.", "https://placeholder.", 1))
+            if (
+                parsed_source.username
+                or parsed_source.password
+                or parsed_source.query
+                or parsed_source.fragment
+                or parsed_source.path not in ("", "/")
+            ):
+                return False
             source_host = parsed_source.hostname or ""
             if not source_host.startswith("placeholder."):
                 return False
@@ -167,6 +175,15 @@ def source_allows_parent(source: str, document_origin: str) -> bool:
         )
     if lowered.startswith("https://"):
         try:
+            parsed_source = urlsplit(lowered)
+            if (
+                parsed_source.username
+                or parsed_source.password
+                or parsed_source.query
+                or parsed_source.fragment
+                or parsed_source.path not in ("", "/")
+            ):
+                return False
             if origin_for(lowered) == origin_for(PARENT_ORIGIN):
                 return True
         except (TypeError, ValueError):
