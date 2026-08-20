@@ -14,9 +14,11 @@ The intended one-button flow on humanitylabs.org gives the user's AI the reviewe
 
 See [the architecture contract](hermesui/ARCHITECTURE.md) and [upstream refresh procedure](docs/UPSTREAM-MAINTENANCE.md).
 
-## Tailnet app rail
+## Wizard OS app rail
 
-On desktop, Hermes UI keeps itself first in a narrow Tailnet app rail. Additional private apps are loaded from an optional per-installation `static/tailnet-apps.json`; the repository ignores this local file so private hostnames cannot enter an ordinary `git add -A`. Each configured app opens in a separate browser tab so Hermes UI stays available as the launcher, including when another app forbids iframe embedding.
+Hermes UI stays first in a persistent app rail organized into three visible groups: **PRIVATE**, **WORK**, and **WEB**. Private Tailnet apps are loaded dynamically from an optional per-installation `static/tailnet-apps.json`; the repository ignores this local file so private hostnames cannot enter an ordinary `git add -A`. Work apps and Web bookmarks can be added with the plus buttons at the bottom of their lists and are stored only in that browser's local storage. The PRIVATE plus opens Humanity Labs inside the workspace as the current placeholder for the private-app library.
+
+Every selector item opens inside Hermes UI's workspace panel: side by side with Hermes on wide screens and in the main workspace on narrow screens. Private apps use their validated same-origin `frameHref`. Browser-local WORK and WEB entries resolve through the same-origin `/tailnet-frame/` bridge, which reads only the selected validated HTTPS bookmark from same-origin local storage. The selector does not create new tabs or windows.
 
 The local file uses this shape:
 
@@ -28,13 +30,14 @@ The local file uses this shape:
       "id": "private-app",
       "label": "Private App",
       "href": "https://device.example.ts.net/private-app/",
+      "frameHref": "/tailnet-frame/?app=private-app",
       "icon": "apps"
     }
   ]
 }
 ```
 
-Accepted icon names are `pipeline`, `apps`, `draw`, `browser`, `terminal`, and `monitor`. Additional links must use HTTPS, except same-origin development links; malformed, duplicate, and unsafe entries are ignored. The desktop rail remains hidden on mobile so the existing hamburger and chat layout stay unchanged.
+Both URLs are required. `href` is the canonical destination and must use HTTPS, except for same-origin development links. `frameHref` must resolve to the Hermes UI origin and should point to the trusted local frame route for that app. Accepted icon names are `pipeline`, `apps`, `draw`, `browser`, `terminal`, and `monitor`; malformed, duplicate, and unsafe entries are ignored. A destination must permit framing by the bridge origin; sites that send restrictive `X-Frame-Options` or `frame-ancestors` headers cannot be made embeddable by this frontend. The rail remains available on mobile while the selected app replaces the main workspace beside it.
 
 ---
 

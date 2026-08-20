@@ -5,8 +5,8 @@
   "replacements": [
     {
       "nodeid": "tests/test_issue3227_help_tab.py::test_help_pane_present",
-      "reason": "Hermes UI intentionally removes the upstream Help navigation surface from its minimal chat shell.",
-      "covered_by": ["tests/test_hermes_ui_chat_shell.py"]
+      "reason": "Hermes UI keeps the upstream Help pane and documentation link but retargets issue reporting to the downstream HermesUI repository.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
     },
     {
       "nodeid": "tests/test_issue4391_settings_shortcut.py::TestSettingsShortcutPresence::test_no_text_input_skip_guard",
@@ -51,7 +51,7 @@
     {
       "nodeid": "tests/test_mobile_layout.py::test_titlebar_reload_button_visibility_css_contract",
       "reason": "Hermes UI's phone titlebar is intentionally minimal and does not expose the upstream reload control.",
-      "covered_by": ["tests/test_hermes_ui_chat_shell.py"]
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
     },
     {
       "nodeid": "tests/test_mobile_sidebar_header_icon_align.py::test_mobile_close_glyph_matches_plus_button_size",
@@ -61,17 +61,17 @@
     {
       "nodeid": "tests/test_pwa_manifest_sw.py::TestSessionManifestRoute::test_session_manifest_json_has_hermes_name",
       "reason": "Hermes UI intentionally brands its installable frontend as HermesUI.",
-      "covered_by": ["tests/test_hermes_ui_chat_shell.py"]
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
     },
     {
       "nodeid": "tests/test_pwa_manifest_sw.py::TestSessionManifestRoute::test_session_manifest_webmanifest_is_parseable_json",
       "reason": "Hermes UI intentionally brands its installable frontend as HermesUI while preserving valid manifest JSON.",
-      "covered_by": ["tests/test_hermes_ui_chat_shell.py"]
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
     },
     {
       "nodeid": "tests/test_pwa_manifest_sw.py::TestRootManifestRoute::test_root_manifest_json_has_hermes_name_and_512_icon",
       "reason": "Hermes UI intentionally brands its root manifest as HermesUI.",
-      "covered_by": ["tests/test_hermes_ui_chat_shell.py"]
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
     },
     {
       "nodeid": "tests/test_pwa_sidebar_swipe.py::test_pwa_edge_swipe_gesture_is_registered_for_mobile_sidebar",
@@ -127,6 +127,86 @@
       "nodeid": "tests/test_sidebar_unassigned_filter.py::test_unassigned_chip_only_shown_when_relevant",
       "reason": "Hermes UI hides redundant folder filters until at least one real folder exists.",
       "covered_by": ["tests/test_hermes_ui_sessions_sidebar.py"]
+    },
+    {
+      "nodeid": "tests/test_6808_appearance_bootstrap_no_fabricated_choice.py::test_fresh_browser_still_paints_dark",
+      "reason": "Hermes UI intentionally uses its light E-Ink skin for a fresh browser instead of upstream dark pre-paint.",
+      "covered_by": ["tests/test_hermes_ui_eink_default.py"]
+    },
+    {
+      "nodeid": "tests/test_6808_appearance_bootstrap_no_fabricated_choice.py::test_any_prior_state_still_normalises_and_persists[initial0-dark-default]",
+      "reason": "Hermes UI's one-time migration maps an explicit legacy default skin to E-Ink while preserving non-default choices.",
+      "covered_by": ["tests/test_hermes_ui_eink_default.py"]
+    },
+    {
+      "nodeid": "tests/test_css_tooltips.py::RailTooltipCascadeTests::test_all_rail_buttons_carry_has_tooltip",
+      "reason": "Hermes UI replaces the upstream panel rail markup with an accessible Tailnet app rail and keeps panel controls in the sidebar.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py", "tests/test_hermes_ui_tailnet_app_rail.py"]
+    },
+    {
+      "nodeid": "tests/test_dashboard_link_ui.py::test_dashboard_nav_buttons_are_hidden_by_default_and_subpath_safe",
+      "reason": "Hermes UI replaces the old desktop Dashboard rail button with its subpath-safe Classic View and High Signal Mode switcher.",
+      "covered_by": ["tests/test_hermes_ui_session_dashboard.py", "tests/test_hermesui_subpath_login.py"]
+    },
+    {
+      "nodeid": "tests/test_dashboard_link_ui.py::test_dashboard_rail_item_sits_between_insights_and_settings_spacer",
+      "reason": "Hermes UI reserves the persistent rail for Hermes and private Tailnet apps rather than the upstream external Dashboard link.",
+      "covered_by": ["tests/test_hermes_ui_session_dashboard.py", "tests/test_hermes_ui_tailnet_app_rail.py"]
+    },
+    {
+      "nodeid": "tests/test_dashboard_link_ui.py::test_dashboard_frontend_opens_external_tab_safely_and_derives_browser_host_url",
+      "reason": "Hermes UI exposes High Signal Mode as an in-app session view instead of a desktop external Dashboard rail action.",
+      "covered_by": ["tests/test_hermes_ui_session_dashboard.py"]
+    },
+    {
+      "nodeid": "tests/test_dashboard_link_ui.py::test_desktop_dashboard_link_button_stays_in_desktop_nav",
+      "reason": "Hermes UI's desktop mode switcher replaces the upstream external Dashboard rail button.",
+      "covered_by": ["tests/test_hermes_ui_session_dashboard.py"]
+    },
+    {
+      "nodeid": "tests/test_issue4856_mobile_transcript_unscrollable.py::test_mobile_inner_does_not_become_scroll_container",
+      "reason": "Hermes UI adds an earlier Tailnet-app mobile breakpoint; the real transcript rule still uses overflow-x:clip later in the mobile overlay.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
+    },
+    {
+      "nodeid": "tests/test_issue4856_mobile_transcript_unscrollable.py::test_mobile_inner_must_not_set_overflow_y_auto_or_scroll",
+      "reason": "Hermes UI's earlier Tailnet-app media block invalidates the upstream fixed source window while the actual transcript rule remains non-scrolling on Y.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
+    },
+    {
+      "nodeid": "tests/test_issue5545_three_panel_layout.py::test_no_unmatched_desktop_hide_breakpoint_above_900",
+      "reason": "Hermes UI intentionally hides Hermes panels below 1296px only while an external Tailnet app owns the workspace; Classic View retains the upstream panel layout.",
+      "covered_by": ["tests/test_hermes_ui_chat_shell.py", "tests/test_hermes_ui_tailnet_app_rail.py"]
+    },
+    {
+      "nodeid": "tests/test_logs_ui_static.py::test_logs_tab_is_wired_between_insights_and_settings_in_rail_and_mobile_nav",
+      "reason": "Hermes UI moves upstream panel navigation, including Logs, from the persistent app rail into its accessible sidebar navigation.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
+    },
+    {
+      "nodeid": "tests/test_mobile_layout.py::test_rightpanel_mobile_slide_over_css",
+      "reason": "Hermes UI adds an earlier Tailnet-app mobile media block; the later Classic View mobile workspace slide-over remains intact.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
+    },
+    {
+      "nodeid": "tests/test_sidebar_collapse_toggle.py::TestRailButtonsPassFromRailClick::test_all_rail_buttons_pass_from_rail_click",
+      "reason": "Hermes UI reserves the persistent rail for apps and moves panel switch buttons, with fromRailClick preserved, into sidebar navigation.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py", "tests/test_hermes_ui_tailnet_app_rail.py"]
+    },
+    {
+      "nodeid": "tests/test_transcript_scroll_invariant.py::test_overflow_x_clip_is_the_chosen_horizontal_clip",
+      "reason": "Hermes UI's earlier Tailnet-app breakpoint falls outside the upstream fixed window assumption; the actual mobile transcript rule still uses overflow-x:clip.",
+      "covered_by": ["tests/test_hermes_ui_replaced_frontend_contracts.py"]
+    },
+    {
+      "nodeid": "tests/test_webui_external_refresh_frontend.py::test_pwa_pull_to_refresh_refreshes_session_list_not_page_when_available",
+      "reason": "Hermes UI intentionally removes the standalone pull-down refresh gesture so vertical mobile drags only scroll content and never refresh the active session.",
+      "covered_by": ["tests/test_hermes_ui_mobile_session_swipe.py"]
+    },
+    {
+      "nodeid": "tests/test_workspace_panel_session_list.py::TestWorkspacePanelCollapsePriority::test_rightpanel_is_a_size_container",
+      "reason": "Hermes UI adds mode-scoped right-panel selectors before the upstream base rule; the Classic View right panel remains an inline-size container.",
+      "covered_by": ["tests/test_hermes_ui_chat_shell.py", "tests/test_hermes_ui_replaced_frontend_contracts.py"]
     }
   ]
 }

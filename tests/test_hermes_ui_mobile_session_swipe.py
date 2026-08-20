@@ -7,6 +7,7 @@ SW = (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 SWIPE = (ROOT / "static" / "session-swipe-navigation.js").read_text(encoding="utf-8")
 SESSIONS = (ROOT / "static" / "sessions.js").read_text(encoding="utf-8")
+UI = (ROOT / "static" / "ui.js").read_text(encoding="utf-8")
 
 
 def test_mobile_session_swipe_is_a_versioned_frontend_shell_asset():
@@ -24,6 +25,14 @@ def test_swipe_is_phone_and_coarse_pointer_only():
     assert "const enabled=()=>media(PHONE_QUERY)&&media(COARSE_QUERY)" in SWIPE
     assert "if(!enabled()||switching||swipeAnimating||gesture||!currentSid()) return" in SWIPE
     assert "@media (max-width:640px) and (pointer:coarse){.messages-shell{touch-action:pan-y;}}" in CSS
+
+
+def test_mobile_shell_has_no_swipe_down_refresh_gesture():
+    assert "Pull-to-refresh for PWA standalone" not in UI
+    assert "pull-to-refresh-indicator" not in UI
+    assert "refreshSessionList('pull'" not in UI
+    assert "pull-to-refresh-indicator" not in CSS
+    assert "html,body{overscroll-behavior-y:none;}" in CSS
 
 
 def test_swipe_uses_visible_sidebar_order_and_existing_session_switch_path():

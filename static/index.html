@@ -160,13 +160,33 @@
   <section class="tailnet-app-workspace" id="tailnetAppWorkspace" aria-label="Selected Tailnet app" hidden>
     <iframe id="tailnetAppFrame" title="Selected Tailnet app" loading="eager" referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
   </section>
-  <nav class="rail tailnet-app-rail" aria-label="Tailnet apps">
+  <nav class="rail tailnet-app-rail" aria-label="Wizard OS apps">
     <a class="rail-btn tailnet-app-link active has-tooltip" id="tailnetAppHome" href="./" data-tooltip="Hermes UI" aria-label="Hermes UI" aria-current="page">
       <img class="tailnet-app-home-icon" src="static/wizard-hat.svg" alt="" width="34" height="34">
     </a>
-    <div class="tailnet-app-divider" aria-hidden="true"></div>
-    <div class="tailnet-app-links" id="tailnetAppLinks"></div>
-    <div class="rail-spacer"></div>
+    <div class="tailnet-app-groups" id="tailnetAppGroups">
+      <section class="tailnet-app-group" data-app-group="private" aria-labelledby="tailnetPrivateAppsLabel">
+        <div class="tailnet-app-group-head has-tooltip" id="tailnetPrivateAppsLabel" role="heading" aria-level="2" aria-label="Private Tailnet apps" data-tooltip="Private Tailnet apps">
+          <span class="tailnet-app-group-badge" aria-hidden="true">PRIVATE</span>
+        </div>
+        <div class="tailnet-app-links" id="tailnetAppLinks"></div>
+        <button class="rail-btn tailnet-app-add tailnet-app-marketplace has-tooltip" id="tailnetPrivateAdd" type="button" data-tailnet-app-id="private-marketplace" aria-label="Open private app library" data-tooltip="Open private app library"><span aria-hidden="true">+</span></button>
+      </section>
+      <section class="tailnet-app-group" data-app-group="work" aria-labelledby="tailnetCompanyAppsLabel">
+        <div class="tailnet-app-group-head has-tooltip" id="tailnetCompanyAppsLabel" role="heading" aria-level="2" aria-label="Work apps" data-tooltip="Work apps">
+          <span class="tailnet-app-group-badge" aria-hidden="true">WORK</span>
+        </div>
+        <div class="tailnet-app-links" id="tailnetCompanyAppLinks"></div>
+        <button class="tailnet-app-add has-tooltip" id="tailnetCompanyAdd" type="button" aria-label="Add work app" data-tooltip="Add work app"><span aria-hidden="true">+</span></button>
+      </section>
+      <section class="tailnet-app-group" data-app-group="web" aria-labelledby="tailnetPublicAppsLabel">
+        <div class="tailnet-app-group-head has-tooltip" id="tailnetPublicAppsLabel" role="heading" aria-level="2" aria-label="Web bookmarks" data-tooltip="Web bookmarks">
+          <span class="tailnet-app-group-badge" aria-hidden="true">WEB</span>
+        </div>
+        <div class="tailnet-app-links" id="tailnetPublicAppLinks"></div>
+        <button class="tailnet-app-add has-tooltip" id="tailnetPublicAdd" type="button" aria-label="Add web bookmark" data-tooltip="Add web bookmark"><span aria-hidden="true">+</span></button>
+      </section>
+    </div>
   </nav>
   <aside class="sidebar">
     <button class="panel-head-btn mobile-sidebar-close has-tooltip has-tooltip--bottom-right" type="button" onclick="closeMobileSidebar(true)" data-tooltip="Close menu" data-i18n-title="close_menu" aria-label="Close menu" data-i18n-aria-label="close_menu">

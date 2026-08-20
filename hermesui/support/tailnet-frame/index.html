@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Wizard OS app</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#f7f7f4;color:#181818;font:15px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    iframe{display:block;width:100%;height:100%;border:0;background:#f7f7f4}
+    .status{position:fixed;inset:0;z-index:2;display:grid;place-items:center;background:#f7f7f4;text-align:center;padding:24px}
+    .status[hidden]{display:none}
+    .status-card{max-width:340px}
+    .status-title{font-weight:700;margin:0 0 8px}
+    .status-copy{color:#666;margin:0}
+    @media(prefers-color-scheme:dark){html,body,iframe,.status{background:#111;color:#f5f5f0}.status-copy{color:#aaa}}
+  </style>
+</head>
+<body>
+  <div class="status" id="status" role="status">
+    <div class="status-card">
+      <p class="status-title" id="statusTitle">Opening app…</p>
+      <p class="status-copy" id="statusCopy">Loading inside Wizard OS.</p>
+    </div>
+  </div>
+  <iframe id="appFrame" title="Wizard OS app" referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
+  <script>
+  (async function(){
+    'use strict';
+    const BOOKMARK_STORAGE_KEY='hermesui.app-selector.bookmarks.v1';
+    const GROUPS=new Set(['company','public']);
+    const status=document.getElementById('status');
+    const title=document.getElementById('statusTitle');
+    const copy=document.getElementById('statusCopy');
+    const frame=document.getElementById('appFrame');
+    const params=new URL(location.href).searchParams;
+
+    function cleanDestination(candidate){
+      if(!candidate||typeof candidate!=='object')return null;
+      const label=typeof candidate.label==='string'?candidate.label.trim():'';
+      const href=typeof candidate.href==='string'?candidate.href.trim():'';
+      if(!label||label.length>48||!href)return null;
+      let url;
+      try{url=new URL(href);}catch(_){return null;}
+      if(url.protocol!=='https:'||url.username||url.password)return null;
+      return {label,href:url.href};
+    }
+
+    function readBookmark(token){
+      const split=token.indexOf(':');
+      if(split<1)return null;
+      const group=token.slice(0,split);
+      const id=token.slice(split+1);
+      if(!GROUPS.has(group)||!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id))return null;
+      try{
+        const payload=JSON.parse(localStorage.getItem(BOOKMARK_STORAGE_KEY)||'null');
+        if(!payload||payload.version!==1)return null;
+        const entries=Array.isArray(payload[group])?payload[group]:[];
+        return cleanDestination(entries.find(item=>item&&item.id===id));
+      }catch(_){return null;}
+    }
+
+    async function readPrivateApp(id){
+      if(id==='private-marketplace')return {label:'Private app library',href:'https://humanitylabs.org/'};
+      const response=await fetch('./apps.json',{cache:'no-store',credentials:'same-origin'});
+      if(!response.ok)throw new Error('inventory unavailable');
+      const payload=await response.json();
+      const candidate=Array.isArray(payload.apps)?payload.apps.find(item=>item&&item.id===id):null;
+      return cleanDestination(candidate);
+    }
+
+    let app=null;
+    try{
+      const bookmark=params.get('bookmark')||'';
+      if(bookmark)app=readBookmark(bookmark);
+      else app=await readPrivateApp(params.get('app')||'');
+      if(!app)throw new Error('unknown app');
+    }catch(_){
+      title.textContent='App unavailable';
+      copy.textContent='This destination is not in the selected Wizard OS group.';
+      return;
+    }
+
+    document.title=app.label;
+    frame.title=app.label;
+    frame.addEventListener('load',()=>{status.hidden=true;},{once:true});
+    frame.src=app.href;
+    setTimeout(()=>{
+      if(status.hidden)return;
+      title.textContent='Still connecting…';
+      copy.textContent='The destination is still loading inside Wizard OS.';
+    },8000);
+  })();
+  </script>
+</body>
+</html>
