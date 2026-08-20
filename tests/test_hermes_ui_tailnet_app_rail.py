@@ -95,12 +95,13 @@ def test_work_and_web_entries_are_browser_local_panel_buttons():
     assert "link.dataset.bookmarkGroup=group" in JS
     bookmark_renderer = JS[JS.index("function renderBookmark"):JS.index("function containerForGroup")]
     assert "document.createElement('button')" in bookmark_renderer
-    assert "activateApp(app)" in bookmark_renderer
+    assert "activateBookmark(app)" in bookmark_renderer
     assert "bindBookmarkActions(link)" in bookmark_renderer
     assert "link.setAttribute('aria-haspopup','menu')" in bookmark_renderer
-    assert "target='_blank'" not in JS
-    assert "window.open(" not in JS
-    assert "The selector does not create new tabs or windows." in README
+    assert "FRAME_DECISION_STORAGE_KEY" in JS
+    assert "FRAME_CHECK_PATH='/frame-check/'" in JS
+    assert "window.open(href,'_blank','noopener,noreferrer')" in JS
+    assert "does not support the in-app panel" in FRAME_BRIDGE
 
 
 def test_saved_bookmark_urls_are_https_only_and_credentials_are_rejected():
@@ -124,11 +125,25 @@ def test_private_app_inventory_is_local_config_not_public_source():
     assert ".ts.net" not in JS
 
 
-def test_every_selector_app_switches_inside_the_private_shell_without_direct_open_fallback():
-    assert "target='_blank'" not in JS
-    assert "noopener noreferrer" not in JS
+def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "link.addEventListener('click'" in JS
     assert "activateApp(app)" in JS
+    assert "activateBookmark(app)" in JS
+    assert "privateAdd.addEventListener('click',()=>activateApp(privateMarketplace))" in JS
+    fallback = JS[JS.index("function activateBrowserFallback"):JS.index("function activateBookmark")]
+    assert "openBrowserTab(app.href)" in fallback
+    assert "reserved.location.replace(app.href)" in fallback
+    activation = JS[JS.index("function activateBookmark"):JS.index("function appIcon")]
+    assert "if(!decision)reserveBrowserTab(app)" in activation
+    assert "refreshFrameDecision(app).then" not in activation
+    assert "const reservedBrowserTabs=new Map()" in JS
+    message_handler = JS[JS.index("window.addEventListener('message'"):JS.index("document.addEventListener('pointerover'")]
+    assert "const reserved=takeReservedTab(app.id)" in message_handler
+    assert "activateBrowserFallback(app,{reserved})" in message_handler
+    assert "else closeReservedTab(reserved)" in message_handler
+    private_activation = JS[JS.index("function renderApp"):JS.index("function renderBookmark")]
+    assert "activateApp(app)" in private_activation
+    assert "activateBookmark(app)" not in private_activation
     assert "link.dataset.tailnetAppId=app.id" in JS
     assert "frameUrl.origin!==location.origin" in JS
     assert "url.protocol!=='https:'&&url.origin!==location.origin" in JS
@@ -149,13 +164,22 @@ def test_same_origin_frame_bridge_resolves_only_valid_saved_work_and_web_entries
     assert "url.protocol!=='https:'||url.username||url.password" in FRAME_BRIDGE
     assert "return cleanDestination(entries.find(item=>item&&item.id===id))" in FRAME_BRIDGE
     assert "frame.src=app.href" in FRAME_BRIDGE
-    assert "target=\"_blank\"" not in FRAME_BRIDGE
+    assert "target=\"_blank\"" in FRAME_BRIDGE
+    assert "rel=\"noopener noreferrer\"" in FRAME_BRIDGE
     assert "window.open(" not in FRAME_BRIDGE
     assert "vnc_auto" not in FRAME_BRIDGE
     assert "websockify" not in FRAME_BRIDGE
     assert "openInTailnetBrowser" not in FRAME_BRIDGE
     assert "fetch('./navigate'" not in FRAME_BRIDGE
     assert "?bookmark=${encodeURIComponent(`${group}:${id}`)}" in JS
+    assert "?browser=${encodeURIComponent(`${group}:${id}`)}" in JS
+    assert "hermesui:bookmark-frame-decision" in JS
+    assert "hermesui:bookmark-frame-decision" in FRAME_BRIDGE
+    assert "notifyParent(bookmarkToken,'unknown'" in FRAME_BRIDGE
+    assert "notifyParent(bookmarkToken,'inline'" in FRAME_BRIDGE
+    assert 'id="manualBrowserAction"' in FRAME_BRIDGE
+    assert "if(!decision||decision.mode==='unknown')" in FRAME_BRIDGE
+    assert "manualAction.href=app.href" in FRAME_BRIDGE
 
 
 def test_app_tooltips_escape_the_clipped_rail_and_bookmarks_have_two_actions():

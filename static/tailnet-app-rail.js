@@ -6,6 +6,9 @@
   const MAX_BOOKMARKS_PER_GROUP=20;
   const STORAGE_KEY='hermesui.tailnet-app';
   const BOOKMARK_STORAGE_KEY='hermesui.app-selector.bookmarks.v1';
+  const FRAME_DECISION_STORAGE_KEY='hermesui.app-selector.frame-decisions.v1';
+  const FRAME_CHECK_PATH='/frame-check/';
+  const FRAME_DECISION_TTL_MS=6*60*60*1000;
   const URL_SCHEME_RE=/^[a-z][a-z0-9+.-]*:/i;
   const GROUPS={
     company:{label:'work app',plural:'work apps',icon:'company'},
@@ -41,6 +44,7 @@
     icon:'apps'
   };
   const appsById=new Map();
+  const reservedBrowserTabs=new Map();
   let savedGroups={company:[],public:[]};
   let activeId='';
   let tooltip=null;
@@ -48,6 +52,7 @@
   let menuBookmark=null;
   let longPress=null;
   let suppressBookmarkClick='';
+  let frameDecisions=readFrameDecisions();
 
   function cleanApp(raw){
     if(!raw||typeof raw!=='object'||raw.enabled===false)return null;
@@ -78,6 +83,74 @@
     return url.href;
   }
 
+  function readFrameDecisions(){
+    try{
+      const payload=JSON.parse(localStorage.getItem(FRAME_DECISION_STORAGE_KEY)||'null');
+      if(!payload||payload.version!==1||!payload.entries||typeof payload.entries!=='object')return {};
+      const result={};
+      Object.entries(payload.entries).slice(0,MAX_BOOKMARKS_PER_GROUP*2).forEach(([href,entry])=>{
+        if(!normalizeBookmarkUrl(href)||!entry||typeof entry!=='object')return;
+        if(entry.mode!=='inline'&&entry.mode!=='browser')return;
+        const checkedAt=Number(entry.checkedAt);
+        if(!Number.isFinite(checkedAt)||checkedAt<=0)return;
+        result[href]={mode:entry.mode,reason:typeof entry.reason==='string'?entry.reason:'',checkedAt};
+      });
+      return result;
+    }catch(_){return {};}
+  }
+
+  function writeFrameDecisions(){
+    try{
+      frameDecisions=Object.fromEntries(
+        Object.entries(frameDecisions)
+          .sort(([,left],[,right])=>right.checkedAt-left.checkedAt)
+          .slice(0,MAX_BOOKMARKS_PER_GROUP*2)
+      );
+      localStorage.setItem(FRAME_DECISION_STORAGE_KEY,JSON.stringify({version:1,entries:frameDecisions}));
+      return true;
+    }catch(_){return false;}
+  }
+
+  function freshFrameDecision(href){
+    const decision=frameDecisions[href];
+    if(!decision||Date.now()-decision.checkedAt>FRAME_DECISION_TTL_MS)return null;
+    return decision;
+  }
+
+  async function refreshFrameDecision(app,{force=false}={}){
+    if(!app||!app.href)return null;
+    const current=freshFrameDecision(app.href);
+    if(current&&!force)return current;
+    const controller=typeof AbortController==='function'?new AbortController():null;
+    const timeout=controller?setTimeout(()=>controller.abort(),6000):null;
+    try{
+      const endpoint=new URL(FRAME_CHECK_PATH,location.origin);
+      endpoint.searchParams.set('url',app.href);
+      const options={cache:'no-store',credentials:'same-origin'};
+      if(controller)options.signal=controller.signal;
+      const response=await fetch(endpoint.href,options);
+      if(!response.ok)return null;
+      const payload=await response.json();
+      if(!payload||payload.ok!==true||(payload.mode!=='inline'&&payload.mode!=='browser'))return null;
+      const decision={mode:payload.mode,reason:typeof payload.reason==='string'?payload.reason:'',checkedAt:Date.now()};
+      frameDecisions[app.href]=decision;
+      writeFrameDecisions();
+      return decision;
+    }catch(_){return null;}finally{if(timeout)clearTimeout(timeout);}
+  }
+
+  async function refreshSavedFrameDecisions(){
+    const bookmarks=[...savedGroups.company,...savedGroups.public];
+    let index=0;
+    async function worker(){
+      while(index<bookmarks.length){
+        const app=bookmarks[index++];
+        await refreshFrameDecision(app);
+      }
+    }
+    await Promise.all(Array.from({length:Math.min(4,bookmarks.length)},()=>worker()));
+  }
+
   function cleanBookmark(raw,group){
     if(!GROUPS[group]||!raw||typeof raw!=='object')return null;
     const id=typeof raw.id==='string'?raw.id.trim():'';
@@ -85,7 +158,8 @@
     const href=normalizeBookmarkUrl(raw.href);
     if(!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id)||!label||label.length>48||!href)return null;
     const frameHref=new URL(`/tailnet-frame/?bookmark=${encodeURIComponent(`${group}:${id}`)}`,location.origin).href;
-    return {id,label,href,frameHref,icon:GROUPS[group].icon};
+    const browserHref=new URL(`/tailnet-frame/?browser=${encodeURIComponent(`${group}:${id}`)}`,location.origin).href;
+    return {id,label,href,frameHref,browserHref,group,icon:GROUPS[group].icon};
   }
 
   function emptySavedGroups(){return {company:[],public:[]};}
@@ -137,6 +211,7 @@
   }
 
   function activateHermes({remember=true}={}){
+    closeReservedTabsExcept();
     hideTooltip();
     closeBookmarkMenu();
     activeId='';
@@ -152,10 +227,13 @@
 
   function activateApp(app){
     if(!workspace||!frame)return;
+    closeReservedTabsExcept(app.id);
     hideTooltip();
     closeBookmarkMenu();
     activeId=app.id;
-    if(frame.dataset.tailnetAppId!==app.id){
+    const wasBrowserFallback=frame.dataset.browserFallback==='true';
+    delete frame.dataset.browserFallback;
+    if(frame.dataset.tailnetAppId!==app.id||wasBrowserFallback){
       frame.dataset.tailnetAppId=app.id;
       frame.title=app.label;
       frame.src=app.frameHref;
@@ -167,6 +245,87 @@
     closeSessionsOverlay();
     try{sessionStorage.setItem(STORAGE_KEY,app.id);}catch(_){}
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:app.id,label:app.label}}));
+  }
+
+  function openBrowserTab(href){
+    try{return window.open(href,'_blank','noopener,noreferrer');}catch(_){return null;}
+  }
+
+  function reserveBrowserTab(app){
+    closeReservedTab(reservedBrowserTabs.get(app.id));
+    reservedBrowserTabs.delete(app.id);
+    try{
+      const reserved=window.open(app.browserHref,'_blank');
+      if(reserved){
+        reserved.opener=null;
+        reservedBrowserTabs.set(app.id,reserved);
+      }
+      return reserved;
+    }catch(_){return null;}
+  }
+
+  function closeReservedTab(reserved){
+    if(!reserved)return;
+    try{if(!reserved.closed)reserved.close();}catch(_){}
+  }
+
+  function takeReservedTab(appId){
+    const reserved=reservedBrowserTabs.get(appId)||null;
+    reservedBrowserTabs.delete(appId);
+    return reserved;
+  }
+
+  function closeReservedTabsExcept(appId=''){
+    reservedBrowserTabs.forEach((reserved,id)=>{
+      if(id===appId)return;
+      closeReservedTab(reserved);
+      reservedBrowserTabs.delete(id);
+    });
+  }
+
+  function activateBrowserFallback(app,{open=true,reserved=null}={}){
+    if(!workspace||!frame||!app.browserHref)return;
+    hideTooltip();
+    closeBookmarkMenu();
+    activeId=app.id;
+    const alreadyShowing=frame.dataset.tailnetAppId===app.id&&frame.dataset.browserFallback==='true';
+    if(open&&!alreadyShowing){
+      let usedReserved=false;
+      if(reserved){
+        try{
+          if(!reserved.closed){
+            reserved.location.replace(app.href);
+            usedReserved=true;
+          }
+        }catch(_){}
+      }
+      if(!usedReserved)openBrowserTab(app.href);
+    }
+    frame.dataset.tailnetAppId=app.id;
+    frame.dataset.browserFallback='true';
+    frame.title=`${app.label} — browser fallback`;
+    if(!alreadyShowing)frame.src=app.browserHref;
+    workspace.setAttribute('aria-label',`${app.label} opened in browser`);
+    workspace.hidden=false;
+    root.setAttribute('data-tailnet-view','external');
+    markSelected(app.id);
+    closeSessionsOverlay();
+    try{sessionStorage.setItem(STORAGE_KEY,app.id);}catch(_){}
+    document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{
+      id:app.id,
+      label:app.label,
+      mode:'browser'
+    }}));
+  }
+
+  function activateBookmark(app){
+    const decision=freshFrameDecision(app.href);
+    if(decision&&decision.mode==='browser'){
+      activateBrowserFallback(app);
+      return;
+    }
+    if(!decision)reserveBrowserTab(app);
+    activateApp(app);
   }
 
 
@@ -206,8 +365,10 @@
         event.preventDefault();
         return;
       }
-      activateApp(app);
+      activateBookmark(app);
     });
+    link.addEventListener('pointerenter',()=>void refreshFrameDecision(app));
+    link.addEventListener('focus',()=>void refreshFrameDecision(app));
     bindBookmarkActions(link);
     link.appendChild(appIcon(GROUPS[group].icon));
     container.appendChild(link);
@@ -426,6 +587,33 @@
   }
 
   function bindOverlayInteractions(){
+    window.addEventListener('message',event=>{
+      if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
+      const data=event.data;
+      if(!data||data.type!=='hermesui:bookmark-frame-decision'||typeof data.token!=='string')return;
+      if(data.mode!=='inline'&&data.mode!=='browser'&&data.mode!=='unknown')return;
+      const split=data.token.indexOf(':');
+      if(split<1)return;
+      const group=data.token.slice(0,split);
+      const id=data.token.slice(split+1);
+      const app=bookmarkFor(group,id);
+      if(!app)return;
+      const reserved=takeReservedTab(app.id);
+      if(data.mode==='inline'||data.mode==='browser'){
+        frameDecisions[app.href]={
+          mode:data.mode,
+          reason:typeof data.reason==='string'?data.reason:'',
+          checkedAt:Date.now()
+        };
+        writeFrameDecisions();
+      }
+      if(activeId!==app.id){
+        closeReservedTab(reserved);
+        return;
+      }
+      if(data.mode==='browser')activateBrowserFallback(app,{reserved});
+      else closeReservedTab(reserved);
+    });
     document.addEventListener('pointerover',event=>{
       const target=event.target instanceof Element?event.target.closest('.tailnet-app-rail .has-tooltip[data-tooltip]'):null;
       if(target)showTooltip(target);
@@ -515,6 +703,7 @@
       }
       renderSavedGroup(group);
       notify(`${app.label} added to ${definition.plural}.`);
+      void refreshFrameDecision(app,{force:true});
       document.dispatchEvent(new CustomEvent('hermesui:app-bookmarks-changed',{detail:{group,count:savedGroups[group].length}}));
     }finally{
       button.disabled=false;
@@ -536,6 +725,7 @@
     savedGroups=readSavedGroups();
     renderSavedGroup('company');
     renderSavedGroup('public');
+    void refreshSavedFrameDecisions();
     let rendered=0;
     const controller=typeof AbortController==='function'?new AbortController():null;
     const timeout=controller?setTimeout(()=>controller.abort(),2500):null;
