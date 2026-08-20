@@ -43,6 +43,11 @@
   const appsById=new Map();
   let savedGroups={company:[],public:[]};
   let activeId='';
+  let tooltip=null;
+  let bookmarkMenu=null;
+  let menuBookmark=null;
+  let longPress=null;
+  let suppressBookmarkClick='';
 
   function cleanApp(raw){
     if(!raw||typeof raw!=='object'||raw.enabled===false)return null;
@@ -132,6 +137,8 @@
   }
 
   function activateHermes({remember=true}={}){
+    hideTooltip();
+    closeBookmarkMenu();
     activeId='';
     root.setAttribute('data-tailnet-view','hermes');
     if(workspace)workspace.hidden=true;
@@ -145,6 +152,8 @@
 
   function activateApp(app){
     if(!workspace||!frame)return;
+    hideTooltip();
+    closeBookmarkMenu();
     activeId=app.id;
     if(frame.dataset.tailnetAppId!==app.id){
       frame.dataset.tailnetAppId=app.id;
@@ -190,7 +199,16 @@
     link.dataset.bookmarkId=app.id;
     link.dataset.tooltip=app.label;
     link.setAttribute('aria-label',app.label);
-    link.addEventListener('click',()=>activateApp(app));
+    link.setAttribute('aria-haspopup','menu');
+    link.addEventListener('click',event=>{
+      if(suppressBookmarkClick===app.id){
+        suppressBookmarkClick='';
+        event.preventDefault();
+        return;
+      }
+      activateApp(app);
+    });
+    bindBookmarkActions(link);
     link.appendChild(appIcon(GROUPS[group].icon));
     container.appendChild(link);
   }
@@ -206,6 +224,7 @@
       appsById.set(app.id,app);
       renderBookmark(container,app,group);
     });
+    markSelected(activeId);
   }
 
   function suggestedLabel(href){
@@ -221,6 +240,225 @@
 
   function notify(message){
     if(typeof window.showToast==='function')window.showToast(message);
+  }
+
+  function ensureTooltip(){
+    if(tooltip)return tooltip;
+    tooltip=document.createElement('div');
+    tooltip.className='tailnet-rail-tooltip';
+    tooltip.setAttribute('role','tooltip');
+    tooltip.hidden=true;
+    document.body.appendChild(tooltip);
+    return tooltip;
+  }
+
+  function hideTooltip(){
+    if(tooltip)tooltip.hidden=true;
+  }
+
+  function showTooltip(target){
+    const label=target&&target.dataset?String(target.dataset.tooltip||'').trim():'';
+    if(!label)return;
+    const node=ensureTooltip();
+    node.textContent=label;
+    node.hidden=false;
+    const rect=target.getBoundingClientRect();
+    const width=node.offsetWidth;
+    const height=node.offsetHeight;
+    node.style.left=`${Math.max(8,Math.min(window.innerWidth-width-8,rect.right+8))}px`;
+    node.style.top=`${Math.max(8,Math.min(window.innerHeight-height-8,rect.top+(rect.height-height)/2))}px`;
+  }
+
+  function closeBookmarkMenu({restoreFocus=false}={}){
+    const target=menuBookmark&&menuBookmark.button;
+    if(bookmarkMenu)bookmarkMenu.hidden=true;
+    menuBookmark=null;
+    if(restoreFocus&&target&&target.isConnected)target.focus();
+  }
+
+  function bookmarkFor(group,id){
+    return GROUPS[group]&&savedGroups[group]?savedGroups[group].find(app=>app.id===id)||null:null;
+  }
+
+  async function renameBookmark(){
+    const current=menuBookmark;
+    closeBookmarkMenu();
+    if(!current)return;
+    const app=bookmarkFor(current.group,current.id);
+    if(!app)return;
+    const rawLabel=await promptValue({
+      title:'Rename',
+      message:'Choose the short name shown in the app selector.',
+      value:app.label,
+      selectAll:true,
+      placeholder:'App name',
+      confirmLabel:'Rename'
+    });
+    if(rawLabel==null)return;
+    const replacement=cleanBookmark({...app,label:String(rawLabel).trim()},current.group);
+    if(!replacement){
+      notify('Enter a name between 1 and 48 characters.');
+      return;
+    }
+    const index=savedGroups[current.group].findIndex(item=>item.id===current.id);
+    if(index<0)return;
+    const previous=savedGroups[current.group][index];
+    savedGroups[current.group][index]=replacement;
+    if(!writeSavedGroups()){
+      savedGroups[current.group][index]=previous;
+      notify('Browser storage is unavailable, so the app was not renamed.');
+      return;
+    }
+    appsById.set(replacement.id,replacement);
+    renderSavedGroup(current.group);
+    if(activeId===replacement.id){
+      frame.title=replacement.label;
+      workspace.setAttribute('aria-label',replacement.label);
+    }
+    notify(`${replacement.label} renamed.`);
+    document.dispatchEvent(new CustomEvent('hermesui:app-bookmarks-changed',{detail:{group:current.group,count:savedGroups[current.group].length}}));
+  }
+
+  function deleteBookmark(){
+    const current=menuBookmark;
+    closeBookmarkMenu();
+    if(!current)return;
+    const app=bookmarkFor(current.group,current.id);
+    if(!app)return;
+    const previous=savedGroups[current.group].slice();
+    savedGroups[current.group]=savedGroups[current.group].filter(item=>item.id!==current.id);
+    if(!writeSavedGroups()){
+      savedGroups[current.group]=previous;
+      notify('Browser storage is unavailable, so the app was not deleted.');
+      return;
+    }
+    appsById.delete(current.id);
+    if(activeId===current.id)activateHermes();
+    renderSavedGroup(current.group);
+    notify(`${app.label} deleted.`);
+    document.dispatchEvent(new CustomEvent('hermesui:app-bookmarks-changed',{detail:{group:current.group,count:savedGroups[current.group].length}}));
+  }
+
+  function ensureBookmarkMenu(){
+    if(bookmarkMenu)return bookmarkMenu;
+    bookmarkMenu=document.createElement('div');
+    bookmarkMenu.className='tailnet-bookmark-menu';
+    bookmarkMenu.setAttribute('role','menu');
+    bookmarkMenu.setAttribute('aria-label','Bookmark actions');
+    bookmarkMenu.hidden=true;
+    const rename=document.createElement('button');
+    rename.type='button';
+    rename.setAttribute('role','menuitem');
+    rename.textContent='Rename';
+    rename.addEventListener('click',()=>void renameBookmark());
+    const remove=document.createElement('button');
+    remove.type='button';
+    remove.setAttribute('role','menuitem');
+    remove.className='danger';
+    remove.textContent='Delete';
+    remove.addEventListener('click',deleteBookmark);
+    bookmarkMenu.append(rename,remove);
+    document.body.appendChild(bookmarkMenu);
+    return bookmarkMenu;
+  }
+
+  function openBookmarkMenu(button,clientX,clientY){
+    const group=button.dataset.bookmarkGroup||'';
+    const id=button.dataset.bookmarkId||'';
+    if(!bookmarkFor(group,id))return;
+    hideTooltip();
+    const menu=ensureBookmarkMenu();
+    menuBookmark={group,id,button};
+    menu.hidden=false;
+    const rect=button.getBoundingClientRect();
+    const x=Number.isFinite(clientX)?clientX:rect.right+8;
+    const y=Number.isFinite(clientY)?clientY:rect.top;
+    const width=menu.offsetWidth;
+    const height=menu.offsetHeight;
+    menu.style.left=`${Math.max(8,Math.min(window.innerWidth-width-8,x))}px`;
+    menu.style.top=`${Math.max(8,Math.min(window.innerHeight-height-8,y))}px`;
+    const first=menu.querySelector('button');
+    if(first)first.focus();
+  }
+
+  function suppressBookmarkActivation(id){
+    suppressBookmarkClick=id;
+    setTimeout(()=>{
+      if(suppressBookmarkClick===id)suppressBookmarkClick='';
+    },900);
+  }
+
+  function cancelLongPress(){
+    if(!longPress)return;
+    clearTimeout(longPress.timer);
+    longPress=null;
+  }
+
+  function bindBookmarkActions(button){
+    button.addEventListener('contextmenu',event=>{
+      event.preventDefault();
+      cancelLongPress();
+      openBookmarkMenu(button,event.clientX,event.clientY);
+    });
+    button.addEventListener('pointerdown',event=>{
+      if(event.pointerType==='mouse'||event.button!==0)return;
+      cancelLongPress();
+      const startX=event.clientX;
+      const startY=event.clientY;
+      longPress={
+        pointerId:event.pointerId,
+        startX,
+        startY,
+        timer:setTimeout(()=>{
+          suppressBookmarkActivation(button.dataset.bookmarkId||'');
+          openBookmarkMenu(button,startX,startY);
+          longPress=null;
+          try{if(navigator.vibrate)navigator.vibrate(20);}catch(_){}
+        },550)
+      };
+    });
+    button.addEventListener('pointermove',event=>{
+      if(!longPress||event.pointerId!==longPress.pointerId)return;
+      if(Math.hypot(event.clientX-longPress.startX,event.clientY-longPress.startY)>10)cancelLongPress();
+    });
+    button.addEventListener('pointerup',cancelLongPress);
+    button.addEventListener('pointercancel',cancelLongPress);
+  }
+
+  function bindOverlayInteractions(){
+    document.addEventListener('pointerover',event=>{
+      const target=event.target instanceof Element?event.target.closest('.tailnet-app-rail .has-tooltip[data-tooltip]'):null;
+      if(target)showTooltip(target);
+    });
+    document.addEventListener('pointerout',event=>{
+      const target=event.target instanceof Element?event.target.closest('.tailnet-app-rail .has-tooltip[data-tooltip]'):null;
+      if(!target)return;
+      const related=event.relatedTarget instanceof Element?event.relatedTarget.closest('.tailnet-app-rail .has-tooltip[data-tooltip]'):null;
+      if(related!==target)hideTooltip();
+    });
+    document.addEventListener('focusin',event=>{
+      const target=event.target instanceof Element?event.target.closest('.tailnet-app-rail .has-tooltip[data-tooltip]'):null;
+      if(target)showTooltip(target);
+    });
+    document.addEventListener('focusout',event=>{
+      if(event.target instanceof Element&&event.target.closest('.tailnet-app-rail .has-tooltip[data-tooltip]'))hideTooltip();
+    });
+    document.addEventListener('pointerdown',event=>{
+      if(bookmarkMenu&&!bookmarkMenu.hidden&&event.target instanceof Node&&!bookmarkMenu.contains(event.target))closeBookmarkMenu();
+    });
+    document.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&bookmarkMenu&&!bookmarkMenu.hidden){
+        event.preventDefault();
+        closeBookmarkMenu({restoreFocus:true});
+      }
+    });
+    const rail=document.querySelector('.tailnet-app-rail');
+    if(rail)rail.addEventListener('scroll',hideTooltip,true);
+    window.addEventListener('resize',()=>{
+      hideTooltip();
+      closeBookmarkMenu();
+    });
+    window.addEventListener('blur',hideTooltip);
   }
 
   async function promptValue(options){
@@ -286,6 +524,7 @@
   async function loadApps(){
     if(!links||!home||!workspace||!frame||!companyLinks||!publicLinks||!privateAdd||!companyAdd||!publicAdd)return;
     root.setAttribute('data-tailnet-view','hermes');
+    bindOverlayInteractions();
     home.addEventListener('click',event=>{
       event.preventDefault();
       activateHermes();

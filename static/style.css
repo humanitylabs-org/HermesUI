@@ -2164,6 +2164,15 @@
   .sidebar-nav{display:none!important;}
   .tailnet-app-rail{gap:6px;padding-top:10px;}
   .tailnet-app-link{text-decoration:none;}
+  .tailnet-app-rail .has-tooltip::after{display:none!important;}
+  .tailnet-app-link[data-bookmark-group]{-webkit-touch-callout:none;}
+  .tailnet-rail-tooltip{position:fixed;z-index:10000;max-width:min(260px,calc(100vw - 16px));overflow:hidden;text-overflow:ellipsis;background:var(--surface);border:1px solid var(--accent-bg-strong);color:var(--text);font-size:11.5px;font-weight:600;line-height:1.25;letter-spacing:.02em;padding:5px 10px;border-radius:6px;white-space:nowrap;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.65),0 0 0 1px rgba(0,0,0,.35),0 1px 0 rgba(255,255,255,.04) inset;}
+  .tailnet-rail-tooltip[hidden]{display:none!important;}
+  .tailnet-bookmark-menu{position:fixed;z-index:10001;display:flex;flex-direction:column;min-width:132px;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.55);}
+  .tailnet-bookmark-menu[hidden]{display:none!important;}
+  .tailnet-bookmark-menu button{min-height:40px;padding:8px 12px;border:0;border-radius:6px;background:transparent;color:var(--text);font:500 13px/1.2 system-ui,sans-serif;text-align:left;cursor:pointer;}
+  .tailnet-bookmark-menu button:hover,.tailnet-bookmark-menu button:focus-visible{background:var(--hover-bg);outline:none;}
+  .tailnet-bookmark-menu button.danger{color:var(--danger,#f87171);}
   .tailnet-app-home-icon{display:block;width:34px;height:34px;border-radius:6px;}
   .tailnet-app-groups{width:100%;min-height:0;flex:1 1 auto;display:flex;flex-direction:column;align-items:center;gap:6px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;padding-bottom:4px;box-sizing:border-box;}
   .tailnet-app-groups::-webkit-scrollbar{display:none;}
@@ -2177,6 +2186,7 @@
   .tailnet-app-marketplace{margin-top:0;}
   .tailnet-app-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
   .tailnet-app-icon svg{width:20px;height:20px;display:block;}
+
   .tailnet-app-workspace{order:0;min-width:0;min-height:0;overflow:hidden;background:var(--main-bg);border-right:1px solid var(--border);}
   .tailnet-app-workspace[hidden]{display:none!important;}
   .tailnet-app-workspace iframe{display:block;width:100%;height:100%;border:0;background:var(--main-bg);}
@@ -2195,6 +2205,7 @@
      persistent app selector. The pointer guard also covers mobile browsers
      that report a desktop-sized layout viewport. */
   @media(max-width:640px),(pointer:coarse){
+    .tailnet-bookmark-menu button{min-height:44px;}
     html[data-tailnet-view="external"] .app-titlebar{display:none!important;}
     html[data-tailnet-view="external"] .layout{padding-top:var(--app-titlebar-safe-top);box-sizing:border-box;}
     html[data-tailnet-view="external"] .tailnet-app-workspace{display:block;order:2;flex:1 1 auto;width:auto;max-width:none;}
@@ -2216,11 +2227,11 @@
     .sidebar.mobile-session-page .panel-head{padding-right:12px;}
   }
   /* HermesUI: remove the workspace browser from the simplified shell. */
-  html body .rightpanel,
-  html body .workspace-panel-edge-toggle,
-  html body .composer-workspace-files-btn,
-  html body .workspace-toggle-btn,
-  html body .mobile-files-btn{display:none!important;}
+  html[data-session-view="dashboard"] body .rightpanel,
+  html[data-session-view="dashboard"] body .workspace-panel-edge-toggle,
+  html[data-session-view="dashboard"] body .composer-workspace-files-btn,
+  html[data-session-view="dashboard"] body .workspace-toggle-btn,
+  html[data-session-view="dashboard"] body .mobile-files-btn{display:none!important;}
   .composer-workspace-chip{border-left:0!important;border-radius:999px!important;padding-left:12px!important;}
   .composer-footer.cf-burger .composer-workspace-group{display:none!important;}
   .sidebar .panel-view{margin-left:0!important;}

@@ -13,6 +13,8 @@ SWIPE = (ROOT / "static" / "session-swipe-navigation.js").read_text(encoding="ut
 GITIGNORE = (ROOT / ".gitignore").read_text(encoding="utf-8")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 FRAME_BRIDGE = (ROOT / "hermesui" / "support" / "tailnet-frame" / "index.html").read_text(encoding="utf-8")
+BROWSER_BROKER = (ROOT / "hermesui" / "support" / "tailnet-browser-broker" / "browser_broker.py").read_text(encoding="utf-8")
+BROWSER_NAVIGATOR = (ROOT / "hermesui" / "support" / "tailnet-browser-broker" / "navigate_browser.py").read_text(encoding="utf-8")
 
 
 def _rail_markup() -> str:
@@ -96,6 +98,8 @@ def test_work_and_web_entries_are_browser_local_panel_buttons():
     bookmark_renderer = JS[JS.index("function renderBookmark"):JS.index("function containerForGroup")]
     assert "document.createElement('button')" in bookmark_renderer
     assert "activateApp(app)" in bookmark_renderer
+    assert "bindBookmarkActions(link)" in bookmark_renderer
+    assert "link.setAttribute('aria-haspopup','menu')" in bookmark_renderer
     assert "target='_blank'" not in JS
     assert "window.open(" not in JS
     assert "The selector does not create new tabs or windows." in README
@@ -145,13 +149,42 @@ def test_same_origin_frame_bridge_resolves_only_valid_saved_work_and_web_entries
     assert "localStorage.getItem(BOOKMARK_STORAGE_KEY)" in FRAME_BRIDGE
     assert "payload.version!==1" in FRAME_BRIDGE
     assert "url.protocol!=='https:'||url.username||url.password" in FRAME_BRIDGE
-    assert "frame.src=app.href" in FRAME_BRIDGE
+    assert "return destination?{...destination,browser:true}:null" in FRAME_BRIDGE
+    assert "frame.src=app.browser?await openInTailnetBrowser(app.href):app.href" in FRAME_BRIDGE
     assert "target=\"_blank\"" not in FRAME_BRIDGE
     assert "window.open(" not in FRAME_BRIDGE
-    assert "vnc_auto" not in FRAME_BRIDGE
-    assert "websockify" not in FRAME_BRIDGE
-    assert "openInTailnetBrowser" not in FRAME_BRIDGE
+    assert "url.pathname='/vnc_auto.html'" in FRAME_BRIDGE
+    assert "url.searchParams.set('path','websockify')" in FRAME_BRIDGE
+    assert "async function openInTailnetBrowser(href)" in FRAME_BRIDGE
+    assert "fetch('./navigate'" in FRAME_BRIDGE
     assert "?bookmark=${encodeURIComponent(`${group}:${id}`)}" in JS
+
+
+def test_work_and_web_browser_broker_is_bounded_and_same_origin():
+    assert '"/tailnet-frame/navigate"' in BROWSER_BROKER
+    assert "origin == f\"https://{host}\"" in BROWSER_BROKER
+    assert "content_type != \"application/json\"" in BROWSER_BROKER
+    assert "MAX_BODY_BYTES = 4096" in BROWSER_BROKER
+    assert "MIN_NAVIGATION_INTERVAL = 0.4" in BROWSER_BROKER
+    assert 'parsed.scheme.lower() != "https"' in BROWSER_NAVIGATOR
+    assert "parsed.username or parsed.password" in BROWSER_NAVIGATOR
+    assert "window.open(" not in FRAME_BRIDGE
+
+
+def test_app_tooltips_escape_the_clipped_rail_and_bookmarks_have_two_actions():
+    assert "document.body.appendChild(tooltip)" in JS
+    assert "tooltip.className='tailnet-rail-tooltip'" in JS
+    assert ".tailnet-rail-tooltip{position:fixed;z-index:10000" in CSS
+    assert ".tailnet-app-rail .has-tooltip::after{display:none!important;}" in CSS
+    assert "button.addEventListener('contextmenu'" in JS
+    context_source = JS[JS.index("button.addEventListener('contextmenu'"):JS.index("button.addEventListener('pointerdown'")]
+    assert "suppressBookmarkActivation" not in context_source
+    assert "setTimeout(()=>{" in JS and "},550)" in JS
+    menu_source = JS[JS.index("function ensureBookmarkMenu"):JS.index("function openBookmarkMenu")]
+    assert "rename.textContent='Rename'" in menu_source
+    assert "remove.textContent='Delete'" in menu_source
+    assert menu_source.count("setAttribute('role','menuitem')") == 2
+    assert ".tailnet-bookmark-menu button{min-height:44px;}" in CSS
 
 
 def test_documented_app_entry_normalizes_to_direct_and_embedded_destinations():
