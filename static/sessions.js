@@ -3069,9 +3069,20 @@ function _sessionMessageCacheClone(data){
   try{return JSON.parse(JSON.stringify(data));}catch(_e){return null;}
 }
 
+function _sessionMessageCacheBusy(session){
+  return Boolean(session&&(
+    session.active_stream_id||
+    session.is_streaming||
+    session.cron_running||
+    session.pending_user_message||
+    session.has_pending_user_message||
+    session.pending_started_at
+  ));
+}
+
 function _storeSessionMessageCache(sid,session){
   sid=String(sid||'');
-  if(!sid||!session||session.active_stream_id) return false;
+  if(!sid||!session||_sessionMessageCacheBusy(session)) return false;
   const messages=Array.isArray(session.messages)?session.messages:[];
   if(messages.length>_SESSION_MESSAGE_CACHE_ROW_MAX) return false;
   const messageCount=_sessionMessageCacheCount(session);
@@ -3103,7 +3114,7 @@ function _freshSessionMessageCacheEntry(sid,metadata){
   const profileMismatch=typeof _profileMatchesActiveProfile==='function'
     ? !_profileMatchesActiveProfile(entry.profile,expectedProfile)
     : entry.profile!==expectedProfile;
-  if(expired||profileMismatch||(metadata&&metadata.active_stream_id)||expectedCount===null||entry.messageCount!==expectedCount){
+  if(expired||profileMismatch||_sessionMessageCacheBusy(metadata)||expectedCount===null||entry.messageCount!==expectedCount){
     _sessionMessageCache.delete(sid);
     return null;
   }
@@ -3155,7 +3166,7 @@ function _cacheActiveSessionMessages(sid){
 }
 
 function _sessionMessagePrefetchEligible(session){
-  if(!session||!session.session_id||session.archived||session.active_stream_id) return false;
+  if(!session||!session.session_id||session.archived||_sessionMessageCacheBusy(session)) return false;
   if(typeof _isSessionEffectivelyStreaming==='function'&&_isSessionEffectivelyStreaming(session)) return false;
   if(S.session&&S.session.session_id===session.session_id) return false;
   if(typeof _isExternalSession==='function'&&_isExternalSession(session)) return false;
@@ -3188,7 +3199,7 @@ async function _prefetchSessionMessages(session){
         `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${_INITIAL_MSG_LIMIT}&expand_renderable=1`,
         {timeoutMs:45000,timeoutToast:false,retries:0}
       );
-      if(!data||!data.session||data.session.active_stream_id) return;
+      if(!data||!data.session||_sessionMessageCacheBusy(data.session)) return;
       if(requestGeneration!==_sessionMessagePrefetchGeneration) return;
       if(!_sessionMessagePrefetchExecutionAllowed()) return;
       const current=Array.isArray(_allSessions)

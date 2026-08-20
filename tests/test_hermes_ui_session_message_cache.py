@@ -107,6 +107,9 @@ assert.strictEqual(_takeFreshSessionMessageCache('a',{{message_count:1}}).sessio
 assert.strictEqual(_takeFreshSessionMessageCache('a',{{message_count:2}}),null);
 assert.strictEqual(_sessionMessageCache.has('a'),false);
 assert.strictEqual(_storeSessionMessageCache('streaming',{{message_count:1,active_stream_id:'run',messages:[]}}),false);
+assert.strictEqual(_storeSessionMessageCache('pending',{{message_count:1,pending_started_at:'2026-08-20T16:00:00Z',messages:[]}}),false);
+assert.strictEqual(_storeSessionMessageCache('pending-take',{{message_count:1,messages:[{{role:'user',content:'old'}}]}}),true);
+assert.strictEqual(_takeFreshSessionMessageCache('pending-take',{{message_count:1,pending_started_at:'2026-08-20T16:00:00Z'}}),null);
 
 for(let i=0;i<6;i++) _storeSessionMessageCache('lru-'+i,{{message_count:1,messages:[{{role:'user',content:String(i)}}]}});
 assert.strictEqual(_sessionMessageCache.size,5);
@@ -214,7 +217,7 @@ function requestIdleCallback(fn){{idle.push(fn);return idle.length;}}
 function _sessionSidebarSortCompare(a,b){{return Number(b.updated_at||0)-Number(a.updated_at||0);}}
 function _isExternalSession(session){{return !!session.external;}}
 function _profileMatchesActiveProfile(a,b){{return a===b;}}
-function _isSessionEffectivelyStreaming(session){{return !!(session&&(session.active_stream_id||session.pending_user_message||session.has_pending_user_message||session.is_streaming||session.cron_running));}}
+function _isSessionEffectivelyStreaming(session){{return !!(session&&(session.active_stream_id||session.pending_user_message||session.has_pending_user_message||session.pending_started_at||session.is_streaming||session.cron_running));}}
 const pending=[];
 let networkActive=0;
 let networkMax=0;
@@ -297,6 +300,16 @@ _allSessions=[{{session_id:'streamed',message_count:1,profile:'default',active_s
 releaseOne();
 await streamed;
 assert.strictEqual(_sessionMessageCache.has('streamed'),false);
+
+_allSessions=[{{session_id:'pending',message_count:1,profile:'default'}}];
+_sessionMessagePrefetchGeneration=51;
+const becamePending=_prefetchSessionMessages(_allSessions[0],{{generation:51}});
+await tick();
+_allSessions=[{{session_id:'pending',message_count:1,profile:'default',pending_started_at:'2026-08-20T16:00:00Z'}}];
+releaseOne();
+await becamePending;
+assert.strictEqual(_sessionMessageCache.has('pending'),false);
+assert.strictEqual(_sessionMessagePrefetchEligible(_allSessions[0]),false);
 
 _allSessions=[{{session_id:'profiled',message_count:1,profile:'default'}}];
 S.activeProfile='default';
