@@ -91,7 +91,8 @@
         const response=await fetch(endpoint.href,options);
         if(!response.ok)return null;
         const payload=await response.json();
-        return payload&&payload.ok===true?payload:null;
+        if(!payload||payload.ok!==true||!['inline','browser','unknown'].includes(payload.mode))return null;
+        return payload;
       }catch(_){return null;}finally{if(timeout)clearTimeout(timeout);}
     }
 

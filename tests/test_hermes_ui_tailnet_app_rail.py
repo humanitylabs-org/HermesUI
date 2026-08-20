@@ -134,7 +134,9 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "openBrowserTab(app.href)" in fallback
     assert "reserved.location.replace(app.href)" in fallback
     activation = JS[JS.index("function activateBookmark"):JS.index("function appIcon")]
-    assert "activateBrowserFallback(app,{reopen:true})" in activation
+    assert "const reserved=takeReservedTab(app.id)" in activation
+    assert "activateBrowserFallback(app,{reserved,reopen:true})" in activation
+    assert "activateBrowserFallback(app,{reopen:true})" not in activation
     assert "if(activeId===app.id&&frame.dataset.browserFallback!=='true')" in activation
     assert "reserveBrowserTab(app)" in activation
     assert "function activateBrowserFallback(app,{open=true,reserved=null,reopen=false}={})" in JS
@@ -184,6 +186,7 @@ def test_same_origin_frame_bridge_resolves_only_valid_saved_work_and_web_entries
     assert 'id="manualBrowserAction"' in FRAME_BRIDGE
     assert "if(!decision||decision.mode==='unknown')" in FRAME_BRIDGE
     assert "manualAction.href=app.href" in FRAME_BRIDGE
+    assert "!['inline','browser','unknown'].includes(payload.mode)" in FRAME_BRIDGE
 
 
 def test_app_tooltips_escape_the_clipped_rail_and_bookmarks_have_two_actions():

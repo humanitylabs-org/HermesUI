@@ -321,7 +321,8 @@
   function activateBookmark(app){
     const decision=freshFrameDecision(app.href);
     if(decision&&decision.mode==='browser'){
-      activateBrowserFallback(app,{reopen:true});
+      const reserved=takeReservedTab(app.id);
+      activateBrowserFallback(app,{reserved,reopen:true});
       return;
     }
     if(activeId===app.id&&frame.dataset.browserFallback!=='true'){
