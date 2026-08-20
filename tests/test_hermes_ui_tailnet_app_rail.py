@@ -134,7 +134,11 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "openBrowserTab(app.href)" in fallback
     assert "reserved.location.replace(app.href)" in fallback
     activation = JS[JS.index("function activateBookmark"):JS.index("function appIcon")]
-    assert "if(!decision)reserveBrowserTab(app)" in activation
+    assert "activateBrowserFallback(app,{reopen:true})" in activation
+    assert "if(activeId===app.id&&frame.dataset.browserFallback!=='true')" in activation
+    assert "reserveBrowserTab(app)" in activation
+    assert "function activateBrowserFallback(app,{open=true,reserved=null,reopen=false}={})" in JS
+    assert "if(open&&(!alreadyShowing||reopen))" in JS
     assert "refreshFrameDecision(app).then" not in activation
     assert "const reservedBrowserTabs=new Map()" in JS
     message_handler = JS[JS.index("window.addEventListener('message'"):JS.index("document.addEventListener('pointerover'")]

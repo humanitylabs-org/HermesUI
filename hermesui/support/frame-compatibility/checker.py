@@ -178,7 +178,11 @@ def csp_blocks_parent(values: list[str], document_origin: str) -> bool:
     for value in values:
         directives = [part.strip() for part in value.split(";")]
         ancestor = next(
-            (part for part in directives if part.lower().startswith("frame-ancestors")),
+            (
+                part
+                for part in directives
+                if part.split(None, 1) and part.split(None, 1)[0].lower() == "frame-ancestors"
+            ),
             None,
         )
         if ancestor is None:

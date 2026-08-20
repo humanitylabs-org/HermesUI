@@ -283,13 +283,13 @@
     });
   }
 
-  function activateBrowserFallback(app,{open=true,reserved=null}={}){
+  function activateBrowserFallback(app,{open=true,reserved=null,reopen=false}={}){
     if(!workspace||!frame||!app.browserHref)return;
     hideTooltip();
     closeBookmarkMenu();
     activeId=app.id;
     const alreadyShowing=frame.dataset.tailnetAppId===app.id&&frame.dataset.browserFallback==='true';
-    if(open&&!alreadyShowing){
+    if(open&&(!alreadyShowing||reopen)){
       let usedReserved=false;
       if(reserved){
         try{
@@ -321,10 +321,14 @@
   function activateBookmark(app){
     const decision=freshFrameDecision(app.href);
     if(decision&&decision.mode==='browser'){
-      activateBrowserFallback(app);
+      activateBrowserFallback(app,{reopen:true});
       return;
     }
-    if(!decision)reserveBrowserTab(app);
+    if(activeId===app.id&&frame.dataset.browserFallback!=='true'){
+      activateApp(app);
+      return;
+    }
+    reserveBrowserTab(app);
     activateApp(app);
   }
 

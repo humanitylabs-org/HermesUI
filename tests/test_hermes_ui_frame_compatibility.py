@@ -113,6 +113,10 @@ def test_frame_ancestors_is_evaluated_against_exact_hermes_origin():
     )
     assert not checker.csp_blocks_parent(["frame-ancestors https:"], "https://example.com")
     assert not checker.csp_blocks_parent(["default-src 'self'"], "https://example.com")
+    assert not checker.csp_blocks_parent(
+        ["frame-ancestors-report 'none'; default-src 'self'"],
+        "https://example.com",
+    )
 
 
 class FakeResponse:
