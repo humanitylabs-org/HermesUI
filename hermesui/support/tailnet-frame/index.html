@@ -45,6 +45,7 @@
     const manualAction=document.getElementById('manualBrowserAction');
     const frame=document.getElementById('appFrame');
     const params=new URL(location.href).searchParams;
+    const generation=params.get('generation')||'';
 
     function cleanDestination(candidate){
       if(!candidate||typeof candidate!=='object')return null;
@@ -100,6 +101,7 @@
       window.parent.postMessage({
         type:'hermesui:bookmark-frame-decision',
         token,
+        generation,
         mode,
         reason
       },location.origin);

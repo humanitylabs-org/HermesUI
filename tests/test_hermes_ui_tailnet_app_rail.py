@@ -173,17 +173,17 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "openBrowserTab(app.href)" in fallback
     assert "reserved.location.replace(app.href)" in fallback
     activation = JS[JS.index("function activateBookmark"):JS.index("function appIcon")]
-    assert "const reserved=takeReservedTab(app.id)" in activation
+    assert "const reserved=takeReservedTab(app)" in activation
     assert "activateBrowserFallback(app,{reserved,reopen:true})" in activation
     assert "activateBrowserFallback(app,{reopen:true})" not in activation
     assert "if(activeId===app.id&&frame.dataset.browserFallback!=='true')" in activation
-    assert "reserveBrowserTab(app)" in activation
+    assert "reserveBrowserTab(app,generation)" in activation
     assert "function activateBrowserFallback(app,{open=true,reserved=null,reopen=false}={})" in JS
     assert "if(open&&(!alreadyShowing||reopen))" in JS
     assert "refreshFrameDecision(app).then" not in activation
     assert "const reservedBrowserTabs=new Map()" in JS
     message_handler = JS[JS.index("window.addEventListener('message'"):JS.index("document.addEventListener('pointerover'")]
-    assert "const reserved=takeReservedTab(app.id)" in message_handler
+    assert "const reserved=takeReservedTab(app,data.generation)" in message_handler
     assert "activateBrowserFallback(app,{reserved})" in message_handler
     assert "else closeReservedTab(reserved)" in message_handler
     private_activation = JS[JS.index("function renderApp"):JS.index("function renderBookmark")]
@@ -226,6 +226,74 @@ def test_same_origin_frame_bridge_resolves_only_valid_saved_work_and_web_entries
     assert "if(!decision||decision.mode==='unknown')" in FRAME_BRIDGE
     assert "manualAction.href=app.href" in FRAME_BRIDGE
     assert "!['inline','browser','unknown'].includes(payload.mode)" in FRAME_BRIDGE
+    assert "const generation=params.get('generation')||''" in FRAME_BRIDGE
+    assert "generation," in FRAME_BRIDGE
+    assert "url.searchParams.set('generation',generation)" in JS
+
+
+def test_bookmark_frame_decisions_are_bound_to_the_current_navigation_generation():
+    node = shutil.which("node")
+    assert node, "Node.js is required for the bookmark navigation-generation contract test"
+    token_start = JS.index("  function bookmarkToken(app){")
+    token_end = JS.index("\n  function nextBookmarkGeneration", token_start)
+    current_start = JS.index("  function isCurrentBookmarkDecision(data,app){")
+    current_end = JS.index("\n  function emptySavedGroups", current_start)
+    source = JS[token_start:token_end] + "\n" + JS[current_start:current_end]
+    harness = f"""
+const GROUPS={{company:{{}},public:{{}}}};
+let activeId='shared';
+let activeBookmarkNavigation={{token:'company:shared',generation:'3'}};
+{source}
+const app={{id:'shared',group:'company'}};
+process.stdout.write(JSON.stringify({{
+  current:isCurrentBookmarkDecision({{token:'company:shared',generation:'3'}},app),
+  staleGeneration:isCurrentBookmarkDecision({{token:'company:shared',generation:'1'}},app),
+  wrongToken:isCurrentBookmarkDecision({{token:'public:shared',generation:'3'}},app),
+  inactive:(()=>{{activeId='other';return isCurrentBookmarkDecision({{token:'company:shared',generation:'3'}},app);}})()
+}}));
+"""
+    proc = subprocess.run([node, "-e", harness], capture_output=True, text=True, timeout=30)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout) == {
+        "current": True,
+        "staleGeneration": False,
+        "wrongToken": False,
+        "inactive": False,
+    }
+
+    take_start = JS.index("  function takeReservedTab(app,generation=''){")
+    take_end = JS.index("\n  function closeReservedTabsExcept", take_start)
+    take_source = JS[take_start:take_end]
+    reservation_harness = f"""
+const GROUPS={{company:{{}},public:{{}}}};
+{JS[token_start:token_end]}
+const tab={{id:'accepted-tab'}};
+const reservedBrowserTabs=new Map([['company:a',{{tab,generation:'3'}}]]);
+{take_source}
+const app={{id:'a',group:'company'}};
+const stale=takeReservedTab(app,'1');
+const afterStale=reservedBrowserTabs.size;
+const current=takeReservedTab(app,'3');
+process.stdout.write(JSON.stringify({{stale,afterStale,current:current&&current.id,afterCurrent:reservedBrowserTabs.size}}));
+"""
+    reservation_proc = subprocess.run(
+        [node, "-e", reservation_harness], capture_output=True, text=True, timeout=30
+    )
+    assert reservation_proc.returncode == 0, reservation_proc.stderr
+    assert json.loads(reservation_proc.stdout) == {
+        "stale": None,
+        "afterStale": 1,
+        "current": "accepted-tab",
+        "afterCurrent": 0,
+    }
+
+    handler = JS[JS.index("window.addEventListener('message'"):JS.index("document.addEventListener('pointerover'")]
+    current_check = handler.index("if(!isCurrentBookmarkDecision(data,app))return")
+    reserve_take = handler.index("takeReservedTab(app,data.generation)")
+    cache_write = handler.index("frameDecisions[app.href]")
+    fallback = handler.index("activateBrowserFallback(app,{reserved})")
+    assert current_check < reserve_take < cache_write < fallback
+    assert "typeof data.generation!=='string'" in handler
 
 
 def test_app_tooltips_escape_the_clipped_rail_and_bookmarks_have_two_actions():
@@ -262,7 +330,8 @@ def test_documented_app_entry_normalizes_to_direct_and_embedded_destinations():
         "frameHref": "https://host.example/tailnet-frame/?app=private-app",
         "icon": "apps",
     }
-    assert "frame.src=app.frameHref" in JS
+    assert "let targetFrameHref=app.frameHref" in JS
+    assert "frame.src=targetFrameHref" in JS
 
 
 def test_required_app_urls_are_rejected_before_url_coercion():

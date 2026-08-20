@@ -46,6 +46,8 @@
   };
   const appsById=new Map();
   const reservedBrowserTabs=new Map();
+  let bookmarkActivationGeneration=0;
+  let activeBookmarkNavigation=null;
   let savedGroups={company:[],public:[]};
   let activeId='';
   let tooltip=null;
@@ -165,6 +167,39 @@
     return {id,label,href,frameHref,browserHref,group,icon:GROUPS[group].icon};
   }
 
+  function bookmarkToken(app){
+    return app&&GROUPS[app.group]?`${app.group}:${app.id}`:'';
+  }
+
+  function nextBookmarkGeneration(){
+    bookmarkActivationGeneration+=1;
+    return String(bookmarkActivationGeneration);
+  }
+
+  function bookmarkFrameHref(app,generation){
+    const url=new URL(app.frameHref,location.origin);
+    url.searchParams.set('generation',generation);
+    return url.href;
+  }
+
+  function browserReservationHref(app,generation){
+    const url=new URL(app.browserHref,location.origin);
+    url.searchParams.set('generation',generation);
+    return url.href;
+  }
+
+  function isCurrentBookmarkDecision(data,app){
+    const token=bookmarkToken(app);
+    return Boolean(
+      token&&
+      data.token===token&&
+      activeId===app.id&&
+      activeBookmarkNavigation&&
+      activeBookmarkNavigation.token===token&&
+      activeBookmarkNavigation.generation===data.generation
+    );
+  }
+
   function emptySavedGroups(){return {company:[],public:[]};}
 
   function readSavedGroups(){
@@ -218,6 +253,7 @@
     hideTooltip();
     closeBookmarkMenu();
     activeId='';
+    activeBookmarkNavigation=null;
     root.setAttribute('data-tailnet-view','hermes');
     if(workspace)workspace.hidden=true;
     markSelected('');
@@ -228,18 +264,36 @@
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:'hermes-ui'}}));
   }
 
-  function activateApp(app){
+  function activateApp(app,{bookmarkGeneration=''}={}){
     if(!workspace||!frame)return;
-    closeReservedTabsExcept(app.id);
+    const token=bookmarkToken(app);
+    closeReservedTabsExcept(token);
     hideTooltip();
     closeBookmarkMenu();
-    activeId=app.id;
     const wasBrowserFallback=frame.dataset.browserFallback==='true';
+    let targetFrameHref=app.frameHref;
+    let frameKey=`app:${app.id}`;
+    if(token){
+      let generation=bookmarkGeneration;
+      if(
+        !generation&&
+        activeId===app.id&&
+        activeBookmarkNavigation&&
+        activeBookmarkNavigation.token===token&&
+        !wasBrowserFallback
+      )generation=activeBookmarkNavigation.generation;
+      if(!generation)generation=nextBookmarkGeneration();
+      activeBookmarkNavigation={token,generation};
+      targetFrameHref=bookmarkFrameHref(app,generation);
+      frameKey=`bookmark:${token}:${generation}`;
+    }else activeBookmarkNavigation=null;
+    activeId=app.id;
     delete frame.dataset.browserFallback;
-    if(frame.dataset.tailnetAppId!==app.id||wasBrowserFallback){
+    if(frame.dataset.tailnetFrameKey!==frameKey||wasBrowserFallback){
       frame.dataset.tailnetAppId=app.id;
+      frame.dataset.tailnetFrameKey=frameKey;
       frame.title=app.label;
-      frame.src=app.frameHref;
+      frame.src=targetFrameHref;
     }
     workspace.setAttribute('aria-label',app.label);
     workspace.hidden=false;
@@ -254,14 +308,15 @@
     try{return window.open(href,'_blank','noopener,noreferrer');}catch(_){return null;}
   }
 
-  function reserveBrowserTab(app){
-    closeReservedTab(reservedBrowserTabs.get(app.id));
-    reservedBrowserTabs.delete(app.id);
+  function reserveBrowserTab(app,generation){
+    const token=bookmarkToken(app);
+    closeReservedTab(reservedBrowserTabs.get(token));
+    reservedBrowserTabs.delete(token);
     try{
-      const reserved=window.open(app.browserHref,'_blank');
+      const reserved=window.open(browserReservationHref(app,generation),'_blank');
       if(reserved){
         reserved.opener=null;
-        reservedBrowserTabs.set(app.id,reserved);
+        reservedBrowserTabs.set(token,{tab:reserved,generation});
       }
       return reserved;
     }catch(_){return null;}
@@ -269,28 +324,33 @@
 
   function closeReservedTab(reserved){
     if(!reserved)return;
-    try{if(!reserved.closed)reserved.close();}catch(_){}
+    const tab=reserved.tab||reserved;
+    try{if(!tab.closed)tab.close();}catch(_){}
   }
 
-  function takeReservedTab(appId){
-    const reserved=reservedBrowserTabs.get(appId)||null;
-    reservedBrowserTabs.delete(appId);
-    return reserved;
+  function takeReservedTab(app,generation=''){
+    const token=bookmarkToken(app);
+    const entry=reservedBrowserTabs.get(token)||null;
+    if(!entry||(generation&&entry.generation!==generation))return null;
+    reservedBrowserTabs.delete(token);
+    return entry.tab;
   }
 
-  function closeReservedTabsExcept(appId=''){
-    reservedBrowserTabs.forEach((reserved,id)=>{
-      if(id===appId)return;
+  function closeReservedTabsExcept(token=''){
+    reservedBrowserTabs.forEach((reserved,key)=>{
+      if(key===token)return;
       closeReservedTab(reserved);
-      reservedBrowserTabs.delete(id);
+      reservedBrowserTabs.delete(key);
     });
   }
 
   function activateBrowserFallback(app,{open=true,reserved=null,reopen=false}={}){
     if(!workspace||!frame||!app.browserHref)return;
+    closeReservedTabsExcept();
     hideTooltip();
     closeBookmarkMenu();
     activeId=app.id;
+    activeBookmarkNavigation=null;
     const alreadyShowing=frame.dataset.tailnetAppId===app.id&&frame.dataset.browserFallback==='true';
     if(open&&(!alreadyShowing||reopen)){
       let usedReserved=false;
@@ -305,6 +365,7 @@
       if(!usedReserved)openBrowserTab(app.href);
     }
     frame.dataset.tailnetAppId=app.id;
+    frame.dataset.tailnetFrameKey=`browser:${bookmarkToken(app)}`;
     frame.dataset.browserFallback='true';
     frame.title=`${app.label} — browser fallback`;
     if(!alreadyShowing)frame.src=app.browserHref;
@@ -324,7 +385,7 @@
   function activateBookmark(app){
     const decision=freshFrameDecision(app.href);
     if(decision&&decision.mode==='browser'){
-      const reserved=takeReservedTab(app.id);
+      const reserved=takeReservedTab(app);
       activateBrowserFallback(app,{reserved,reopen:true});
       return;
     }
@@ -332,8 +393,9 @@
       activateApp(app);
       return;
     }
-    reserveBrowserTab(app);
-    activateApp(app);
+    const generation=nextBookmarkGeneration();
+    reserveBrowserTab(app,generation);
+    activateApp(app,{bookmarkGeneration:generation});
   }
 
 
@@ -598,7 +660,12 @@
     window.addEventListener('message',event=>{
       if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
       const data=event.data;
-      if(!data||data.type!=='hermesui:bookmark-frame-decision'||typeof data.token!=='string')return;
+      if(
+        !data||
+        data.type!=='hermesui:bookmark-frame-decision'||
+        typeof data.token!=='string'||
+        typeof data.generation!=='string'
+      )return;
       if(data.mode!=='inline'&&data.mode!=='browser'&&data.mode!=='unknown')return;
       const split=data.token.indexOf(':');
       if(split<1)return;
@@ -606,7 +673,8 @@
       const id=data.token.slice(split+1);
       const app=bookmarkFor(group,id);
       if(!app)return;
-      const reserved=takeReservedTab(app.id);
+      if(!isCurrentBookmarkDecision(data,app))return;
+      const reserved=takeReservedTab(app,data.generation);
       if(data.mode==='inline'||data.mode==='browser'){
         frameDecisions[app.href]={
           mode:data.mode,
