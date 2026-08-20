@@ -39,6 +39,20 @@ def test_resolution_rejects_any_private_or_loopback_answer(monkeypatch):
         checker.resolve_public_address("example.com")
 
 
+@pytest.mark.parametrize("unsafe_address", ["224.0.0.1", "ff0e::1"])
+def test_resolution_rejects_multicast_answers(monkeypatch, unsafe_address):
+    family = checker.socket.AF_INET6 if ":" in unsafe_address else checker.socket.AF_INET
+    monkeypatch.setattr(
+        checker.socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [
+            (family, checker.socket.SOCK_STREAM, 6, "", (unsafe_address, 443)),
+        ],
+    )
+    with pytest.raises(checker.CompatibilityError, match="private-address"):
+        checker.resolve_public_address("example.com")
+
+
 def test_request_retries_every_validated_public_address(monkeypatch):
     attempts = []
 
@@ -87,6 +101,14 @@ def test_frame_ancestors_is_evaluated_against_exact_hermes_origin():
     )
     assert not checker.csp_blocks_parent(
         [f"frame-ancestors {checker.PARENT_ORIGIN}:443"],
+        "https://example.com",
+    )
+    assert not checker.csp_blocks_parent(
+        ["frame-ancestors https://*.tail6adf1a.ts.net:443"],
+        "https://example.com",
+    )
+    assert checker.csp_blocks_parent(
+        ["frame-ancestors https://*.tail6adf1a.ts.net:8443"],
         "https://example.com",
     )
     assert not checker.csp_blocks_parent(["frame-ancestors https:"], "https://example.com")

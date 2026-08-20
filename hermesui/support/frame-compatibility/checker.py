@@ -78,7 +78,15 @@ def resolve_public_addresses(hostname: str) -> list[str]:
             parsed = ipaddress.ip_address(address)
         except ValueError as exc:
             raise CompatibilityError("dns-failed") from exc
-        if not parsed.is_global:
+        if (
+            not parsed.is_global
+            or parsed.is_private
+            or parsed.is_loopback
+            or parsed.is_link_local
+            or parsed.is_multicast
+            or parsed.is_reserved
+            or parsed.is_unspecified
+        ):
             raise CompatibilityError("private-address")
     return addresses
 
@@ -139,16 +147,30 @@ def source_allows_parent(source: str, document_origin: str) -> bool:
         return True
     if lowered.startswith("http:"):
         return False
+    if lowered.startswith("https://*."):
+        try:
+            parsed_source = urlsplit(lowered.replace("https://*.", "https://placeholder.", 1))
+            source_host = parsed_source.hostname or ""
+            if not source_host.startswith("placeholder."):
+                return False
+            allowed_host = source_host[len("placeholder.") :]
+            parent = urlsplit(PARENT_ORIGIN)
+            parent_host = parent.hostname or ""
+            source_port = parsed_source.port or 443
+            parent_port = parent.port or 443
+        except ValueError:
+            return False
+        return (
+            bool(allowed_host)
+            and source_port == parent_port
+            and parent_host.endswith("." + allowed_host)
+        )
     if lowered.startswith("https://"):
         try:
             if origin_for(lowered) == origin_for(PARENT_ORIGIN):
                 return True
         except (TypeError, ValueError):
             pass
-    if lowered.startswith("https://*."):
-        parent_host = urlsplit(PARENT_ORIGIN).hostname or ""
-        allowed_host = lowered[len("https://*.") :].split(":", 1)[0]
-        return parent_host.endswith("." + allowed_host)
     return False
 
 
