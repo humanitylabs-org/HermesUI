@@ -134,6 +134,49 @@ def origin_for(url: str) -> str:
     return f"https://{parsed.hostname}{suffix}"
 
 
+def host_source_allows_parent(source: str, document_origin: str) -> bool:
+    parent = urlsplit(PARENT_ORIGIN)
+    document = urlsplit(document_origin)
+    if "://" in source:
+        source_scheme, remainder = source.split("://", 1)
+    else:
+        source_scheme, remainder = document.scheme.lower(), source
+    if source_scheme != parent.scheme.lower():
+        return False
+    try:
+        parsed_source = urlsplit(f"{source_scheme}://{remainder}")
+        if (
+            parsed_source.username
+            or parsed_source.password
+            or parsed_source.query
+            or parsed_source.fragment
+            or parsed_source.path not in ("", "/")
+        ):
+            return False
+        source_host = (parsed_source.hostname or "").lower()
+        parent_host = (parent.hostname or "").lower()
+        if not source_host or not parent_host:
+            return False
+        port_wildcard = parsed_source.netloc.endswith(":*")
+        if port_wildcard:
+            source_port = parent.port or 443
+        else:
+            source_port = parsed_source.port or 443
+        parent_port = parent.port or 443
+    except (TypeError, ValueError):
+        return False
+    if source_port != parent_port:
+        return False
+    if source_host == "*":
+        return True
+    if source_host.startswith("*."):
+        allowed_host = source_host[2:]
+        return bool(allowed_host) and parent_host.endswith("." + allowed_host)
+    if "*" in source_host:
+        return False
+    return source_host == parent_host
+
+
 def source_allows_parent(source: str, document_origin: str) -> bool:
     token = source.strip()
     lowered = token.lower()
@@ -147,48 +190,7 @@ def source_allows_parent(source: str, document_origin: str) -> bool:
         return True
     if lowered.startswith("http:"):
         return False
-    if lowered.startswith("https://*."):
-        try:
-            parsed_source = urlsplit(lowered.replace("https://*.", "https://placeholder.", 1))
-            if (
-                parsed_source.username
-                or parsed_source.password
-                or parsed_source.query
-                or parsed_source.fragment
-                or parsed_source.path not in ("", "/")
-            ):
-                return False
-            source_host = parsed_source.hostname or ""
-            if not source_host.startswith("placeholder."):
-                return False
-            allowed_host = source_host[len("placeholder.") :]
-            parent = urlsplit(PARENT_ORIGIN)
-            parent_host = parent.hostname or ""
-            source_port = parsed_source.port or 443
-            parent_port = parent.port or 443
-        except ValueError:
-            return False
-        return (
-            bool(allowed_host)
-            and source_port == parent_port
-            and parent_host.endswith("." + allowed_host)
-        )
-    if lowered.startswith("https://"):
-        try:
-            parsed_source = urlsplit(lowered)
-            if (
-                parsed_source.username
-                or parsed_source.password
-                or parsed_source.query
-                or parsed_source.fragment
-                or parsed_source.path not in ("", "/")
-            ):
-                return False
-            if origin_for(lowered) == origin_for(PARENT_ORIGIN):
-                return True
-        except (TypeError, ValueError):
-            pass
-    return False
+    return host_source_allows_parent(lowered, document_origin)
 
 
 def csp_blocks_parent(values: list[str], document_origin: str) -> bool:
