@@ -7,6 +7,9 @@
 
 // Cache version is injected by the server at request time (routes.py /sw.js handler).
 // Bumps automatically whenever the git commit changes — no manual edits needed.
+// HermesUI frontend delivery marker: wizard-os-panel-v1. This intentionally
+// changes the worker bytes so hot frontend deployments refresh an existing
+// process's shell cache without interrupting active agent runs.
 const CACHE_NAME = 'hermes-shell-__WEBUI_VERSION__';
 
 // Static assets that form the app shell.
