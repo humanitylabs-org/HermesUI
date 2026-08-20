@@ -104,6 +104,45 @@ def test_work_and_web_entries_are_browser_local_panel_buttons():
     assert "does not support the in-app panel" in FRAME_BRIDGE
 
 
+def test_browser_only_frame_decisions_are_rechecked_after_checker_cache_window():
+    assert "const FRAME_INLINE_DECISION_TTL_MS=6*60*60*1000" in JS
+    assert "const FRAME_BROWSER_DECISION_TTL_MS=5*60*1000" in JS
+    fresh = JS[JS.index("function freshFrameDecision"):JS.index("async function refreshFrameDecision")]
+    assert "decision.mode==='browser'?FRAME_BROWSER_DECISION_TTL_MS:FRAME_INLINE_DECISION_TTL_MS" in fresh
+
+    node = shutil.which("node")
+    assert node, "Node.js is required for the frame-decision cache contract test"
+    constants = "\n".join(
+        line.strip()
+        for line in JS.splitlines()
+        if line.strip().startswith("const FRAME_") and "DECISION_TTL_MS=" in line
+    )
+    harness = f"""
+{constants}
+let now=1_800_000_000_000;
+Date.now=()=>now;
+let frameDecisions={{}};
+{fresh}
+function probe(mode,age){{
+  frameDecisions={{'https://app.example/':{{mode,reason:'fixture',checkedAt:now-age}}}};
+  return freshFrameDecision('https://app.example/');
+}}
+process.stdout.write(JSON.stringify({{
+  browserFresh:probe('browser',4*60*1000),
+  browserExpired:probe('browser',5*60*1000+1),
+  inlineFresh:probe('inline',5*60*60*1000),
+  inlineExpired:probe('inline',6*60*60*1000+1)
+}}));
+"""
+    proc = subprocess.run([node, "-e", harness], capture_output=True, text=True, timeout=30)
+    assert proc.returncode == 0, proc.stderr
+    result = json.loads(proc.stdout)
+    assert result["browserFresh"]["mode"] == "browser"
+    assert result["browserExpired"] is None
+    assert result["inlineFresh"]["mode"] == "inline"
+    assert result["inlineExpired"] is None
+
+
 def test_saved_bookmark_urls_are_https_only_and_credentials_are_rejected():
     assert "if(!URL_SCHEME_RE.test(value))value=`https://${value}`" in JS
     assert "url.protocol!=='https:'" in JS

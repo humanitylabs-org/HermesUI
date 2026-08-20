@@ -8,7 +8,8 @@
   const BOOKMARK_STORAGE_KEY='hermesui.app-selector.bookmarks.v1';
   const FRAME_DECISION_STORAGE_KEY='hermesui.app-selector.frame-decisions.v1';
   const FRAME_CHECK_PATH='/frame-check/';
-  const FRAME_DECISION_TTL_MS=6*60*60*1000;
+  const FRAME_INLINE_DECISION_TTL_MS=6*60*60*1000;
+  const FRAME_BROWSER_DECISION_TTL_MS=5*60*1000;
   const URL_SCHEME_RE=/^[a-z][a-z0-9+.-]*:/i;
   const GROUPS={
     company:{label:'work app',plural:'work apps',icon:'company'},
@@ -113,7 +114,9 @@
 
   function freshFrameDecision(href){
     const decision=frameDecisions[href];
-    if(!decision||Date.now()-decision.checkedAt>FRAME_DECISION_TTL_MS)return null;
+    if(!decision)return null;
+    const ttl=decision.mode==='browser'?FRAME_BROWSER_DECISION_TTL_MS:FRAME_INLINE_DECISION_TTL_MS;
+    if(Date.now()-decision.checkedAt>ttl)return null;
     return decision;
   }
 
