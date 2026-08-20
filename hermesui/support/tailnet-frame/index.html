@@ -57,8 +57,7 @@
         const payload=JSON.parse(localStorage.getItem(BOOKMARK_STORAGE_KEY)||'null');
         if(!payload||payload.version!==1)return null;
         const entries=Array.isArray(payload[group])?payload[group]:[];
-        const destination=cleanDestination(entries.find(item=>item&&item.id===id));
-        return destination?{...destination,browser:true}:null;
+        return cleanDestination(entries.find(item=>item&&item.id===id));
       }catch(_){return null;}
     }
 
@@ -69,30 +68,6 @@
       const payload=await response.json();
       const candidate=Array.isArray(payload.apps)?payload.apps.find(item=>item&&item.id===id):null;
       return cleanDestination(candidate);
-    }
-
-    function tailnetBrowserUrl(){
-      const url=new URL(location.href);
-      url.port='6080';
-      url.pathname='/vnc_auto.html';
-      url.search='';
-      url.hash='';
-      url.searchParams.set('path','websockify');
-      url.searchParams.set('autoconnect','1');
-      url.searchParams.set('resize','scale');
-      url.searchParams.set('view_only','0');
-      return url.href;
-    }
-
-    async function openInTailnetBrowser(href){
-      const response=await fetch('./navigate',{
-        method:'POST',
-        credentials:'same-origin',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({url:href})
-      });
-      if(!response.ok)throw new Error('browser unavailable');
-      return tailnetBrowserUrl();
     }
 
     let app=null;
@@ -110,13 +85,7 @@
     document.title=app.label;
     frame.title=app.label;
     frame.addEventListener('load',()=>{status.hidden=true;},{once:true});
-    try{
-      frame.src=app.browser?await openInTailnetBrowser(app.href):app.href;
-    }catch(_){
-      title.textContent='Browser unavailable';
-      copy.textContent='The private in-panel browser could not open this destination.';
-      return;
-    }
+    frame.src=app.href;
     setTimeout(()=>{
       if(status.hidden)return;
       title.textContent='Still connecting…';
