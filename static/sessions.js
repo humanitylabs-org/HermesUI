@@ -1753,6 +1753,11 @@ async function loadSession(sid){
   // restored when the user switches back (#1060). Save to server now so the
   // draft survives page refresh and syncs across clients.
   if (currentSid && currentSid !== sid) {
+    // Keep the stable transcript we are leaving in a small browser-memory cache.
+    // The next visit still fetches authoritative metadata; this only avoids a
+    // second, heavier messages round-trip when the server's message_count still
+    // matches. Streaming sessions are deliberately excluded by the helper.
+    _cacheActiveSessionMessages(currentSid);
     if(typeof window._clearPendingSelections==='function') window._clearPendingSelections();
     if(typeof _clearQueueCardDisplay==='function') _clearQueueCardDisplay(currentSid);
     await _saveComposerDraftNow(currentSid, ($('msg') || {}).value || '', S.pendingFiles ? [...S.pendingFiles] : []);
@@ -3031,6 +3036,198 @@ let _messagesTruncated = false;
 // server-bounded and do not consume the visible-message budget.
 // Older messages are loaded on-demand via _loadOlderMessages().
 const _INITIAL_MSG_LIMIT = 30;
+// Frontend-only warm transcript cache. This deliberately lives in page memory
+// rather than CacheStorage/localStorage: session content disappears with the
+// tab, is never available offline, and never bypasses the live metadata/auth
+// request made by loadSession(). Classic and High Signal share loadSession(),
+// so this one bounded cache benefits both views without separate code paths.
+const _SESSION_MESSAGE_CACHE_MAX = 5;
+const _SESSION_MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000;
+const _SESSION_MESSAGE_PREFETCH_CONCURRENCY = 2;
+const _sessionMessageCache = new Map();
+const _sessionMessagePrefetchInFlight = new Map();
+let _sessionMessagePrefetchSchedule = 0;
+
+function _sessionMessageCacheCount(session){
+  const value=Number(session&&session.message_count);
+  return Number.isFinite(value)?Math.max(0,value):null;
+}
+
+function _sessionMessageCacheProfile(session){
+  return String(session&&session.profile||S.activeProfile||'default').trim()||'default';
+}
+
+function _sessionMessageCacheClone(data){
+  if(!data) return null;
+  try{
+    if(typeof structuredClone==='function') return structuredClone(data);
+  }catch(_e){}
+  try{return JSON.parse(JSON.stringify(data));}catch(_e){return null;}
+}
+
+function _storeSessionMessageCache(sid,session){
+  sid=String(sid||'');
+  if(!sid||!session||session.active_stream_id) return false;
+  const messages=Array.isArray(session.messages)?session.messages:[];
+  const messageCount=_sessionMessageCacheCount(session);
+  if(messageCount===null) return false;
+  const snapshot=_sessionMessageCacheClone({session});
+  if(!snapshot||!snapshot.session||!Array.isArray(snapshot.session.messages)) return false;
+  // Refresh insertion order so Map doubles as a tiny LRU.
+  _sessionMessageCache.delete(sid);
+  _sessionMessageCache.set(sid,{
+    storedAt:Date.now(),
+    messageCount,
+    profile:_sessionMessageCacheProfile(session),
+    data:snapshot,
+  });
+  while(_sessionMessageCache.size>_SESSION_MESSAGE_CACHE_MAX){
+    const oldest=_sessionMessageCache.keys().next().value;
+    _sessionMessageCache.delete(oldest);
+  }
+  return messages.length===snapshot.session.messages.length;
+}
+
+function _freshSessionMessageCacheEntry(sid,metadata){
+  sid=String(sid||'');
+  const entry=_sessionMessageCache.get(sid);
+  if(!entry) return null;
+  const expectedCount=_sessionMessageCacheCount(metadata);
+  const expectedProfile=_sessionMessageCacheProfile(metadata);
+  const expired=(Date.now()-Number(entry.storedAt||0))>_SESSION_MESSAGE_CACHE_TTL_MS;
+  const profileMismatch=typeof _profileMatchesActiveProfile==='function'
+    ? !_profileMatchesActiveProfile(entry.profile,expectedProfile)
+    : entry.profile!==expectedProfile;
+  if(expired||profileMismatch||(metadata&&metadata.active_stream_id)||expectedCount===null||entry.messageCount!==expectedCount){
+    _sessionMessageCache.delete(sid);
+    return null;
+  }
+  return entry;
+}
+
+function _takeFreshSessionMessageCache(sid,metadata){
+  sid=String(sid||'');
+  const entry=_freshSessionMessageCacheEntry(sid,metadata);
+  if(!entry) return null;
+  // Touch for LRU and clone so render-time ephemeral annotations cannot mutate
+  // the reusable cache entry.
+  _sessionMessageCache.delete(sid);
+  _sessionMessageCache.set(sid,entry);
+  return _sessionMessageCacheClone(entry.data);
+}
+
+function _hasWarmSessionMessageCache(sid,session){
+  sid=String(sid||'');
+  const entry=_sessionMessageCache.get(sid);
+  if(!entry) return false;
+  const expired=(Date.now()-Number(entry.storedAt||0))>_SESSION_MESSAGE_CACHE_TTL_MS;
+  const profile=_sessionMessageCacheProfile(session);
+  const profileMismatch=typeof _profileMatchesActiveProfile==='function'
+    ? !_profileMatchesActiveProfile(entry.profile,profile)
+    : entry.profile!==profile;
+  if(expired||profileMismatch){
+    _sessionMessageCache.delete(sid);
+    return false;
+  }
+  return true;
+}
+
+function _cacheActiveSessionMessages(sid){
+  if(!S.session||S.session.session_id!==sid||S.busy||S.activeStreamId) return false;
+  if(!Array.isArray(S.messages)||!S.messages.length) return false;
+  // A reader may have expanded a very long transcript. Avoid cloning hundreds
+  // of rows during navigation; the background prefetch will warm its normal
+  // bounded 30-row tail instead.
+  if(S.messages.length>200) return false;
+  return _storeSessionMessageCache(sid,{
+    ...S.session,
+    messages:S.messages,
+    tool_calls:Array.isArray(S.toolCalls)?S.toolCalls:(S.session.tool_calls||[]),
+    _messages_truncated:!!_messagesTruncated,
+    _messages_offset:Number(_oldestIdx)||0,
+    _msg_limit_max:Number(_msgLimitMax)||_MSG_LIMIT_MAX,
+  });
+}
+
+function _sessionMessagePrefetchEligible(session){
+  if(!session||!session.session_id||session.archived||session.active_stream_id) return false;
+  if(typeof _isSessionEffectivelyStreaming==='function'&&_isSessionEffectivelyStreaming(session)) return false;
+  if(S.session&&S.session.session_id===session.session_id) return false;
+  if(typeof _isExternalSession==='function'&&_isExternalSession(session)) return false;
+  const profile=String(session.profile||'').trim();
+  if(profile&&typeof _profileMatchesActiveProfile==='function'&&!_profileMatchesActiveProfile(profile,S.activeProfile||'default')) return false;
+  return true;
+}
+
+async function _prefetchSessionMessages(session){
+  if(!_sessionMessagePrefetchEligible(session)) return;
+  const sid=String(session.session_id);
+  // Sidebar message_count is an inexpensive list approximation and can differ
+  // from GET /api/session's authoritative count. Any warm entry is sufficient
+  // here; loadSession compares it to fresh metadata before using it.
+  if(_hasWarmSessionMessageCache(sid,session)) return;
+  if(_sessionMessagePrefetchInFlight.has(sid)) return _sessionMessagePrefetchInFlight.get(sid);
+  const request=(async()=>{
+    try{
+      const data=await api(
+        `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${_INITIAL_MSG_LIMIT}&expand_renderable=1`,
+        {timeoutMs:45000,timeoutToast:false,retries:0}
+      );
+      if(!data||!data.session||data.session.active_stream_id) return;
+      _storeSessionMessageCache(sid,data.session);
+    }catch(_e){
+      // Preload is opportunistic; normal navigation remains the recovery path.
+    }finally{
+      _sessionMessagePrefetchInFlight.delete(sid);
+    }
+  })();
+  _sessionMessagePrefetchInFlight.set(sid,request);
+  return request;
+}
+
+function _sessionMessagePrefetchTargets(){
+  const ordered=Array.isArray(_allSessions)?[..._allSessions].sort(_sessionSidebarSortCompare):[];
+  const activeSid=S.session&&S.session.session_id;
+  const activeIndex=ordered.findIndex(item=>item&&item.session_id===activeSid);
+  const candidates=[];
+  if(activeIndex>=0){
+    if(ordered[activeIndex-1]) candidates.push(ordered[activeIndex-1]);
+    if(ordered[activeIndex+1]) candidates.push(ordered[activeIndex+1]);
+  }
+  candidates.push(...ordered);
+  const seen=new Set();
+  return candidates.filter(session=>{
+    const sid=String(session&&session.session_id||'');
+    if(!sid||seen.has(sid)||!_sessionMessagePrefetchEligible(session)) return false;
+    seen.add(sid);
+    return true;
+  }).slice(0,_SESSION_MESSAGE_CACHE_MAX);
+}
+
+function _scheduleSessionMessagePrefetch(){
+  if(typeof document!=='undefined'&&document.hidden) return;
+  if(typeof navigator!=='undefined'&&navigator.connection&&navigator.connection.saveData) return;
+  if(_sessionMessagePrefetchSchedule) return;
+  const run=()=>{
+    _sessionMessagePrefetchSchedule=0;
+    const targets=_sessionMessagePrefetchTargets();
+    let next=0;
+    const worker=async()=>{
+      while(next<targets.length){
+        const target=targets[next++];
+        await _prefetchSessionMessages(target);
+      }
+    };
+    const workers=[];
+    for(let i=0;i<Math.min(_SESSION_MESSAGE_PREFETCH_CONCURRENCY,targets.length);i++) workers.push(worker());
+    void Promise.allSettled(workers);
+  };
+  if(typeof requestIdleCallback==='function'){
+    _sessionMessagePrefetchSchedule=requestIdleCallback(run,{timeout:1500});
+  }else{
+    _sessionMessagePrefetchSchedule=setTimeout(run,350);
+  }
+}
 // ============================================================================
 // COUPLED CONSTANT — keep in sync with api/routes.py:_MAX_MSG_LIMIT.
 // ============================================================================
@@ -3168,10 +3365,22 @@ async function _ensureMessagesLoaded(sid, opts) {
   const expandParam = boundedReloadLimit ? '&expand_renderable=1' : '';
   let data;
   try {
-    data = await api(
-      `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0${reloadLimitParam}${expandParam}`,
-      {timeoutMs:120000}
-    );
+    if(!opts.force){
+      data=_takeFreshSessionMessageCache(sid,S.session);
+      const pending=!data?_sessionMessagePrefetchInFlight.get(sid):null;
+      if(pending){
+        try{await pending;}catch(_e){}
+        if(!_ownsLoad()) return;
+        data=_takeFreshSessionMessageCache(sid,S.session);
+      }
+    }
+    if(!data){
+      data = await api(
+        `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0${reloadLimitParam}${expandParam}`,
+        {timeoutMs:120000}
+      );
+      if(data&&data.session&&!opts.force) _storeSessionMessageCache(sid,data.session);
+    }
   } finally {
     if (_ownsLoad()) _clearSameSessionForceReloadHint(sid);
   }
@@ -5515,6 +5724,9 @@ function _applySessionListPayload(sessData, projData, opts){
     _sessionListFirstRenderAnimated=true;
   }
   ensureSessionEventsSSE();
+  // Warm a bounded set of recent idle transcripts after the authoritative list
+  // arrives. This is opportunistic and never blocks the sidebar paint.
+  _scheduleSessionMessagePrefetch();
   // #4671: this payload is the freshly-resolved /api/sessions response (and a superseded
   // response was already discarded by the generation guard upstream), so _allSessions now
   // holds the CURRENT profile's rows. Clear the skeleton flag right before painting so this
