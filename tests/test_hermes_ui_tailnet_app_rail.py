@@ -148,6 +148,9 @@ def test_same_origin_frame_bridge_resolves_only_valid_saved_work_and_web_entries
     assert "frame.src=app.href" in FRAME_BRIDGE
     assert "target=\"_blank\"" not in FRAME_BRIDGE
     assert "window.open(" not in FRAME_BRIDGE
+    assert "vnc_auto" not in FRAME_BRIDGE
+    assert "websockify" not in FRAME_BRIDGE
+    assert "openInTailnetBrowser" not in FRAME_BRIDGE
     assert "?bookmark=${encodeURIComponent(`${group}:${id}`)}" in JS
 
 

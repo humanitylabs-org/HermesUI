@@ -18,7 +18,7 @@ See [the architecture contract](hermesui/ARCHITECTURE.md) and [upstream refresh 
 
 Hermes UI stays first in a persistent app rail organized into three visible groups: **PRIVATE**, **WORK**, and **WEB**. Private Tailnet apps are loaded dynamically from an optional per-installation `static/tailnet-apps.json`; the repository ignores this local file so private hostnames cannot enter an ordinary `git add -A`. Work apps and Web bookmarks can be added with the plus buttons at the bottom of their lists and are stored only in that browser's local storage. The PRIVATE plus opens Humanity Labs inside the workspace as the current placeholder for the private-app library.
 
-Every selector item opens inside Hermes UI's workspace panel: side by side with Hermes on wide screens and in the main workspace on narrow screens. Private apps use their validated same-origin `frameHref`. Browser-local WORK and WEB entries resolve through the same-origin `/tailnet-frame/` bridge, which reads only the selected validated HTTPS bookmark from same-origin local storage. The selector does not create new tabs or windows.
+Every selector item opens inside Hermes UI's workspace panel: side by side with Hermes on wide screens and in the main workspace on narrow screens. Private apps use their validated same-origin `frameHref`. Browser-local WORK and WEB entries resolve through the same-origin `/tailnet-frame/` bridge, which reads only the selected validated HTTPS bookmark from same-origin local storage and loads it in a normal browser iframe on this machine. The bridge is not noVNC or a remote-browser layer. The selector does not create new tabs or windows.
 
 The local file uses this shape:
 
