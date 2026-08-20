@@ -134,9 +134,15 @@ def test_frame_ancestors_is_evaluated_against_exact_hermes_origin():
     )
     for invalid_source in (
         f"https://user@{checker.PARENT_ORIGIN.removeprefix('https://')}",
+        f"https://@{checker.PARENT_ORIGIN.removeprefix('https://')}",
+        f"https://:@{checker.PARENT_ORIGIN.removeprefix('https://')}",
         f"{checker.PARENT_ORIGIN}/hermesUI/",
         f"{checker.PARENT_ORIGIN}?unexpected=1",
+        f"{checker.PARENT_ORIGIN}?",
         f"{checker.PARENT_ORIGIN}#unexpected",
+        f"{checker.PARENT_ORIGIN}#",
+        f"{checker.PARENT_ORIGIN}:",
+        "https://*.tail6adf1a.ts.net:",
         "https://*.tail6adf1a.ts.net:443/hermesUI/",
     ):
         assert checker.csp_blocks_parent(

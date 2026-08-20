@@ -143,6 +143,13 @@ def host_source_allows_parent(source: str, document_origin: str) -> bool:
         source_scheme, remainder = document.scheme.lower(), source
     if source_scheme != parent.scheme.lower():
         return False
+    authority = remainder.split("/", 1)[0]
+    if (
+        not authority
+        or authority.endswith(":")
+        or any(marker in remainder for marker in ("@", "?", "#"))
+    ):
+        return False
     try:
         parsed_source = urlsplit(f"{source_scheme}://{remainder}")
         if (
