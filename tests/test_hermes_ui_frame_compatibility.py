@@ -148,6 +148,25 @@ def test_frame_ancestors_is_evaluated_against_exact_hermes_origin():
         "https://example.com",
     )
     assert not checker.csp_blocks_parent(["frame-ancestors https:"], "https://example.com")
+    assert checker.csp_blocks_parent(
+        [f"frame-ancestors 'none', frame-ancestors {checker.PARENT_ORIGIN}"],
+        "https://example.com",
+    )
+    assert checker.csp_blocks_parent(
+        [f"frame-ancestors {checker.PARENT_ORIGIN}, frame-ancestors 'none'"],
+        "https://example.com",
+    )
+    assert not checker.csp_blocks_parent(
+        [
+            f"frame-ancestors {checker.PARENT_ORIGIN}, "
+            f"default-src 'self'; frame-ancestors {checker.PARENT_ORIGIN}"
+        ],
+        "https://example.com",
+    )
+    assert checker.csp_blocks_parent(
+        ["frame-ancestors 'none'", f"frame-ancestors {checker.PARENT_ORIGIN}"],
+        "https://example.com",
+    )
     assert not checker.csp_blocks_parent(["default-src 'self'"], "https://example.com")
     assert not checker.csp_blocks_parent(
         ["frame-ancestors-report 'none'; default-src 'self'"],

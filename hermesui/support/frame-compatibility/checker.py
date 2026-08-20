@@ -194,8 +194,14 @@ def source_allows_parent(source: str, document_origin: str) -> bool:
 
 
 def csp_blocks_parent(values: list[str], document_origin: str) -> bool:
-    for value in values:
-        directives = [part.strip() for part in value.split(";")]
+    policies = (
+        policy.strip()
+        for value in values
+        for policy in value.split(",")
+        if policy.strip()
+    )
+    for policy in policies:
+        directives = [part.strip() for part in policy.split(";")]
         ancestor = next(
             (
                 part
