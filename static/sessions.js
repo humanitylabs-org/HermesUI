@@ -2125,7 +2125,7 @@ async function loadSession(sid){
     // this session's INFLIGHT snapshot, not leave prior-session rows in place.
     if(typeof clearLiveToolCards==='function') clearLiveToolCards();
     try {
-      await _ensureMessagesLoaded(sid, {force:_keepStaleUntilLoaded, loadGeneration:_loadGeneration});
+      await _ensureMessagesLoaded(sid, {force:forceReload, loadGeneration:_loadGeneration});
     } catch(e) {
       if (!_isCurrentLoad()) {
         _rearmActiveSessionStream();
@@ -2231,7 +2231,7 @@ async function loadSession(sid){
     // "messages already populated" early-return inside _ensureMessagesLoaded
     // does NOT skip the swap to the new transcript.
     try {
-      await _ensureMessagesLoaded(sid, {force:_keepStaleUntilLoaded, loadGeneration:_loadGeneration});
+      await _ensureMessagesLoaded(sid, {force:forceReload, loadGeneration:_loadGeneration});
     } catch (e) {
       if (!_isCurrentLoad()) {
         _rearmActiveSessionStream();
@@ -3044,9 +3044,13 @@ const _INITIAL_MSG_LIMIT = 30;
 const _SESSION_MESSAGE_CACHE_MAX = 5;
 const _SESSION_MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000;
 const _SESSION_MESSAGE_PREFETCH_CONCURRENCY = 2;
+const _SESSION_MESSAGE_CACHE_ROW_MAX = 200;
 const _sessionMessageCache = new Map();
 const _sessionMessagePrefetchInFlight = new Map();
 let _sessionMessagePrefetchSchedule = 0;
+let _sessionMessagePrefetchGeneration = 0;
+let _sessionMessagePrefetchQueue = [];
+let _sessionMessagePrefetchActive = 0;
 
 function _sessionMessageCacheCount(session){
   const value=Number(session&&session.message_count);
@@ -3069,6 +3073,7 @@ function _storeSessionMessageCache(sid,session){
   sid=String(sid||'');
   if(!sid||!session||session.active_stream_id) return false;
   const messages=Array.isArray(session.messages)?session.messages:[];
+  if(messages.length>_SESSION_MESSAGE_CACHE_ROW_MAX) return false;
   const messageCount=_sessionMessageCacheCount(session);
   if(messageCount===null) return false;
   const snapshot=_sessionMessageCacheClone({session});
@@ -3162,11 +3167,21 @@ function _sessionMessagePrefetchEligible(session){
 async function _prefetchSessionMessages(session){
   if(!_sessionMessagePrefetchEligible(session)) return;
   const sid=String(session.session_id);
+  const generation=Number(arguments[1]&&arguments[1].generation);
+  const requestGeneration=Number.isFinite(generation)?generation:_sessionMessagePrefetchGeneration;
+  const requestProfile=_sessionMessageCacheProfile(session);
+  const requestCount=_sessionMessageCacheCount(session);
+  const requestUpdatedAt=String(session.updated_at||'');
   // Sidebar message_count is an inexpensive list approximation and can differ
   // from GET /api/session's authoritative count. Any warm entry is sufficient
   // here; loadSession compares it to fresh metadata before using it.
   if(_hasWarmSessionMessageCache(sid,session)) return;
-  if(_sessionMessagePrefetchInFlight.has(sid)) return _sessionMessagePrefetchInFlight.get(sid);
+  const existing=_sessionMessagePrefetchInFlight.get(sid);
+  if(existing){
+    try{await existing;}catch(_e){}
+    if(requestGeneration!==_sessionMessagePrefetchGeneration) return;
+    if(_hasWarmSessionMessageCache(sid,session)) return;
+  }
   const request=(async()=>{
     try{
       const data=await api(
@@ -3174,6 +3189,19 @@ async function _prefetchSessionMessages(session){
         {timeoutMs:45000,timeoutToast:false,retries:0}
       );
       if(!data||!data.session||data.session.active_stream_id) return;
+      if(requestGeneration!==_sessionMessagePrefetchGeneration) return;
+      if(!_sessionMessagePrefetchExecutionAllowed()) return;
+      const current=Array.isArray(_allSessions)
+        ? _allSessions.find(item=>item&&String(item.session_id)===sid)
+        : null;
+      if(!current||!_sessionMessagePrefetchEligible(current)) return;
+      if(requestProfile!==_sessionMessageCacheProfile(current)) return;
+      if(!_profileMatchesActiveProfile(requestProfile,S.activeProfile||'default')) return;
+      if(requestCount!==_sessionMessageCacheCount(current)) return;
+      if(requestUpdatedAt!==String(current.updated_at||'')) return;
+      const responseProfile=String(data.session.profile||requestProfile).trim()||requestProfile;
+      if(responseProfile!==requestProfile) return;
+      if(typeof _isSessionEffectivelyStreaming==='function'&&_isSessionEffectivelyStreaming(data.session)) return;
       _storeSessionMessageCache(sid,data.session);
     }catch(_e){
       // Preload is opportunistic; normal navigation remains the recovery path.
@@ -3204,23 +3232,43 @@ function _sessionMessagePrefetchTargets(){
   }).slice(0,_SESSION_MESSAGE_CACHE_MAX);
 }
 
+function _sessionMessagePrefetchExecutionAllowed(){
+  if(typeof document!=='undefined'&&document.hidden) return false;
+  if(typeof navigator!=='undefined'&&navigator.connection&&navigator.connection.saveData) return false;
+  return true;
+}
+
+function _pumpSessionMessagePrefetchQueue(){
+  if(!_sessionMessagePrefetchExecutionAllowed()){
+    _sessionMessagePrefetchQueue=[];
+    return;
+  }
+  while(_sessionMessagePrefetchActive<_SESSION_MESSAGE_PREFETCH_CONCURRENCY&&_sessionMessagePrefetchQueue.length){
+    const job=_sessionMessagePrefetchQueue.shift();
+    if(!job||job.generation!==_sessionMessagePrefetchGeneration) continue;
+    if(!_sessionMessagePrefetchExecutionAllowed()){
+      _sessionMessagePrefetchQueue=[];
+      return;
+    }
+    _sessionMessagePrefetchActive++;
+    void _prefetchSessionMessages(job.session,{generation:job.generation})
+      .finally(()=>{
+        _sessionMessagePrefetchActive=Math.max(0,_sessionMessagePrefetchActive-1);
+        _pumpSessionMessagePrefetchQueue();
+      });
+  }
+}
+
 function _scheduleSessionMessagePrefetch(){
-  if(typeof document!=='undefined'&&document.hidden) return;
-  if(typeof navigator!=='undefined'&&navigator.connection&&navigator.connection.saveData) return;
+  if(!_sessionMessagePrefetchExecutionAllowed()) return;
   if(_sessionMessagePrefetchSchedule) return;
   const run=()=>{
     _sessionMessagePrefetchSchedule=0;
+    if(!_sessionMessagePrefetchExecutionAllowed()) return;
+    const generation=_sessionMessagePrefetchGeneration;
     const targets=_sessionMessagePrefetchTargets();
-    let next=0;
-    const worker=async()=>{
-      while(next<targets.length){
-        const target=targets[next++];
-        await _prefetchSessionMessages(target);
-      }
-    };
-    const workers=[];
-    for(let i=0;i<Math.min(_SESSION_MESSAGE_PREFETCH_CONCURRENCY,targets.length);i++) workers.push(worker());
-    void Promise.allSettled(workers);
+    _sessionMessagePrefetchQueue=targets.map(session=>({session,generation}));
+    _pumpSessionMessagePrefetchQueue();
   };
   if(typeof requestIdleCallback==='function'){
     _sessionMessagePrefetchSchedule=requestIdleCallback(run,{timeout:1500});
@@ -3365,9 +3413,11 @@ async function _ensureMessagesLoaded(sid, opts) {
   const expandParam = boundedReloadLimit ? '&expand_renderable=1' : '';
   let data;
   try {
-    if(!opts.force){
+    if(!opts.force&&typeof _takeFreshSessionMessageCache==='function'){
       data=_takeFreshSessionMessageCache(sid,S.session);
-      const pending=!data?_sessionMessagePrefetchInFlight.get(sid):null;
+      const pending=(!data&&typeof _sessionMessagePrefetchInFlight!=='undefined')
+        ? _sessionMessagePrefetchInFlight.get(sid)
+        : null;
       if(pending){
         try{await pending;}catch(_e){}
         if(!_ownsLoad()) return;
@@ -3379,7 +3429,9 @@ async function _ensureMessagesLoaded(sid, opts) {
         `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0${reloadLimitParam}${expandParam}`,
         {timeoutMs:120000}
       );
-      if(data&&data.session&&!opts.force) _storeSessionMessageCache(sid,data.session);
+      if(data&&data.session&&!opts.force&&typeof _storeSessionMessageCache==='function'){
+        _storeSessionMessageCache(sid,data.session);
+      }
     }
   } finally {
     if (_ownsLoad()) _clearSameSessionForceReloadHint(sid);
@@ -5667,6 +5719,11 @@ function _applySessionListPayload(sessData, projData, opts){
     : [];
   _reconcileActiveSessionIdleStateFromList(serverSessions);
   _allSessions = _mergeOptimisticFirstTurnSessions(serverSessions);
+  // Every accepted authoritative list invalidates queued or in-flight prefetch
+  // completion authority. In-flight requests may finish, but only the current
+  // generation is allowed to populate the bounded cache.
+  _sessionMessagePrefetchGeneration++;
+  _sessionMessagePrefetchQueue=[];
   // Tag the cache with the scope it was loaded under (active profile +
   // all-profiles flag). If a later /api/sessions fails right after a profile
   // switch, the catch path checks this so it won't re-render the PRIOR
