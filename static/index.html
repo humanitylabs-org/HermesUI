@@ -159,6 +159,18 @@
 <div class="layout">
   <section class="tailnet-app-workspace" id="tailnetAppWorkspace" aria-label="Selected Tailnet app" hidden>
     <iframe id="tailnetAppFrame" title="Selected Tailnet app" loading="eager" referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
+    <section class="tailnet-app-manager" id="tailnetAppManager" aria-labelledby="tailnetAppManagerTitle" hidden>
+      <header class="tailnet-app-manager-head">
+        <div>
+          <p class="tailnet-app-manager-eyebrow">PRIVATE</p>
+          <h1 id="tailnetAppManagerTitle">Manage apps</h1>
+          <p>Apps detected on this Tailnet node. Choose which ones appear in the PRIVATE selector.</p>
+        </div>
+        <button class="btn secondary tailnet-app-manager-refresh" id="tailnetAppManagerRefresh" type="button">Refresh</button>
+      </header>
+      <div class="tailnet-app-manager-notice" id="tailnetAppManagerNotice" role="status" aria-live="polite">Open this view to scan the current Tailnet routes.</div>
+      <div class="tailnet-app-manager-list" id="tailnetAppManagerList"></div>
+    </section>
   </section>
   <nav class="rail tailnet-app-rail" aria-label="Wizard OS apps">
     <a class="rail-btn tailnet-app-link active has-tooltip" id="tailnetAppHome" href="./" data-tooltip="Hermes UI" aria-label="Hermes UI" aria-current="page">
@@ -170,6 +182,10 @@
           <span class="tailnet-app-group-badge" aria-hidden="true">PRIVATE</span>
         </div>
         <div class="tailnet-app-links" id="tailnetAppLinks"></div>
+        <button class="rail-btn tailnet-app-link tailnet-app-manager-link has-tooltip" id="tailnetPrivateManager" type="button" data-tailnet-app-id="private-app-manager" aria-label="Manage private apps" data-tooltip="Manage private apps">
+          <span class="tailnet-app-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.09A1.65 1.65 0 0 0 20.91 10H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"/></svg></span>
+          <span class="tailnet-app-manager-badge" id="tailnetAppManagerBadge" aria-label="New detected apps" hidden></span>
+        </button>
         <button class="rail-btn tailnet-app-add tailnet-app-marketplace has-tooltip" id="tailnetPrivateAdd" type="button" data-tailnet-app-id="private-marketplace" aria-label="Open private app library" data-tooltip="Open private app library"><span aria-hidden="true">+</span></button>
       </section>
       <section class="tailnet-app-group" data-app-group="work" aria-labelledby="tailnetCompanyAppsLabel">
@@ -1884,6 +1900,7 @@
 <script src="static/session-dashboard.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__" defer></script>
+<script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/boot.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/outline.js?v=__WEBUI_VERSION__" defer></script>

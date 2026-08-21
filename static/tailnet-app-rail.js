@@ -815,7 +815,8 @@
         const apps=Array.isArray(payload&&payload.apps)?payload.apps:[];
         apps.slice(0,MAX_APPS).forEach(raw=>{
           const app=cleanApp(raw);
-          if(!app||seen.has(app.id))return;
+          // The native cog tile replaces the legacy standalone Apps Manager card.
+          if(!app||app.id==='apps-manager'||seen.has(app.id))return;
           seen.add(app.id);
           appsById.set(app.id,app);
           renderApp(links,app);

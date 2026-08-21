@@ -7,7 +7,7 @@
 
 // Cache version is injected by the server at request time (routes.py /sw.js handler).
 // Bumps automatically whenever the git commit changes — no manual edits needed.
-// HermesUI frontend delivery marker: wizard-os-session-warm-cache-v2. This intentionally
+// HermesUI frontend delivery marker: wizard-os-private-app-manager-v1. This intentionally
 // changes the worker bytes so hot frontend deployments refresh an existing
 // process's shell cache without interrupting active agent runs.
 const CACHE_NAME = 'hermes-shell-__WEBUI_VERSION__';
@@ -33,6 +33,8 @@ const SHELL_ASSETS = [
   './static/messages.js' + VQ,
   './static/sessions.js' + VQ,
   './static/session-swipe-navigation.js' + VQ,
+  './static/tailnet-app-rail.js' + VQ,
+  './static/tailnet-app-manager.js' + VQ,
   './static/panels.js' + VQ,
   './static/commands.js' + VQ,
   './static/icons.js' + VQ,

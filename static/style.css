@@ -2190,6 +2190,36 @@
   .tailnet-app-workspace{order:0;min-width:0;min-height:0;overflow:hidden;background:var(--main-bg);border-right:1px solid var(--border);}
   .tailnet-app-workspace[hidden]{display:none!important;}
   .tailnet-app-workspace iframe{display:block;width:100%;height:100%;border:0;background:var(--main-bg);}
+  .tailnet-app-workspace iframe[hidden]{display:none!important;}
+  .tailnet-app-manager-link{position:relative;}
+  .tailnet-app-manager-badge{position:absolute;right:4px;top:3px;min-width:14px;height:14px;padding:0 3px;box-sizing:border-box;border:2px solid var(--sidebar-bg);border-radius:999px;background:var(--accent);color:#fff;font:800 8px/10px system-ui,sans-serif;text-align:center;}
+  .tailnet-app-manager-badge[hidden]{display:none!important;}
+  .tailnet-app-manager{height:100%;overflow:auto;box-sizing:border-box;padding:clamp(18px,3vw,38px);background:linear-gradient(180deg,color-mix(in srgb,var(--main-bg) 96%,var(--accent) 4%),var(--main-bg));color:var(--text);}
+  .tailnet-app-manager[hidden]{display:none!important;}
+  .tailnet-app-manager-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;max-width:980px;margin:0 auto 18px;}
+  .tailnet-app-manager-head>div{min-width:0;}
+  .tailnet-app-manager-head h1{margin:2px 0 6px;font-size:clamp(24px,3vw,34px);line-height:1.05;letter-spacing:-.025em;}
+  .tailnet-app-manager-head p{max-width:650px;margin:0;color:var(--muted);font-size:13px;line-height:1.5;}
+  .tailnet-app-manager-head .tailnet-app-manager-eyebrow{color:var(--accent);font-size:9px;font-weight:850;letter-spacing:.14em;}
+  .tailnet-app-manager-refresh{flex:0 0 auto;min-width:84px;}
+  .tailnet-app-manager-notice{max-width:980px;min-height:18px;margin:0 auto 12px;color:var(--muted);font-size:12px;line-height:1.45;}
+  .tailnet-app-manager-notice.is-error{color:var(--danger,#f87171);}
+  .tailnet-app-manager-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px;max-width:980px;margin:0 auto;padding-bottom:24px;}
+  .tailnet-managed-app{display:flex;flex-direction:column;gap:13px;min-width:0;padding:16px;border:1px solid var(--border);border-radius:13px;background:color-mix(in srgb,var(--surface) 94%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.12);}
+  .tailnet-managed-app-top{display:flex;align-items:flex-start;gap:11px;min-width:0;}
+  .tailnet-managed-app-icon{display:flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;border:1px solid var(--border);border-radius:10px;background:var(--hover-bg);color:var(--accent);}
+  .tailnet-managed-app-icon svg{width:19px;height:19px;}
+  .tailnet-managed-app-copy{min-width:0;flex:1 1 auto;}
+  .tailnet-managed-app-copy strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:1.35;}
+  .tailnet-managed-app-copy code{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;color:var(--muted);font:11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .tailnet-managed-app-health{flex:0 0 auto;width:9px;height:9px;margin-top:5px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 3px color-mix(in srgb,var(--muted) 18%,transparent);}
+  .tailnet-managed-app-health.is-up{background:#34d399;box-shadow:0 0 0 3px rgba(52,211,153,.14);}
+  .tailnet-managed-app-health.is-down{background:#f87171;box-shadow:0 0 0 3px rgba(248,113,113,.14);}
+  .tailnet-managed-app-state{min-height:17px;color:var(--muted);font-size:11px;line-height:1.4;}
+  .tailnet-managed-app-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:auto;}
+  .tailnet-managed-app-actions .btn{min-height:34px;padding:6px 10px;font-size:11px;}
+  .tailnet-managed-app-actions .btn.private-active{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:color-mix(in srgb,var(--accent) 14%,var(--surface));color:var(--accent);}
+  .tailnet-managed-app-empty{grid-column:1/-1;padding:30px 18px;border:1px dashed var(--border);border-radius:13px;color:var(--muted);text-align:center;font-size:13px;}
   /* Split mode needs 50vw external + 48px rail + 180px sidebar + 420px main.
      1296px is the first width where those minimums fit without clipping. */
   @media(min-width:1296px){
@@ -2206,6 +2236,12 @@
      that report a desktop-sized layout viewport. */
   @media(max-width:640px),(pointer:coarse){
     .tailnet-bookmark-menu button{min-height:44px;}
+    .tailnet-app-manager{padding:18px 14px 28px;}
+    .tailnet-app-manager-head{align-items:center;gap:12px;}
+    .tailnet-app-manager-head h1{font-size:25px;}
+    .tailnet-app-manager-head p{font-size:12px;}
+    .tailnet-app-manager-list{grid-template-columns:1fr;}
+    .tailnet-managed-app-actions .btn{min-height:44px;}
     html[data-tailnet-view="external"] .app-titlebar{display:none!important;}
     html[data-tailnet-view="external"] .layout{padding-top:var(--app-titlebar-safe-top);box-sizing:border-box;}
     html[data-tailnet-view="external"] .tailnet-app-workspace{display:block;order:2;flex:1 1 auto;width:auto;max-width:none;}
