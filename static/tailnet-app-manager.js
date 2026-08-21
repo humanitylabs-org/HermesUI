@@ -14,11 +14,15 @@
   const panel=document.getElementById('tailnetAppManager');
   const managerButton=document.getElementById('tailnetPrivateManager');
   const refreshButton=document.getElementById('tailnetAppManagerRefresh');
+  const originLink=document.getElementById('tailnetAppManagerOrigin');
   const notice=document.getElementById('tailnetAppManagerNotice');
   const list=document.getElementById('tailnetAppManagerList');
-  const badge=document.getElementById('tailnetAppManagerBadge');
   const privateLinks=document.getElementById('tailnetAppLinks');
-  if(!workspace||!frame||!panel||!managerButton||!refreshButton||!notice||!list||!badge||!privateLinks)return;
+  if(!workspace||!frame||!panel||!managerButton||!refreshButton||!originLink||!notice||!list||!privateLinks)return;
+
+  const nodeUrl=new URL('/',location.origin);
+  originLink.href=nodeUrl.href;
+  originLink.textContent=nodeUrl.href;
 
   let approvedApps=[];
   let statusPayload=null;
@@ -132,6 +136,7 @@
       const payload=await response.json();
       approvedApps=(Array.isArray(payload&&payload.apps)?payload.apps:[]).map(cleanApprovedApp).filter(Boolean);
       renderApprovedApps();
+      if(statusPayload)renderStatus();
       const remembered=(()=>{try{return sessionStorage.getItem(STORAGE_KEY)||'';}catch(_){return '';}})();
       const rememberedApp=approvedApps.find(app=>app.id===remembered);
       if(rememberedApp)openPrivateApp(rememberedApp);
@@ -139,6 +144,7 @@
     }catch(_){
       approvedApps=[];
       renderApprovedApps();
+      if(statusPayload)renderStatus();
       return false;
     }
   }
@@ -151,7 +157,7 @@
     root.setAttribute('data-tailnet-view','external');
     markSelected(MANAGER_ID);
     try{sessionStorage.setItem(STORAGE_KEY,MANAGER_ID);}catch(_){}
-    document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:MANAGER_ID,label:'Manage apps',mode:'native'}}));
+    document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:MANAGER_ID,label:'Detected',mode:'native'}}));
     void loadStatus();
   }
 
@@ -193,20 +199,12 @@
     }).sort((left,right)=>String(left.name||left.path).localeCompare(String(right.name||right.path)));
   }
 
-  function updateBadge(apps=managedApps()){
-    const pinned=pinnedApps();
-    const approved=approvedKeys();
-    const count=apps.filter(app=>appIsEligible(app)&&!pinned.ids.has(app.id)&&!pinned.sourceKeys.has(app.actionKey)&&!approved.has(app.actionKey)).length;
-    badge.textContent=count>9?'9+':String(count);
-    badge.hidden=count===0;
-    managerButton.dataset.tooltip=count?`Manage private apps · ${count} detected`:'Manage private apps';
-  }
-
-  function button(label,handler,{primary=false,active=false,disabled=false}={}){
+  function button(label,handler,{primary=false,active=false,disabled=false,title=''}={}){
     const node=document.createElement('button');
     node.type='button';
     node.className=`btn ${primary?'primary':'secondary'}${active?' private-active':''}`;
     node.textContent=label;
+    if(title){node.title=title;node.setAttribute('aria-label',title);}
     node.disabled=disabled||busy;
     node.addEventListener('click',handler);
     return node;
@@ -233,7 +231,7 @@
     try{
       await postJson(PRIVATE_APPS_PATH,{action,appId:app.actionKey});
       await loadApprovedApps();
-      setNotice(action==='approve'?`${app.name||app.path} added to PRIVATE.`:`${app.name||app.path} removed from PRIVATE.`);
+      setNotice(`${managedApps().length} app${managedApps().length===1?'':'s'}`);
       notify(action==='approve'?'Added to PRIVATE.':'Removed from PRIVATE.');
     }catch(error){
       setNotice(error.message||'The PRIVATE list could not be changed.',{error:true});
@@ -252,7 +250,7 @@
     renderStatus();
     try{
       await postJson('/apps/api/action',{appId:app.actionKey,action,...extra});
-      setNotice(`${app.name||app.path}: ${verb} accepted.`);
+      setNotice(`${verb} requested`);
       notify(`${app.name||app.path}: ${verb} accepted.`);
       await loadStatus({force:true});
     }catch(error){
@@ -268,11 +266,10 @@
     const pinned=pinnedApps();
     const approved=approvedKeys();
     list.replaceChildren();
-    updateBadge(apps);
     if(!apps.length){
       const empty=document.createElement('div');
       empty.className='tailnet-managed-app-empty';
-      empty.textContent=statusPayload?'No app routes were detected on this Tailnet origin.':'Scanning Tailnet routes…';
+      empty.textContent=statusPayload?'No apps':'Loading…';
       list.appendChild(empty);
       return;
     }
@@ -296,25 +293,24 @@
       health.className=`tailnet-managed-app-health ${app.healthOk?'is-up':(app.healthCode?'is-down':'')}`.trim();
       health.title=app.healthOk?'Available':(app.healthCode?'Unavailable':'Status unknown');
       top.append(icon,copy,health);
-      const state=document.createElement('div');
-      state.className='tailnet-managed-app-state';
       const isPinned=pinned.ids.has(app.id)||pinned.sourceKeys.has(app.actionKey);
       const isApproved=approved.has(app.actionKey);
-      state.textContent=isPinned?'Pinned in PRIVATE':(isApproved?'Shown in PRIVATE':'Detected · not shown in PRIVATE');
       const actions=document.createElement('div');
       actions.className='tailnet-managed-app-actions';
       if(appIsEligible(app)){
-        if(isPinned)actions.appendChild(button('Pinned',()=>{}, {active:true,disabled:true}));
-        else if(isApproved)actions.appendChild(button('Remove from PRIVATE',()=>void changePrivateApp(app,'remove'),{active:true}));
-        else actions.appendChild(button('Add to PRIVATE',()=>void changePrivateApp(app,'approve'),{primary:true}));
+        if(isPinned)actions.appendChild(button('Added',()=>{}, {active:true,disabled:true,title:`${app.name||app.path} is in PRIVATE`}));
+        else if(isApproved)actions.appendChild(button('Remove',()=>void changePrivateApp(app,'remove'),{active:true,title:`Remove ${app.name||app.path} from PRIVATE`}));
+        else actions.appendChild(button('Add',()=>void changePrivateApp(app,'approve'),{primary:true,title:`Add ${app.name||app.path} to PRIVATE`}));
       }
-      if(app.canRestart)actions.appendChild(button('Restart',()=>void runAction(app,'restart')));
-      if(app.canUpdate)actions.appendChild(button('Update',()=>void runAction(app,'update')));
+      if(app.canRestart)actions.appendChild(button('Restart',()=>void runAction(app,'restart'),{title:`Restart ${app.name||app.path} now`}));
+      if(app.canUpdate)actions.appendChild(button('Update',()=>void runAction(app,'update'),{title:`Update ${app.name||app.path}`}));
       if(app.canToggleAutostart){
         const enabled=Boolean(app.serviceEnabled);
-        actions.appendChild(button(enabled?'Disable startup':'Start at boot',()=>void runAction(app,'setAutostart',{enabled:!enabled})));
+        actions.appendChild(button(enabled?'Disable startup':'Start at boot',()=>void runAction(app,'setAutostart',{enabled:!enabled}),{
+          title:enabled?`Do not start ${app.name||app.path} after a VPS reboot`:`Start ${app.name||app.path} after a VPS reboot`,
+        }));
       }
-      card.append(top,state,actions);
+      card.append(top,actions);
       list.appendChild(card);
     });
   }
@@ -323,7 +319,7 @@
     if(busy)return;
     if(!force&&statusPayload&&Date.now()-lastStatusAt<30000){renderStatus();return;}
     refreshButton.disabled=true;
-    setNotice('Scanning the current Tailnet routes…');
+    setNotice('Loading…');
     if(!statusPayload)renderStatus();
     try{
       const endpoint=new URL(STATUS_PATH,location.origin);
@@ -335,10 +331,10 @@
       statusPayload=payload;
       lastStatusAt=Date.now();
       const apps=managedApps();
-      setNotice(`${apps.length} app route${apps.length===1?'':'s'} detected on ${location.hostname}.`);
+      setNotice(`${apps.length} app${apps.length===1?'':'s'}`);
       renderStatus();
     }catch(error){
-      setNotice(`App detection is unavailable: ${error.message||error}`,{error:true});
+      setNotice(`Unavailable: ${error.message||error}`,{error:true});
       statusPayload={ok:false,apps:[]};
       renderStatus();
     }finally{
@@ -354,11 +350,16 @@
     panel.hidden=true;
     if(id&&id!=='hermes-ui')frame.hidden=false;
   });
-  document.addEventListener('hermesui:tailnet-apps-ready',()=>{
+  let initialPrivateSyncStarted=false;
+  function syncInitialPrivateApps(){
+    if(initialPrivateSyncStarted)return;
+    initialPrivateSyncStarted=true;
     void loadApprovedApps().then(()=>{
       let remembered='';
       try{remembered=sessionStorage.getItem(STORAGE_KEY)||'';}catch(_){}
       if(remembered===MANAGER_ID)activateManager();
     });
-  });
+  }
+  document.addEventListener('hermesui:tailnet-apps-ready',syncInitialPrivateApps);
+  if(root.dataset.tailnetAppsReady==='true')syncInitialPrivateApps();
 })();
