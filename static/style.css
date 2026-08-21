@@ -2191,14 +2191,16 @@
   .tailnet-app-workspace[hidden]{display:none!important;}
   .tailnet-app-workspace iframe{display:block;width:100%;height:100%;border:0;background:var(--main-bg);}
   .tailnet-app-workspace iframe[hidden]{display:none!important;}
-  .tailnet-orb-home{position:relative;height:100%;min-height:0;overflow:hidden;isolation:isolate;background:#000;color:#fff;}
-  .tailnet-orb-home[hidden]{display:none!important;}
-  .wizard-orb-blackout{position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;background:#000;}
-  .wizard-orb-float{position:relative;width:min(58%,400px);min-width:240px;aspect-ratio:1;animation:wizard-orb-hover 8s ease-in-out infinite;}
-  .wizard-orb-sphere{position:absolute;inset:0;background:url("./wizard-orb-glass-v3.webp") center/contain no-repeat;}
-  .wizard-orb-sigil{position:absolute;left:50%;top:50%;z-index:1;width:30%;height:30%;transform:translate(-50%,-50%);object-fit:contain;opacity:.8;mix-blend-mode:screen;filter:grayscale(1) brightness(0) invert(1) drop-shadow(0 0 8px rgba(234,218,255,.58)) drop-shadow(0 5px 18px rgba(47,0,95,.82));}
-  @keyframes wizard-orb-hover{0%,100%{transform:translateY(-5px);}50%{transform:translateY(7px);}}
-  @media(prefers-reduced-motion:reduce){.wizard-orb-float{animation:none!important;}}
+  .tailnet-wizard-home{position:relative;height:100%;min-height:0;overflow:hidden;isolation:isolate;background:#000;color:#fff;}
+  .tailnet-wizard-home[hidden]{display:none!important;}
+  .wizard-home-stage{position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;background:#000;perspective:1000px;}
+  .wizard-home-float{width:clamp(260px,62%,440px);max-width:78%;aspect-ratio:1;transform-style:preserve-3d;will-change:transform;animation:wizard-home-float 9s cubic-bezier(.45,.05,.55,.95) infinite;}
+  .wizard-home-mark{display:block;width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 24px 38px rgba(50,0,89,.5)) drop-shadow(0 0 18px rgba(159,95,255,.16));}
+  @keyframes wizard-home-float{
+    0%,100%{transform:translate3d(0,-7px,0) rotateX(1.2deg) rotateY(-2.4deg) scale(.985);}
+    50%{transform:translate3d(0,8px,18px) rotateX(-1deg) rotateY(2.4deg) scale(1.015);}
+  }
+  @media(prefers-reduced-motion:reduce){.wizard-home-float{animation:none!important;transform:none!important;}}
   .tailnet-app-manager-link{position:relative;}
   .tailnet-app-manager{container-type:inline-size;height:100%;overflow:auto;box-sizing:border-box;padding:clamp(16px,2.4vw,30px);background:linear-gradient(180deg,color-mix(in srgb,var(--main-bg) 96%,var(--accent) 4%),var(--main-bg));color:var(--text);}
   .tailnet-app-manager[hidden]{display:none!important;}
@@ -2240,12 +2242,12 @@
      1296px is the first width where those minimums fit without clipping. */
   @media(min-width:1296px){
     html[data-tailnet-view="external"] .tailnet-app-workspace{display:block;flex:0 0 50vw;width:50vw;max-width:50vw;}
-    html[data-tailnet-view="orb"] .tailnet-app-workspace{display:block;flex:0 0 50vw;width:50vw;max-width:50vw;}
+    html[data-tailnet-view="wizard-home"] .tailnet-app-workspace{display:block;flex:0 0 50vw;width:50vw;max-width:50vw;}
   }
   @media(min-width:901px) and (max-width:1295px){
-    html[data-tailnet-view="orb"] .tailnet-app-workspace{display:block;flex:0 1 38vw;width:38vw;max-width:490px;}
-    html[data-tailnet-view="orb"] .layout > .sidebar{min-width:150px;}
-    html[data-tailnet-view="orb"] .layout > .main{min-width:340px;}
+    html[data-tailnet-view="wizard-home"] .tailnet-app-workspace{display:block;flex:0 1 38vw;width:38vw;max-width:490px;}
+    html[data-tailnet-view="wizard-home"] .layout > .sidebar{min-width:150px;}
+    html[data-tailnet-view="wizard-home"] .layout > .main{min-width:340px;}
   }
   @media(max-width:1295px){
     html[data-tailnet-view="external"] .tailnet-app-workspace{display:block;order:2;flex:1 1 auto;width:auto;}
@@ -2286,7 +2288,7 @@
     .sidebar.mobile-session-page .mobile-sidebar-close{display:none!important;}
     .sidebar.mobile-session-page .panel-view{margin-left:0;}
     .sidebar.mobile-session-page .panel-head{padding-right:12px;}
-    html[data-tailnet-view="orb"] .tailnet-app-workspace{display:none!important;}
+    html[data-tailnet-view="wizard-home"] .tailnet-app-workspace{display:none!important;}
   }
   /* HermesUI: remove the workspace browser from the simplified shell. */
   html[data-session-view="dashboard"] body .rightpanel,

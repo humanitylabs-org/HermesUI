@@ -28,7 +28,7 @@
   const root=document.documentElement;
   const workspace=document.getElementById('tailnetAppWorkspace');
   const frame=document.getElementById('tailnetAppFrame');
-  const orbHome=document.getElementById('tailnetOrbHome');
+  const wizardHome=document.getElementById('tailnetWizardHome');
   const managerPanel=document.getElementById('tailnetAppManager');
   const home=document.getElementById('tailnetAppHome');
   const links=document.getElementById('tailnetAppLinks');
@@ -218,7 +218,7 @@
     try{return window.matchMedia('(max-width:640px)').matches;}catch(_){return window.innerWidth<=640;}
   }
 
-  function isOrbDesktop(){
+  function isWizardHomeDesktop(){
     try{return window.matchMedia('(min-width:901px)').matches;}catch(_){return window.innerWidth>=901;}
   }
 
@@ -244,14 +244,14 @@
     closeBookmarkMenu();
     activeId='';
     activeBookmarkNavigation=null;
-    const showOrb=isOrbDesktop();
-    root.setAttribute('data-tailnet-view',showOrb?'orb':'hermes');
+    const showWizardHome=isWizardHomeDesktop();
+    root.setAttribute('data-tailnet-view',showWizardHome?'wizard-home':'hermes');
     if(frame)frame.hidden=true;
     if(managerPanel)managerPanel.hidden=true;
-    if(orbHome)orbHome.hidden=!showOrb;
+    if(wizardHome)wizardHome.hidden=!showWizardHome;
     if(workspace){
-      workspace.hidden=!showOrb;
-      workspace.setAttribute('aria-label',showOrb?'Wizard OS ambient home':'Selected Tailnet app');
+      workspace.hidden=!showWizardHome;
+      workspace.setAttribute('aria-label',showWizardHome?'Wizard OS ambient home':'Selected Tailnet app');
     }
     markSelected('');
     if(openMobileMenu&&isPhoneWidth()&&typeof window.toggleMobileSidebar==='function')window.toggleMobileSidebar();
@@ -296,7 +296,7 @@
       frame.src=targetFrameHref;
     }
     workspace.setAttribute('aria-label',app.label);
-    if(orbHome)orbHome.hidden=true;
+    if(wizardHome)wizardHome.hidden=true;
     if(frame)frame.hidden=false;
     workspace.hidden=false;
     root.setAttribute('data-tailnet-view','external');
@@ -372,7 +372,7 @@
     frame.title=`${app.label} — browser fallback`;
     if(!alreadyShowing)frame.src=app.browserHref;
     workspace.setAttribute('aria-label',`${app.label} opened in browser`);
-    if(orbHome)orbHome.hidden=true;
+    if(wizardHome)wizardHome.hidden=true;
     if(frame)frame.hidden=false;
     workspace.hidden=false;
     root.setAttribute('data-tailnet-view','external');
@@ -795,7 +795,7 @@
       const id=event&&event.detail&&event.detail.id;
       if(!id||id==='hermes-ui')return;
       activeId=id;
-      if(orbHome)orbHome.hidden=true;
+      if(wizardHome)wizardHome.hidden=true;
     });
     savedGroups=readSavedGroups();
     renderSavedGroup('company');
