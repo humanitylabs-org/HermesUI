@@ -251,7 +251,7 @@
     if(wizardHome)wizardHome.hidden=!showWizardHome;
     if(workspace){
       workspace.hidden=!showWizardHome;
-      workspace.setAttribute('aria-label',showWizardHome?'Wizard OS ambient home':'Selected Tailnet app');
+      workspace.setAttribute('aria-label',showWizardHome?'Wizard Canvas':'Selected Tailnet app');
     }
     markSelected('');
     if(openMobileMenu&&isPhoneWidth()&&typeof window.toggleMobileSidebar==='function')window.toggleMobileSidebar();
@@ -805,10 +805,10 @@
     try{remembered=sessionStorage.getItem(STORAGE_KEY)||'';}catch(_){}
     if(remembered&&appsById.has(remembered))activateApp(appsById.get(remembered));
     else activateHermes({remember:false});
-    const desktopOrbMedia=window.matchMedia('(min-width:901px)');
+    const desktopHomeMedia=window.matchMedia('(min-width:901px)');
     const syncHomeAcrossBreakpoint=()=>{if(!activeId)activateHermes({remember:false});};
-    if(typeof desktopOrbMedia.addEventListener==='function')desktopOrbMedia.addEventListener('change',syncHomeAcrossBreakpoint);
-    else if(typeof desktopOrbMedia.addListener==='function')desktopOrbMedia.addListener(syncHomeAcrossBreakpoint);
+    if(typeof desktopHomeMedia.addEventListener==='function')desktopHomeMedia.addEventListener('change',syncHomeAcrossBreakpoint);
+    else if(typeof desktopHomeMedia.addListener==='function')desktopHomeMedia.addListener(syncHomeAcrossBreakpoint);
     root.dataset.tailnetAppsReady='true';
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-apps-ready',{detail:{
       count:savedGroups.company.length+savedGroups.public.length+2,

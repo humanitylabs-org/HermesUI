@@ -1,0 +1,81 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #fff;
+}
+
+* { box-sizing: border-box; }
+html, body, #root, .wizard-canvas-shell { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: #fff; }
+.wizard-canvas-shell { position: relative; }
+
+/* This is one private server canvas, not an Excalidraw cloud client. */
+.excalidraw label[title="Library"],
+.excalidraw .library-button,
+.excalidraw button[aria-label="Library"] { display: none !important; }
+
+.excalidraw .App-menu_top { padding-top: 10px; }
+.excalidraw .App-bottom-bar { padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+.excalidraw .Island { box-shadow: 0 5px 20px rgba(40, 21, 72, .08); }
+.excalidraw .ToolIcon__icon { border-radius: 9px; }
+
+.wizard-canvas-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  max-width: min(260px, 34vw);
+  padding: 7px 10px;
+  border: 1px solid rgba(40, 21, 72, .10);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  color: #6f6780;
+  box-shadow: 0 4px 18px rgba(40, 21, 72, .08);
+  backdrop-filter: blur(12px);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.wizard-canvas-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, .12);
+}
+.wizard-canvas-status.is-loading .wizard-canvas-status-dot,
+.wizard-canvas-status.is-saving .wizard-canvas-status-dot {
+  background: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, .12);
+  animation: wizard-canvas-pulse 1.2s ease-in-out infinite;
+}
+.wizard-canvas-status.is-error .wizard-canvas-status-dot,
+.wizard-canvas-status.is-conflict .wizard-canvas-status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, .14);
+}
+.wizard-canvas-status button {
+  appearance: none;
+  margin: -3px -5px -3px 1px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 999px;
+  background: #f3effb;
+  color: #5b21b6;
+  font: inherit;
+  cursor: pointer;
+}
+.wizard-canvas-status button:hover,
+.wizard-canvas-status button:focus-visible { background: #e9defa; outline: none; }
+
+@keyframes wizard-canvas-pulse {
+  0%, 100% { opacity: .55; transform: scale(.88); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wizard-canvas-status-dot { animation: none !important; }
+}

@@ -76,6 +76,7 @@ graphify-out/
 # Dev-only lint tooling (ESLint runtime-error guard) — see TESTING.md
 node_modules/
 package-lock.json
+hermesui/wizard-canvas/.build-public/
 docs/ui-ux/review-shots/
 
 # Python build metadata (never commit generated egg-info)

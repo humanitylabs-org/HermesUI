@@ -70,7 +70,7 @@
     };
   }
 })()</script>
-<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-home-v5">
+<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v1">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
@@ -155,12 +155,8 @@
 </header>
 <div class="layout">
   <section class="tailnet-app-workspace" id="tailnetAppWorkspace" aria-label="Selected Tailnet app" hidden>
-    <section class="tailnet-wizard-home" id="tailnetWizardHome" aria-label="Wizard OS ambient home" hidden>
-      <div class="wizard-home-stage" aria-hidden="true">
-        <div class="wizard-home-float">
-          <img class="wizard-home-art" src="static/wizard-home-caustic-v5.webp" alt="">
-        </div>
-      </div>
+    <section class="tailnet-wizard-home" id="tailnetWizardHome" aria-label="Wizard Canvas" hidden>
+      <iframe class="wizard-canvas-frame" id="wizardCanvasFrame" title="Wizard Canvas" src="static/wizard-canvas/index.html?overlay=wizard-canvas-v1" loading="eager" referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write"></iframe>
     </section>
     <iframe id="tailnetAppFrame" title="Selected Tailnet app" loading="eager" referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
     <section class="tailnet-app-manager" id="tailnetAppManager" aria-labelledby="tailnetAppManagerTitle" hidden>
@@ -1903,7 +1899,7 @@
 <script src="static/panels.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/session-dashboard.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-home-v5" defer></script>
+<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v1" defer></script>
 <script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/boot.js?v=__WEBUI_VERSION__" defer></script>
