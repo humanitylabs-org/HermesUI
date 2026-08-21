@@ -9,7 +9,8 @@
 // Bumps automatically whenever the git commit changes — no manual edits needed.
 // HermesUI frontend delivery marker: wizard-canvas-v3. This intentionally
 // changes the worker bytes so hot frontend deployments refresh an existing
-// process's shell cache without interrupting active agent runs.
+// process's shell cache without interrupting active agent runs. Bookmark
+// fallback marker v2 keeps successful WORK/WEB frames entirely in this shell.
 const CACHE_NAME = 'hermes-shell-__WEBUI_VERSION__';
 
 // Static assets that form the app shell.
@@ -33,7 +34,7 @@ const SHELL_ASSETS = [
   './static/messages.js' + VQ,
   './static/sessions.js' + VQ,
   './static/session-swipe-navigation.js' + VQ,
-  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v3',
+  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v3&bookmark-fallback=v2',
   './static/tailnet-app-manager.js' + VQ,
   './static/panels.js' + VQ,
   './static/commands.js' + VQ,

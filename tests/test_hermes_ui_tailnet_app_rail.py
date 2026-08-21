@@ -172,21 +172,18 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "privateAdd.addEventListener('click',()=>activateApp(privateMarketplace))" in JS
     fallback = JS[JS.index("function activateBrowserFallback"):JS.index("function activateBookmark")]
     assert "openBrowserTab(app.href)" in fallback
-    assert "reserved.location.replace(app.href)" in fallback
     activation = JS[JS.index("function activateBookmark"):JS.index("function appIcon")]
-    assert "const reserved=takeReservedTab(app)" in activation
-    assert "activateBrowserFallback(app,{reserved,reopen:true})" in activation
-    assert "activateBrowserFallback(app,{reopen:true})" not in activation
+    assert "activateBrowserFallback(app,{reopen:true})" in activation
     assert "if(activeId===app.id&&frame.dataset.browserFallback!=='true')" in activation
-    assert "reserveBrowserTab(app,generation)" in activation
-    assert "function activateBrowserFallback(app,{open=true,reserved=null,reopen=false}={})" in JS
+    assert "reserveBrowserTab" not in activation
+    assert "function activateBrowserFallback(app,{open=true,reopen=false}={})" in JS
     assert "if(open&&(!alreadyShowing||reopen))" in JS
     assert "refreshFrameDecision(app).then" not in activation
-    assert "const reservedBrowserTabs=new Map()" in JS
+    assert "reservedBrowserTabs" not in JS
+    assert "browserReservationHref" not in JS
     message_handler = JS[JS.index("window.addEventListener('message'"):JS.index("document.addEventListener('pointerover'")]
-    assert "const reserved=takeReservedTab(app,data.generation)" in message_handler
-    assert "activateBrowserFallback(app,{reserved})" in message_handler
-    assert "else closeReservedTab(reserved)" in message_handler
+    assert "takeReservedTab" not in message_handler
+    assert "if(data.mode==='browser')activateBrowserFallback(app)" in message_handler
     private_activation = MANAGER[MANAGER.index("function openPrivateApp"):MANAGER.index("function renderApprovedApps")]
     assert "frame.src=app.frameHref" in private_activation
     assert "activateBrowserFallback" not in private_activation
@@ -263,39 +260,23 @@ process.stdout.write(JSON.stringify({{
         "inactive": False,
     }
 
-    take_start = JS.index("  function takeReservedTab(app,generation=''){")
-    take_end = JS.index("\n  function closeReservedTabsExcept", take_start)
-    take_source = JS[take_start:take_end]
-    reservation_harness = f"""
-const GROUPS={{company:{{}},public:{{}}}};
-{JS[token_start:token_end]}
-const tab={{id:'accepted-tab'}};
-const reservedBrowserTabs=new Map([['company:a',{{tab,generation:'3'}}]]);
-{take_source}
-const app={{id:'a',group:'company'}};
-const stale=takeReservedTab(app,'1');
-const afterStale=reservedBrowserTabs.size;
-const current=takeReservedTab(app,'3');
-process.stdout.write(JSON.stringify({{stale,afterStale,current:current&&current.id,afterCurrent:reservedBrowserTabs.size}}));
-"""
-    reservation_proc = subprocess.run(
-        [node, "-e", reservation_harness], capture_output=True, text=True, timeout=30
-    )
-    assert reservation_proc.returncode == 0, reservation_proc.stderr
-    assert json.loads(reservation_proc.stdout) == {
-        "stale": None,
-        "afterStale": 1,
-        "current": "accepted-tab",
-        "afterCurrent": 0,
-    }
-
     handler = JS[JS.index("window.addEventListener('message'"):JS.index("document.addEventListener('pointerover'")]
     current_check = handler.index("if(!isCurrentBookmarkDecision(data,app))return")
-    reserve_take = handler.index("takeReservedTab(app,data.generation)")
     cache_write = handler.index("frameDecisions[app.href]")
-    fallback = handler.index("activateBrowserFallback(app,{reserved})")
-    assert current_check < reserve_take < cache_write < fallback
+    fallback = handler.index("activateBrowserFallback(app)")
+    assert current_check < cache_write < fallback
     assert "typeof data.generation!=='string'" in handler
+
+
+def test_work_web_links_do_not_preopen_a_browser_before_inline_decision():
+    activation = JS[JS.index("function activateBookmark"):JS.index("function appIcon")]
+    assert "window.open" not in activation
+    assert "reserve" not in activation.lower()
+    assert "activateApp(app,{bookmarkGeneration:generation})" in activation
+    assert "decision&&decision.mode==='browser'" in activation
+    assert "activateBrowserFallback(app,{reopen:true})" in activation
+    assert "bookmark-fallback=v2" in INDEX
+    assert "bookmark-fallback=v2" in (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
 
 
 def test_app_tooltips_escape_the_clipped_rail_and_bookmarks_have_two_actions():
@@ -408,7 +389,9 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
         'transform:translateX(0);}'
         in CSS
     )
-    assert INDEX.index('id="btnHamburger"') < INDEX.index('id="mobileSessionTabs"')
+    assert 'id="btnHamburger"' not in INDEX
+    assert 'id="mobileSessionTabs"' in INDEX
+    assert "activateHermes({openMobileMenu:true})" in JS
     assert "function openMobileSessionPage()" in BOOT
     assert "openMobileSessionPage();" in BOOT
     assert "document.documentElement.dataset.mobileSessionView='sessions';" in BOOT
@@ -421,6 +404,10 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 
 
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
-    assert 'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=aiwizards-v2"' in INDEX
+    assert (
+        'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
+        '&overlay=wizard-canvas-v3&bookmark-fallback=v2"'
+        in INDEX
+    )
     assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__"' in INDEX
     assert "new URL(PRIVATE_APPS_PATH,location.origin)" in MANAGER

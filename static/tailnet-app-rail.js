@@ -45,7 +45,6 @@
     icon:'apps'
   };
   const appsById=new Map();
-  const reservedBrowserTabs=new Map();
   let bookmarkActivationGeneration=0;
   let activeBookmarkNavigation=null;
   let savedGroups={company:[],public:[]};
@@ -164,12 +163,6 @@
     return url.href;
   }
 
-  function browserReservationHref(app,generation){
-    const url=new URL(app.browserHref,location.origin);
-    url.searchParams.set('generation',generation);
-    return url.href;
-  }
-
   function isCurrentBookmarkDecision(data,app){
     const token=bookmarkToken(app);
     return Boolean(
@@ -239,7 +232,6 @@
   }
 
   function activateHermes({remember=true,openMobileMenu=false}={}){
-    closeReservedTabsExcept();
     hideTooltip();
     closeBookmarkMenu();
     activeId='';
@@ -265,7 +257,6 @@
   function activateApp(app,{bookmarkGeneration=''}={}){
     if(!workspace||!frame)return;
     const token=bookmarkToken(app);
-    closeReservedTabsExcept(token);
     hideTooltip();
     closeBookmarkMenu();
     const wasBrowserFallback=frame.dataset.browserFallback==='true';
@@ -310,61 +301,15 @@
     try{return window.open(href,'_blank','noopener,noreferrer');}catch(_){return null;}
   }
 
-  function reserveBrowserTab(app,generation){
-    const token=bookmarkToken(app);
-    closeReservedTab(reservedBrowserTabs.get(token));
-    reservedBrowserTabs.delete(token);
-    try{
-      const reserved=window.open(browserReservationHref(app,generation),'_blank');
-      if(reserved){
-        reserved.opener=null;
-        reservedBrowserTabs.set(token,{tab:reserved,generation});
-      }
-      return reserved;
-    }catch(_){return null;}
-  }
-
-  function closeReservedTab(reserved){
-    if(!reserved)return;
-    const tab=reserved.tab||reserved;
-    try{if(!tab.closed)tab.close();}catch(_){}
-  }
-
-  function takeReservedTab(app,generation=''){
-    const token=bookmarkToken(app);
-    const entry=reservedBrowserTabs.get(token)||null;
-    if(!entry||(generation&&entry.generation!==generation))return null;
-    reservedBrowserTabs.delete(token);
-    return entry.tab;
-  }
-
-  function closeReservedTabsExcept(token=''){
-    reservedBrowserTabs.forEach((reserved,key)=>{
-      if(key===token)return;
-      closeReservedTab(reserved);
-      reservedBrowserTabs.delete(key);
-    });
-  }
-
-  function activateBrowserFallback(app,{open=true,reserved=null,reopen=false}={}){
+  function activateBrowserFallback(app,{open=true,reopen=false}={}){
     if(!workspace||!frame||!app.browserHref)return;
-    closeReservedTabsExcept();
     hideTooltip();
     closeBookmarkMenu();
     activeId=app.id;
     activeBookmarkNavigation=null;
     const alreadyShowing=frame.dataset.tailnetAppId===app.id&&frame.dataset.browserFallback==='true';
     if(open&&(!alreadyShowing||reopen)){
-      let usedReserved=false;
-      if(reserved){
-        try{
-          if(!reserved.closed){
-            reserved.location.replace(app.href);
-            usedReserved=true;
-          }
-        }catch(_){}
-      }
-      if(!usedReserved)openBrowserTab(app.href);
+      openBrowserTab(app.href);
     }
     frame.dataset.tailnetAppId=app.id;
     frame.dataset.tailnetFrameKey=`browser:${bookmarkToken(app)}`;
@@ -389,16 +334,15 @@
   function activateBookmark(app){
     const decision=freshFrameDecision(app.href);
     if(decision&&decision.mode==='browser'){
-      const reserved=takeReservedTab(app);
-      activateBrowserFallback(app,{reserved,reopen:true});
+      activateBrowserFallback(app,{reopen:true});
       return;
     }
     if(activeId===app.id&&frame.dataset.browserFallback!=='true'){
       activateApp(app);
       return;
     }
+    // Never pre-open a browser target: inline-capable links must remain in this shell.
     const generation=nextBookmarkGeneration();
-    reserveBrowserTab(app,generation);
     activateApp(app,{bookmarkGeneration:generation});
   }
 
@@ -667,7 +611,6 @@
       const app=bookmarkFor(group,id);
       if(!app)return;
       if(!isCurrentBookmarkDecision(data,app))return;
-      const reserved=takeReservedTab(app,data.generation);
       if(data.mode==='inline'||data.mode==='browser'){
         frameDecisions[app.href]={
           mode:data.mode,
@@ -676,12 +619,8 @@
         };
         writeFrameDecisions();
       }
-      if(activeId!==app.id){
-        closeReservedTab(reserved);
-        return;
-      }
-      if(data.mode==='browser')activateBrowserFallback(app,{reserved});
-      else closeReservedTab(reserved);
+      if(activeId!==app.id)return;
+      if(data.mode==='browser')activateBrowserFallback(app);
     });
     document.addEventListener('pointerover',event=>{
       const target=event.target instanceof Element?event.target.closest('.tailnet-app-rail .has-tooltip[data-tooltip]'):null;
