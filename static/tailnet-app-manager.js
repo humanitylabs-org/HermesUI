@@ -68,14 +68,12 @@
       frameHref=new URL(rawFrameHref,location.origin);
     }catch(_){return null;}
     if(
-      href.protocol!==location.protocol
-      || frameHref.protocol!==location.protocol
+      href.origin!==location.origin
+      || frameHref.origin!==location.origin
       || href.username
       || href.password
       || frameHref.username
       || frameHref.password
-      || href.hostname!==location.hostname
-      || frameHref.hostname!==location.hostname
     )return null;
     return {id,label,sourceKey,href:href.href,frameHref:frameHref.href,icon:typeof raw.icon==='string'?raw.icon:'apps'};
   }
@@ -167,12 +165,12 @@
 
   function appIsCurrentNode(app){
     const url=parsedAppUrl(app);
-    return Boolean(url&&url.protocol===location.protocol&&url.hostname===location.hostname);
+    return Boolean(url&&url.origin===location.origin);
   }
 
   function appIsEligible(app){
     const url=parsedAppUrl(app);
-    if(!url||url.protocol!==location.protocol||url.hostname!==location.hostname)return false;
+    if(!url||url.origin!==location.origin)return false;
     const path=String(app&&app.path||url.pathname).replace(/\/$/,'')||'/';
     return !BLOCKED_PATHS.has(path);
   }
@@ -242,7 +240,7 @@
   }
 
   async function runAction(app,action,extra={}){
-    const labels={restart:'restart',update:'update',setAutostart:extra.enabled?'enable at startup':'disable at startup'};
+    const labels={restart:'restart',update:'update'};
     const verb=labels[action]||action;
     if(!window.confirm(`Confirm ${verb} for ${app.name||app.path}?`))return;
     if(busy)return;
@@ -304,12 +302,6 @@
       }
       if(app.canRestart)actions.appendChild(button('Restart',()=>void runAction(app,'restart'),{title:`Restart ${app.name||app.path} now`}));
       if(app.canUpdate)actions.appendChild(button('Update',()=>void runAction(app,'update'),{title:`Update ${app.name||app.path}`}));
-      if(app.canToggleAutostart){
-        const enabled=Boolean(app.serviceEnabled);
-        actions.appendChild(button(enabled?'Disable startup':'Start at boot',()=>void runAction(app,'setAutostart',{enabled:!enabled}),{
-          title:enabled?`Do not start ${app.name||app.path} after a VPS reboot`:`Start ${app.name||app.path} after a VPS reboot`,
-        }));
-      }
       card.append(top,actions);
       list.appendChild(card);
     });

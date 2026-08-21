@@ -49,7 +49,7 @@ def test_detected_apps_require_explicit_private_approval():
     assert "changePrivateApp(app,'remove')" in JS
     assert "changePrivateApp(app,'approve')" in JS
     assert "function appIsEligible(app)" in JS
-    assert "url.hostname===location.hostname" in JS
+    assert "url.origin===location.origin" in JS
     assert "return !BLOCKED_PATHS.has(path);" in JS
 
 
@@ -86,4 +86,7 @@ def test_manager_copy_is_concise_and_cards_expand_to_four_columns():
     assert "state.textContent" not in JS
     assert "button('Add'" in JS
     assert "button('Remove'" in JS
+    assert "Disable startup" not in JS
+    assert "Start at boot" not in JS
+    assert "setAutostart" not in JS
     assert '@container(min-width:680px){.tailnet-app-manager-list{grid-template-columns:repeat(4,minmax(0,1fr));}}' in CSS

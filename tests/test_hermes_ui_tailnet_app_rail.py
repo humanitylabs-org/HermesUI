@@ -191,8 +191,8 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "frame.src=app.frameHref" in private_activation
     assert "activateBrowserFallback" not in private_activation
     assert "button.dataset.tailnetAppId=app.id" in MANAGER
-    assert "href.hostname!==location.hostname" in MANAGER
-    assert "frameHref.hostname!==location.hostname" in MANAGER
+    assert "href.origin!==location.origin" in MANAGER
+    assert "frameHref.origin!==location.origin" in MANAGER
 
 
 def test_private_plus_is_the_humanity_labs_panel_marketplace_placeholder():
@@ -313,15 +313,15 @@ def test_app_tooltips_escape_the_clipped_rail_and_bookmarks_have_two_actions():
     assert ".tailnet-bookmark-menu button{min-height:44px;}" in CSS
 
 
-def test_documented_app_entry_normalizes_to_direct_and_embedded_destinations():
-    assert "explicitly configured HTTPS apps on dedicated ports" in README
+def test_documented_app_entry_normalizes_to_canonical_direct_and_embedded_destinations():
+    assert "only canonical app paths on HermesUI's own default Tailnet origin" in README
     app = _clean_app(
         {
             "id": "private-app",
             "label": "Private App",
             "sourceKey": "route-key",
-            "href": "https://host.example:9443/private-app/",
-            "frameHref": "https://host.example:9443/private-app/",
+            "href": "https://host.example/private-app/",
+            "frameHref": "https://host.example/private-app/",
             "icon": "apps",
         }
     )
@@ -329,8 +329,8 @@ def test_documented_app_entry_normalizes_to_direct_and_embedded_destinations():
         "id": "private-app",
         "label": "Private App",
         "sourceKey": "route-key",
-        "href": "https://host.example:9443/private-app/",
-        "frameHref": "https://host.example:9443/private-app/",
+        "href": "https://host.example/private-app/",
+        "frameHref": "https://host.example/private-app/",
         "icon": "apps",
     }
     assert "frame.src=app.frameHref" in MANAGER
