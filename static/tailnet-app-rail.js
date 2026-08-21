@@ -1,8 +1,6 @@
 (function(){
   'use strict';
 
-  const CONFIG_PATH='static/tailnet-apps.json';
-  const MAX_APPS=20;
   const MAX_BOOKMARKS_PER_GROUP=20;
   const STORAGE_KEY='hermesui.tailnet-app';
   const BOOKMARK_STORAGE_KEY='hermesui.app-selector.bookmarks.v1';
@@ -57,25 +55,6 @@
   let suppressBookmarkClick='';
   let frameDecisions=readFrameDecisions();
 
-  function cleanApp(raw){
-    if(!raw||typeof raw!=='object'||raw.enabled===false)return null;
-    const id=typeof raw.id==='string'?raw.id.trim():'';
-    const label=typeof raw.label==='string'?raw.label.trim():'';
-    const href=typeof raw.href==='string'?raw.href.trim():'';
-    const frameHref=typeof raw.frameHref==='string'?raw.frameHref.trim():'';
-    const sourceKey=typeof raw.sourceKey==='string'?raw.sourceKey.trim():'';
-    if(!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id)||!label||label.length>48)return null;
-    if(!href||!frameHref||sourceKey.length>500)return null;
-    let url;
-    let frameUrl;
-    try{
-      url=new URL(href,document.baseURI||location.href);
-      frameUrl=new URL(frameHref,location.origin);
-    }catch(_){return null;}
-    if(url.protocol!=='https:'&&url.origin!==location.origin)return null;
-    if(frameUrl.origin!==location.origin)return null;
-    return {id,label,href:url.href,frameHref:frameUrl.href,...(sourceKey?{sourceKey}:{}),icon:ICONS[raw.icon]?raw.icon:'link'};
-  }
 
   function normalizeBookmarkUrl(raw){
     let value=typeof raw==='string'?raw.trim():'';
@@ -408,18 +387,6 @@
     return icon;
   }
 
-  function renderApp(container,app){
-    const link=document.createElement('button');
-    link.className='rail-btn tailnet-app-link has-tooltip';
-    link.type='button';
-    link.dataset.tailnetAppId=app.id;
-    if(app.sourceKey)link.dataset.tailnetAppSourceKey=app.sourceKey;
-    link.dataset.tooltip=app.label;
-    link.setAttribute('aria-label',app.label);
-    link.addEventListener('click',()=>activateApp(app));
-    link.appendChild(appIcon(app.icon));
-    container.appendChild(link);
-  }
 
   function renderBookmark(container,app,group){
     const link=document.createElement('button');
@@ -804,36 +771,14 @@
     renderSavedGroup('company');
     renderSavedGroup('public');
     void refreshSavedFrameDecisions();
-    let rendered=0;
-    const controller=typeof AbortController==='function'?new AbortController():null;
-    const timeout=controller?setTimeout(()=>controller.abort(),2500):null;
-    try{
-      const options={cache:'no-store',credentials:'same-origin'};
-      if(controller)options.signal=controller.signal;
-      const response=await fetch(new URL(CONFIG_PATH,document.baseURI||location.href).href,options);
-      if(response.ok){
-        const payload=await response.json();
-        const seen=new Set();
-        const apps=Array.isArray(payload&&payload.apps)?payload.apps:[];
-        apps.slice(0,MAX_APPS).forEach(raw=>{
-          const app=cleanApp(raw);
-          // The native cog tile replaces the legacy standalone Apps Manager card.
-          if(!app||app.id==='apps-manager'||seen.has(app.id))return;
-          seen.add(app.id);
-          appsById.set(app.id,app);
-          renderApp(links,app);
-          rendered+=1;
-        });
-      }
-    }catch(_){}finally{if(timeout)clearTimeout(timeout);}
     let remembered='';
     try{remembered=sessionStorage.getItem(STORAGE_KEY)||'';}catch(_){}
     if(remembered&&appsById.has(remembered))activateApp(appsById.get(remembered));
     else activateHermes({remember:false});
     root.dataset.tailnetAppsReady='true';
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-apps-ready',{detail:{
-      count:rendered+savedGroups.company.length+savedGroups.public.length+2,
-      privateCount:rendered,
+      count:savedGroups.company.length+savedGroups.public.length+2,
+      privateCount:0,
       companyCount:savedGroups.company.length,
       publicCount:savedGroups.public.length,
       activeId:activeId||'hermes-ui'

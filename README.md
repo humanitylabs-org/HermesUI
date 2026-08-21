@@ -16,28 +16,9 @@ See [the architecture contract](hermesui/ARCHITECTURE.md) and [upstream refresh 
 
 ## Wizard OS app rail
 
-Hermes UI stays first in a persistent app rail organized into three visible groups: **PRIVATE**, **WORK**, and **WEB**. Private Tailnet apps are loaded dynamically from an optional per-installation `static/tailnet-apps.json`; the repository ignores this local file so private hostnames cannot enter an ordinary `git add -A`. Work apps and Web bookmarks can be added with the plus buttons at the bottom of their lists and are stored only in that browser's local storage. Right-clicking a WORK or WEB item, or holding it on a touch device, offers only Rename and Delete. The PRIVATE plus opens Humanity Labs inside the workspace as the current placeholder for the private-app library.
+Hermes UI stays first in a persistent app rail organized into three visible groups: **PRIVATE**, **WORK**, and **WEB**. PRIVATE starts with only the native **Manage Apps** cog and the app-library plus button. Manage Apps reads live routes from the installation's adjacent Tailnet app controller; apps appear in PRIVATE only after the operator selects **Add to PRIVATE**. Work apps and Web bookmarks can be added with the plus buttons at the bottom of their lists and are stored only in that browser's local storage. Right-clicking a WORK or WEB item, or holding it on a touch device, offers only Rename and Delete. The PRIVATE plus opens Humanity Labs inside the workspace as the current placeholder for the private-app library.
 
-Every PRIVATE selector item opens inside Hermes UI's workspace panel: side by side with Hermes on wide screens and in the main workspace on narrow screens. Private apps use their validated same-origin `frameHref`. Browser-local WORK and WEB entries are checked through the installation's Tailnet-only `/frame-check/` service before the same-origin `/tailnet-frame/` bridge loads them. Destinations whose redirect chain or response headers block framing open in a regular browser tab instead, while the workspace shows a clear explanation and an `Open in browser` retry link. Frame-compatible destinations continue in the normal iframe panel. The checker rejects private, loopback, link-local, and non-HTTPS targets and never weakens the destination's security headers. Because browsers do not expose every failed cross-origin navigation to parent JavaScript, the fallback covers detectable framing headers and known hosted Access redirects; the retry link remains available for later login-flow refusals. No remote desktop, noVNC, privileged browser broker, or Funnel is introduced.
-
-The local file uses this shape:
-
-```json
-{
-  "version": 1,
-  "apps": [
-    {
-      "id": "private-app",
-      "label": "Private App",
-      "href": "https://device.example.ts.net/private-app/",
-      "frameHref": "/tailnet-frame/?app=private-app",
-      "icon": "apps"
-    }
-  ]
-}
-```
-
-Both URLs are required. `href` is the canonical destination and must use HTTPS, except for same-origin development links. `frameHref` must resolve to the Hermes UI origin and should point to the trusted local frame route for that app. Accepted icon names are `pipeline`, `apps`, `draw`, `browser`, `terminal`, and `monitor`; malformed, duplicate, and unsafe entries are ignored. A destination must permit framing by the bridge origin; sites that send restrictive `X-Frame-Options` or `frame-ancestors` headers cannot be made embeddable by this frontend. The rail remains available on mobile while the selected app replaces the main workspace beside it.
+Every PRIVATE selector item opens inside Hermes UI's workspace panel: side by side with Hermes on wide screens and in the main workspace on narrow screens. Approved entries are persisted by the adjacent controller outside this repository. The controller discovers current Tailscale Serve routes and explicitly configured HTTPS apps on dedicated ports of the same Tailnet node; routes from other nodes are rejected. Browser-local WORK and WEB entries are checked through the installation's Tailnet-only `/frame-check/` service before the same-origin `/tailnet-frame/` bridge loads them. Destinations whose redirect chain or response headers block framing open in a regular browser tab instead, while the workspace shows a clear explanation and an `Open in browser` retry link. PRIVATE apps always remain in the panel and never use the browser fallback, so a PRIVATE app must permit framing by the Hermes UI origin. No remote desktop, noVNC, privileged browser broker, or Funnel is introduced.
 
 ---
 

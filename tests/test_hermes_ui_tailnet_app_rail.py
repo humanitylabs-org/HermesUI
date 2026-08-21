@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 JS = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
+MANAGER = (ROOT / "static" / "tailnet-app-manager.js").read_text(encoding="utf-8")
 BOOT = (ROOT / "static" / "boot.js").read_text(encoding="utf-8")
 SWIPE = (ROOT / "static" / "session-swipe-navigation.js").read_text(encoding="utf-8")
 GITIGNORE = (ROOT / ".gitignore").read_text(encoding="utf-8")
@@ -24,15 +25,13 @@ def _rail_markup() -> str:
 def _clean_app(raw):
     node = shutil.which("node")
     assert node, "Node.js is required for the Tailnet app parser contract test"
-    start = JS.index("  function cleanApp(raw){")
-    end = JS.index("\n  function closeSessionsOverlay", start)
-    clean_app_source = JS[start:end]
+    start = MANAGER.index("  function cleanApprovedApp(raw){")
+    end = MANAGER.index("\n  function openPrivateApp", start)
+    clean_app_source = MANAGER[start:end]
     harness = f"""
-const document={{baseURI:'https://host.example/hermesUI/'}};
 const location=new URL('https://host.example/hermesUI/');
-const ICONS={{apps:'icon',link:'icon'}};
 {clean_app_source}
-const result=cleanApp(JSON.parse(process.argv[1]));
+const result=cleanApprovedApp(JSON.parse(process.argv[1]));
 process.stdout.write(JSON.stringify(result));
 """
     proc = subprocess.run(
@@ -158,7 +157,9 @@ def test_group_list_scrolls_inside_the_fixed_rail():
 
 
 def test_private_app_inventory_is_local_config_not_public_source():
-    assert "tailnet-apps.json" in JS
+    assert "tailnet-apps.json" not in JS
+    assert "const PRIVATE_APPS_PATH='/apps/api/private-apps'" in MANAGER
+    assert "credentials:'same-origin'" in MANAGER
     assert "static/tailnet-apps.json" in GITIGNORE.splitlines()
     assert ".ts.net" not in INDEX
     assert ".ts.net" not in JS
@@ -186,12 +187,12 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "const reserved=takeReservedTab(app,data.generation)" in message_handler
     assert "activateBrowserFallback(app,{reserved})" in message_handler
     assert "else closeReservedTab(reserved)" in message_handler
-    private_activation = JS[JS.index("function renderApp"):JS.index("function renderBookmark")]
-    assert "activateApp(app)" in private_activation
-    assert "activateBookmark(app)" not in private_activation
-    assert "link.dataset.tailnetAppId=app.id" in JS
-    assert "frameUrl.origin!==location.origin" in JS
-    assert "url.protocol!=='https:'&&url.origin!==location.origin" in JS
+    private_activation = MANAGER[MANAGER.index("function openPrivateApp"):MANAGER.index("function renderApprovedApps")]
+    assert "frame.src=app.frameHref" in private_activation
+    assert "activateBrowserFallback" not in private_activation
+    assert "button.dataset.tailnetAppId=app.id" in MANAGER
+    assert "href.hostname!==location.hostname" in MANAGER
+    assert "frameHref.hostname!==location.hostname" in MANAGER
 
 
 def test_private_plus_is_the_humanity_labs_panel_marketplace_placeholder():
@@ -313,33 +314,35 @@ def test_app_tooltips_escape_the_clipped_rail_and_bookmarks_have_two_actions():
 
 
 def test_documented_app_entry_normalizes_to_direct_and_embedded_destinations():
-    assert '"frameHref": "/tailnet-frame/?app=private-app"' in README
+    assert "explicitly configured HTTPS apps on dedicated ports" in README
     app = _clean_app(
         {
             "id": "private-app",
             "label": "Private App",
-            "href": "https://device.example.ts.net/private-app/",
-            "frameHref": "/tailnet-frame/?app=private-app",
+            "sourceKey": "route-key",
+            "href": "https://host.example:9443/private-app/",
+            "frameHref": "https://host.example:9443/private-app/",
             "icon": "apps",
         }
     )
     assert app == {
         "id": "private-app",
         "label": "Private App",
-        "href": "https://device.example.ts.net/private-app/",
-        "frameHref": "https://host.example/tailnet-frame/?app=private-app",
+        "sourceKey": "route-key",
+        "href": "https://host.example:9443/private-app/",
+        "frameHref": "https://host.example:9443/private-app/",
         "icon": "apps",
     }
-    assert "let targetFrameHref=app.frameHref" in JS
-    assert "frame.src=targetFrameHref" in JS
+    assert "frame.src=app.frameHref" in MANAGER
 
 
 def test_required_app_urls_are_rejected_before_url_coercion():
     valid = {
         "id": "private-app",
         "label": "Private App",
-        "href": "https://device.example.ts.net/private-app/",
-        "frameHref": "/tailnet-frame/?app=private-app",
+        "sourceKey": "route-key",
+        "href": "https://host.example:9443/private-app/",
+        "frameHref": "https://host.example:9443/private-app/",
         "icon": "apps",
     }
     for field in ("href", "frameHref"):
@@ -418,4 +421,5 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert 'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__"' in INDEX
-    assert "new URL(CONFIG_PATH,document.baseURI||location.href)" in JS
+    assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__"' in INDEX
+    assert "new URL(PRIVATE_APPS_PATH,location.origin)" in MANAGER

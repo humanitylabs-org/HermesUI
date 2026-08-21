@@ -54,14 +54,25 @@
     const id=typeof raw.id==='string'?raw.id.trim():'';
     const label=typeof raw.label==='string'?raw.label.trim():'';
     const sourceKey=typeof raw.sourceKey==='string'?raw.sourceKey.trim():'';
-    if(!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id)||!label||label.length>48||!sourceKey)return null;
+    const rawHref=typeof raw.href==='string'?raw.href.trim():'';
+    const rawFrameHref=typeof raw.frameHref==='string'?raw.frameHref.trim():'';
+    if(!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id)||!label||label.length>48||!sourceKey||sourceKey.length>500||!rawHref||!rawFrameHref)return null;
     let href;
     let frameHref;
     try{
-      href=new URL(raw.href,location.origin);
-      frameHref=new URL(raw.frameHref,location.origin);
+      href=new URL(rawHref,location.origin);
+      frameHref=new URL(rawFrameHref,location.origin);
     }catch(_){return null;}
-    if(href.protocol!==location.protocol||href.origin!==location.origin||frameHref.origin!==location.origin)return null;
+    if(
+      href.protocol!==location.protocol
+      || frameHref.protocol!==location.protocol
+      || href.username
+      || href.password
+      || frameHref.username
+      || frameHref.password
+      || href.hostname!==location.hostname
+      || frameHref.hostname!==location.hostname
+    )return null;
     return {id,label,sourceKey,href:href.href,frameHref:frameHref.href,icon:typeof raw.icon==='string'?raw.icon:'apps'};
   }
 
@@ -100,6 +111,7 @@
       button.className='rail-btn tailnet-app-link has-tooltip';
       button.type='button';
       button.dataset.tailnetAppId=app.id;
+      button.dataset.tailnetAppSourceKey=app.sourceKey;
       button.dataset.privateDynamic='true';
       button.dataset.tooltip=app.label;
       button.setAttribute('aria-label',app.label);
@@ -154,7 +166,7 @@
 
   function appIsEligible(app){
     const url=parsedAppUrl(app);
-    if(!url||url.origin!==location.origin)return false;
+    if(!url||url.protocol!==location.protocol||url.hostname!==location.hostname)return false;
     const path=String(app&&app.path||url.pathname).replace(/\/$/,'')||'/';
     return !BLOCKED_PATHS.has(path);
   }
@@ -177,7 +189,7 @@
       seen.add(app.actionKey);
       const path=String(app.path||'').replace(/\/$/,'')||'/';
       if(BLOCKED_PATHS.has(path))return false;
-      return parsedAppUrl(app)?.origin===location.origin;
+      return appIsCurrentNode(app);
     }).sort((left,right)=>String(left.name||left.path).localeCompare(String(right.name||right.path)));
   }
 
