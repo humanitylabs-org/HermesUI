@@ -421,6 +421,6 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 
 
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
-    assert 'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__"' in INDEX
+    assert 'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=aiwizards-v2"' in INDEX
     assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__"' in INDEX
     assert "new URL(PRIVATE_APPS_PATH,location.origin)" in MANAGER

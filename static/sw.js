@@ -33,7 +33,7 @@ const SHELL_ASSETS = [
   './static/messages.js' + VQ,
   './static/sessions.js' + VQ,
   './static/session-swipe-navigation.js' + VQ,
-  './static/tailnet-app-rail.js' + VQ,
+  './static/tailnet-app-rail.js' + VQ + '&overlay=aiwizards-v2',
   './static/tailnet-app-manager.js' + VQ,
   './static/panels.js' + VQ,
   './static/commands.js' + VQ,
