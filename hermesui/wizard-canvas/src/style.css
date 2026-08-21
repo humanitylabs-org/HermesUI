@@ -9,6 +9,21 @@ html, body, #root, .wizard-canvas-shell { width: 100%; height: 100%; margin: 0; 
 body { background: #fff; }
 .wizard-canvas-shell { position: relative; }
 
+.wizard-canvas-brand {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: clamp(280px, 58%, 520px);
+  height: auto;
+  transform: translate(-50%, -50%);
+  opacity: .17;
+  filter: saturate(.92) contrast(.96);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* This is one private server canvas, not an Excalidraw cloud client. */
 .excalidraw label[title="Library"],
 .excalidraw .library-button,
@@ -19,7 +34,7 @@ body { background: #fff; }
 .excalidraw .Island { box-shadow: 0 5px 20px rgba(40, 21, 72, .08); }
 .excalidraw .ToolIcon__icon { border-radius: 9px; }
 
-.wizard-canvas-status {
+.wizard-canvas-recovery {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -29,7 +44,7 @@ body { background: #fff; }
   border: 1px solid rgba(40, 21, 72, .10);
   border-radius: 999px;
   background: rgba(255, 255, 255, .92);
-  color: #6f6780;
+  color: #8a5a0a;
   box-shadow: 0 4px 18px rgba(40, 21, 72, .08);
   backdrop-filter: blur(12px);
   font-size: 11px;
@@ -37,27 +52,7 @@ body { background: #fff; }
   line-height: 1;
   white-space: nowrap;
 }
-
-.wizard-canvas-status-dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, .12);
-}
-.wizard-canvas-status.is-loading .wizard-canvas-status-dot,
-.wizard-canvas-status.is-saving .wizard-canvas-status-dot {
-  background: #7c3aed;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, .12);
-  animation: wizard-canvas-pulse 1.2s ease-in-out infinite;
-}
-.wizard-canvas-status.is-error .wizard-canvas-status-dot,
-.wizard-canvas-status.is-conflict .wizard-canvas-status-dot {
-  background: #f59e0b;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, .14);
-}
-.wizard-canvas-status button {
+.wizard-canvas-recovery button {
   appearance: none;
   margin: -3px -5px -3px 1px;
   padding: 5px 7px;
@@ -68,14 +63,5 @@ body { background: #fff; }
   font: inherit;
   cursor: pointer;
 }
-.wizard-canvas-status button:hover,
-.wizard-canvas-status button:focus-visible { background: #e9defa; outline: none; }
-
-@keyframes wizard-canvas-pulse {
-  0%, 100% { opacity: .55; transform: scale(.88); }
-  50% { opacity: 1; transform: scale(1.08); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .wizard-canvas-status-dot { animation: none !important; }
-}
+.wizard-canvas-recovery button:hover,
+.wizard-canvas-recovery button:focus-visible { background: #e9defa; outline: none; }
