@@ -125,15 +125,19 @@ def test_full_process_verifier_accepts_upstream_exec_into_agent_venv(tmp_path):
     commit = "1" * 40
     tree = "2" * 40
     port = 18793
+    hermes_home = tmp_path / "runtime-home"
     env = os.environ.copy()
     env.update(
         {
             "HERMESUI_MANAGED": "1",
+            "HERMESUI_MODE": "standalone",
+            "HERMESUI_PROFILE": "default",
             "HERMESUI_RUNTIME_COMMIT": commit,
             "HERMESUI_RUNTIME_TREE": tree,
             "HERMES_WEBUI_PYTHON": str(launch_python),
             "HERMES_WEBUI_AGENT_DIR": str(agent),
             "HOME": str(home),
+            "HERMES_HOME": str(hermes_home),
             "PATH": managed_path,
             "HERMES_WEBUI_HOST": "127.0.0.1",
             "HERMES_WEBUI_PORT": str(port),
@@ -151,7 +155,18 @@ def test_full_process_verifier_accepts_upstream_exec_into_agent_venv(tmp_path):
             home,
             port,
             allowed_runtime_identities=frozenset({(commit, tree)}),
+            hermes_home=hermes_home,
+            profile="default",
         )
+        with pytest.raises(RuntimeError, match="HERMES_HOME ownership check"):
+            MODULE.verify_owned_process(
+                process.pid,
+                repo,
+                home,
+                port,
+                hermes_home=tmp_path / "different-runtime-home",
+                profile="default",
+            )
     finally:
         process.terminate()
         process.wait(timeout=5)

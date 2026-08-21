@@ -6,7 +6,7 @@ The project has three intentionally separate layers:
 
 1. **Upstream WebUI backend** — kept byte-for-byte identical to the commit in `UPSTREAM.json`.
 2. **Hermes UI frontend** — the changed files under `static/`, recorded with source and result hashes in `hermesui/frontend-overlay.json`.
-3. **Tailnet composition** — install, status, update, and uninstall tools under `hermesui/installer/`. These run the unchanged upstream server on loopback and expose `/hermesUI` privately with Tailscale Serve.
+3. **Tailnet composition** — install, status, update, and uninstall tools under `hermesui/installer/`. These run one unchanged upstream server on loopback and expose `/hermesUI` privately with Tailscale Serve. The standalone installer persists the resolved Hermes home/profile and fails closed rather than launch a second execution backend over the same Hermes state; external/client-only mode is not yet supported.
 
 Run `python3 hermesui/check_boundary.py` before every commit. It fails if an upstream backend/runtime file changed or if the frontend overlay manifest is stale. When a frontend asset changes, regenerate the manifest with `python3 hermesui/update_overlay_manifest.py`.
 

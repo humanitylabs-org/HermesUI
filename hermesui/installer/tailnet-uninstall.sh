@@ -20,6 +20,7 @@ SERVE_CAS="${HERMESUI_SERVE_CAS_HELPER:-${INSTALLER_DIR}/tailscale-serve-cas.py}
 PROCESS_STOP="${HERMESUI_PROCESS_STOP:-${INSTALLER_DIR}/stop-owned-process.py}"
 SERVICE_START="${HERMESUI_SERVICE_START:-${INSTALLER_DIR}/systemd-start-owned.py}"
 LAUNCHER_UNIT="${HERMESUI_LAUNCHER_UNIT_HELPER:-${INSTALLER_DIR}/systemd-launcher-unit.py}"
+RUNTIME_GUARD="${HERMESUI_RUNTIME_HOME_GUARD:-${INSTALLER_DIR}/runtime-home-guard.py}"
 LOCK_HELPER="${HERMESUI_LIFECYCLE_LOCK_HELPER:-${INSTALLER_DIR}/acquire-lifecycle-lock.py}"
 SYSTEMD_RUN="${HERMESUI_SYSTEMD_RUN:-systemd-run}"
 LIFECYCLE_LOCK="${HERMESUI_LIFECYCLE_LOCK_FILE:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/hermesui-${UID}/lifecycle.lock}"
@@ -47,11 +48,18 @@ serve_cas() {
 }
 
 unit_is_owned() {
+  local -a schema_args
+  if [[ "${unit_schema:-legacy}" == "legacy" ]]; then
+    schema_args=(--legacy)
+  else
+    schema_args=(--hermes-home "$RESOLVED_HERMES_HOME" --profile "$RESOLVED_PROFILE")
+  fi
   "$LAUNCHER_UNIT" verify "$1" \
     --repo-root "$REPO_ROOT" \
     --home "$HOME" \
     --host 127.0.0.1 \
-    --port "$PORT"
+    --port "$PORT" \
+    "${schema_args[@]}"
 }
 
 inspect_route() {
@@ -128,12 +136,19 @@ state_owned=0
 state_preimage_digest=""
 PORT="${HERMESUI_PORT:-}"
 tcp_443_created=''
+unit_schema=legacy
+RESOLVED_HERMES_HOME="$(python3 "$RUNTIME_GUARD" normalize "$HOME/.hermes")" || exit 1
+RESOLVED_PROFILE=default
 if [[ -e "$STATE_FILE" ]]; then
   if [[ ! -r "$STATE_FILE" ]]; then
     printf 'ERROR: HermesUI install state is unreadable; refusing an ownership-ambiguous uninstall.\n' >&2
     exit 1
   fi
   saved_port=''
+  saved_state_version=''
+  saved_mode=''
+  saved_hermes_home=''
+  saved_profile=''
   state_invalid=0
   while IFS='=' read -r key value; do
     case "$key" in
@@ -143,9 +158,23 @@ if [[ -e "$STATE_FILE" ]]; then
       HERMESUI_TCP_443_CREATED)
         if [[ -n "$tcp_443_created" ]]; then state_invalid=1; else tcp_443_created="$value"; fi
         ;;
+      HERMESUI_STATE_VERSION) [[ -z "$saved_state_version" ]] && saved_state_version="$value" || state_invalid=1 ;;
+      HERMESUI_MODE) [[ -z "$saved_mode" ]] && saved_mode="$value" || state_invalid=1 ;;
+      HERMESUI_HERMES_HOME) [[ -z "$saved_hermes_home" ]] && saved_hermes_home="$value" || state_invalid=1 ;;
+      HERMESUI_PROFILE) [[ -z "$saved_profile" ]] && saved_profile="$value" || state_invalid=1 ;;
       *) state_invalid=1 ;;
     esac
   done <"$STATE_FILE"
+  if [[ -n "$saved_state_version$saved_mode$saved_hermes_home$saved_profile" ]]; then
+    unit_schema=current
+    if [[ "$saved_state_version" != "2" || "$saved_mode" != "standalone" || "$saved_profile" != "default" ]]; then
+      state_invalid=1
+    else
+      saved_hermes_home="$(python3 "$RUNTIME_GUARD" normalize "$saved_hermes_home")" || state_invalid=1
+      RESOLVED_HERMES_HOME="$saved_hermes_home"
+      RESOLVED_PROFILE="$saved_profile"
+    fi
+  fi
   if [[ "$state_invalid" == "0" && "$saved_port" =~ ^[0-9]+$ && "$tcp_443_created" =~ ^[01]$ ]]; then
     if [[ -n "$PORT" && "$PORT" != "$saved_port" ]]; then
       printf 'ERROR: HERMESUI_PORT does not match the installer-owned port in install.env. Nothing was changed.\n' >&2
@@ -284,13 +313,17 @@ query_service_state() {
 }
 
 stop_owned_service() {
+  local -a process_schema_args=()
   query_service_state || return 1
   if [[ "$service_active_state" != "active" ]]; then
     [[ "$service_main_pid" == "0" ]] || return 1
     return 0
   fi
   [[ "$service_load_state" == "loaded" && "$service_main_pid" -gt 1 ]] || return 1
-  "$PROCESS_STOP" --pid "$service_main_pid" --repo-root "$REPO_ROOT" --home "$HOME" --port "$PORT" --systemd-unit "$SERVICE_NAME" --systemctl "$SYSTEMCTL" || return 1
+  if [[ "$unit_schema" == "current" ]]; then
+    process_schema_args=(--hermes-home "$RESOLVED_HERMES_HOME" --profile "$RESOLVED_PROFILE")
+  fi
+  "$PROCESS_STOP" --pid "$service_main_pid" --repo-root "$REPO_ROOT" --home "$HOME" --port "$PORT" --systemd-unit "$SERVICE_NAME" --systemctl "$SYSTEMCTL" "${process_schema_args[@]}" || return 1
   for _ in $(seq 1 50); do
     query_service_state || return 1
     if [[ "$service_active_state" != "active" && "$service_load_state" == "not-found" && "$service_main_pid" == "0" ]]; then
@@ -307,6 +340,8 @@ start_owned_service() {
     --unit "$SERVICE_NAME" \
     --repo-root "$REPO_ROOT" \
     --home "$HOME" \
+    --hermes-home "$RESOLVED_HERMES_HOME" \
+    --profile "$RESOLVED_PROFILE" \
     --port "$PORT"
 }
 

@@ -49,6 +49,7 @@ jobs:
             tests/test_hermes_ui_chat_shell.py \
             tests/test_hermes_ui_boundary.py \
             tests/test_hermes_ui_installer_runtime_identity.py \
+            tests/test_hermes_ui_runtime_home_guard.py \
             tests/test_hermes_ui_mobile_session_swipe.py \
             tests/test_hermes_ui_session_dashboard.py \
             tests/test_hermes_ui_sessions_sidebar.py \

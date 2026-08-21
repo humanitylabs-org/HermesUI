@@ -39,6 +39,8 @@ def build_command(
     unit: str,
     repo_root: Path,
     home: Path,
+    hermes_home: Path,
+    profile: str,
     port: int,
 ) -> list[str]:
     if unit != "hermesui.service":
@@ -48,6 +50,10 @@ def build_command(
     repo_root = repo_root.resolve(strict=True)
     home = home.resolve(strict=True)
     bootstrap = (repo_root / "bootstrap.py").resolve(strict=True)
+    guard = (repo_root / "hermesui" / "installer" / "runtime-home-guard.py").resolve(strict=True)
+    hermes_home = hermes_home.expanduser().resolve(strict=False)
+    if profile != "default":
+        raise RuntimeError("v0.2.2 standalone installation supports only the default Hermes profile")
     runtime_commit = git_oid(repo_root, "HEAD")
     runtime_tree = git_oid(repo_root, "HEAD^{tree}")
     managed_path = f"{home}/.local/bin:/usr/local/bin:/usr/bin:/bin"
@@ -55,7 +61,7 @@ def build_command(
     if python is None:
         raise RuntimeError("python3 was not found in the managed launch PATH")
     python = str(Path(python).resolve(strict=True))
-    for value in (str(repo_root), str(home), str(bootstrap)):
+    for value in (str(repo_root), str(home), str(hermes_home), str(bootstrap), str(guard), profile):
         if "\n" in value or "\0" in value:
             raise RuntimeError("paths containing newlines or NUL bytes are unsupported")
 
@@ -72,10 +78,13 @@ def build_command(
         "--property=RestartSec=5s",
         "--property=TimeoutStopSec=30s",
         "--setenv=HERMESUI_MANAGED=1",
+        "--setenv=HERMESUI_MODE=standalone",
+        f"--setenv=HERMESUI_PROFILE={profile}",
         f"--setenv=HERMESUI_RUNTIME_COMMIT={runtime_commit}",
         f"--setenv=HERMESUI_RUNTIME_TREE={runtime_tree}",
         f"--setenv=HERMES_WEBUI_PYTHON={python}",
         f"--setenv=HOME={home}",
+        f"--setenv=HERMES_HOME={hermes_home}",
         f"--setenv=PATH={home}/.local/bin:/usr/local/bin:/usr/bin:/bin",
         "--setenv=HERMES_WEBUI_HOST=127.0.0.1",
         f"--setenv=HERMES_WEBUI_PORT={port}",
@@ -84,13 +93,18 @@ def build_command(
         "--setenv=HERMES_WEBUI_COOKIE_NAME=hermesui_session",
         "--setenv=HERMES_WEBUI_PROFILE_COOKIE_NAME=hermesui_profile",
         python,
-        str(bootstrap),
+        str(guard),
+        "exec",
+        "--repo-root",
+        str(repo_root),
+        "--python",
+        python,
+        "--hermes-home",
+        str(hermes_home),
+        "--profile",
+        profile,
+        "--port",
         str(port),
-        "--host",
-        "127.0.0.1",
-        "--no-browser",
-        "--foreground",
-        "--skip-agent-install",
     ]
 
 
@@ -100,6 +114,8 @@ def main() -> int:
     parser.add_argument("--unit", default="hermesui.service")
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--home", type=Path, required=True)
+    parser.add_argument("--hermes-home", type=Path)
+    parser.add_argument("--profile", default="default")
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
     try:
@@ -108,6 +124,8 @@ def main() -> int:
             args.unit,
             args.repo_root,
             args.home,
+            args.hermes_home or (args.home / ".hermes"),
+            args.profile,
             args.port,
         )
         subprocess.run(command, check=True)
