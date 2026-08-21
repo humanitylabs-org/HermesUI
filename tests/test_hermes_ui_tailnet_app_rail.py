@@ -198,7 +198,8 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
 def test_private_plus_is_the_ai_wizards_panel_app_library():
     assert "id:'private-marketplace'" in JS
     assert "href:'https://www.aiwizards.com/apps'" in JS
-    assert "frameHref:new URL('/tailnet-frame/?app=private-marketplace',location.origin).href" in JS
+    assert "frameHref:new URL('/tailnet-frame/?app=private-marketplace&library=aiwizards-v2',location.origin).href" in JS
+    assert "?'app:private-marketplace:aiwizards-v2'" in JS
     assert "privateAdd.addEventListener('click',()=>activateApp(privateMarketplace))" in JS
     assert "if(id==='private-marketplace')return {label:'Private app library',href:'https://www.aiwizards.com/apps'}" in FRAME_BRIDGE
 

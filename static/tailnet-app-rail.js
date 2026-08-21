@@ -39,7 +39,7 @@
     id:'private-marketplace',
     label:'Private app library',
     href:'https://www.aiwizards.com/apps',
-    frameHref:new URL('/tailnet-frame/?app=private-marketplace',location.origin).href,
+    frameHref:new URL('/tailnet-frame/?app=private-marketplace&library=aiwizards-v2',location.origin).href,
     icon:'apps'
   };
   const appsById=new Map();
@@ -252,7 +252,9 @@
     closeBookmarkMenu();
     const wasBrowserFallback=frame.dataset.browserFallback==='true';
     let targetFrameHref=app.frameHref;
-    let frameKey=`app:${app.id}`;
+    let frameKey=app.id===privateMarketplace.id
+      ?'app:private-marketplace:aiwizards-v2'
+      :`app:${app.id}`;
     if(token){
       let generation=bookmarkGeneration;
       if(

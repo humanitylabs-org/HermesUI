@@ -75,7 +75,7 @@ def test_approved_routes_keep_stable_detector_identity():
 def test_service_worker_delivers_both_private_app_scripts_without_caching_apis():
     assert "'./static/tailnet-app-rail.js' + VQ" in SW
     assert "'./static/tailnet-app-manager.js' + VQ" in SW
-    assert "wizard-os-private-marketplace-aiwizards-v1" in SW
+    assert "wizard-os-private-marketplace-aiwizards-v2" in SW
     assert "url.pathname.includes('/api/')" in SW
     assert "return; // let browser handle normally" in SW
 
