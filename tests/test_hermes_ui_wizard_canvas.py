@@ -12,7 +12,7 @@ BUILD = ROOT / "static" / "wizard-canvas"
 def test_wizard_icon_opens_one_embedded_desktop_canvas():
     assert 'id="tailnetWizardHome" aria-label="Wizard Canvas"' in INDEX
     assert 'id="wizardCanvasFrame" title="Wizard Canvas"' in INDEX
-    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v2' in INDEX
+    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v3' in INDEX
     assert "showWizardHome=isWizardHomeDesktop()" in RAIL
     assert "wizardHome.hidden=!showWizardHome" in RAIL
     assert "if(wizardHome)wizardHome.hidden=true" in RAIL
@@ -21,7 +21,7 @@ def test_wizard_icon_opens_one_embedded_desktop_canvas():
 
 def test_canvas_is_self_hosted_and_cloud_actions_are_disabled():
     assert (BUILD / "index.html").is_file()
-    assert (BUILD / "assets" / "app-v2.min.js").is_file()
+    assert (BUILD / "assets" / "app-v3.min.js").is_file()
     assert (BUILD / "EXCALIDRAW_LICENSE.txt").is_file()
     assert (BUILD / "fonts").is_dir()
     assert "@excalidraw/excalidraw" in SOURCE
@@ -32,13 +32,14 @@ def test_canvas_is_self_hosted_and_cloud_actions_are_disabled():
     assert "saveAsImage: false" in SOURCE
 
 
-def test_canvas_has_a_noninteractive_light_column_watermark_without_routine_save_badge():
-    assert "wizard-light-column.webp" in SOURCE
-    assert 'className="wizard-canvas-brand"' in SOURCE
-    assert 'aria-hidden="true"' in SOURCE
-    assert 'draggable="false"' in SOURCE
+def test_canvas_has_a_transient_minimal_save_status_without_a_watermark():
+    assert "wizard-light-column.webp" not in SOURCE
+    assert "wizard-canvas-brand" not in SOURCE
+    assert "Saving…" in SOURCE
+    assert "'Saved'" in SOURCE
+    assert "SAVED_VISIBLE_MS = 2600" in SOURCE
     assert "Saved on this server" not in SOURCE
-    assert "renderTopRightUI={recoveryUi}" in SOURCE
+    assert "renderTopRightUI={topRightUi}" in SOURCE
 
 
 def test_canvas_uses_only_the_server_autosave_endpoint():
@@ -48,4 +49,4 @@ def test_canvas_uses_only_the_server_autosave_endpoint():
     assert "baseRevision" in SOURCE
     assert "method: 'PUT'" in SOURCE
     assert "Changed in another tab" in SOURCE
-    assert "wizard-canvas-v2" in SW
+    assert "wizard-canvas-v3" in SW

@@ -9,21 +9,6 @@ html, body, #root, .wizard-canvas-shell { width: 100%; height: 100%; margin: 0; 
 body { background: #fff; }
 .wizard-canvas-shell { position: relative; }
 
-.wizard-canvas-brand {
-  position: absolute;
-  z-index: 2;
-  top: 50%;
-  left: 50%;
-  width: clamp(280px, 58%, 520px);
-  height: auto;
-  transform: translate(-50%, -50%);
-  opacity: .17;
-  filter: saturate(.92) contrast(.96);
-  mix-blend-mode: multiply;
-  pointer-events: none;
-  user-select: none;
-}
-
 /* This is one private server canvas, not an Excalidraw cloud client. */
 .excalidraw label[title="Library"],
 .excalidraw .library-button,
@@ -33,6 +18,35 @@ body { background: #fff; }
 .excalidraw .App-bottom-bar { padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
 .excalidraw .Island { box-shadow: 0 5px 20px rgba(40, 21, 72, .08); }
 .excalidraw .ToolIcon__icon { border-radius: 9px; }
+
+.wizard-canvas-save {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(109, 40, 217, .13);
+  border-radius: 999px;
+  background: rgba(245, 243, 255, .92);
+  color: #6d28d9;
+  box-shadow: 0 3px 14px rgba(76, 29, 149, .08);
+  backdrop-filter: blur(12px);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  animation: wizard-save-in .16s ease-out both;
+}
+.wizard-canvas-save.is-saved {
+  animation: wizard-save-in .16s ease-out both, wizard-save-out .3s ease-in 2.3s forwards;
+}
+
+@keyframes wizard-save-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes wizard-save-out {
+  to { opacity: 0; transform: translateY(-2px); }
+}
 
 .wizard-canvas-recovery {
   display: inline-flex;
@@ -65,3 +79,7 @@ body { background: #fff; }
 }
 .wizard-canvas-recovery button:hover,
 .wizard-canvas-recovery button:focus-visible { background: #e9defa; outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wizard-canvas-save { animation: none; }
+}

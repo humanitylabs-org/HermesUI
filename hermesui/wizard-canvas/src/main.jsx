@@ -6,11 +6,11 @@ import {
   serializeAsJSON,
 } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
-import wizardBackground from '../assets/wizard-light-column.webp';
 import './style.css';
 
 const ENDPOINT = '/apps/api/wizard-canvas';
 const SAVE_DELAY_MS = 800;
+const SAVED_VISIBLE_MS = 2600;
 const CLIENT_MAX_BYTES = 8 * 1024 * 1024;
 
 function byteLength(value) {
@@ -34,8 +34,27 @@ function WizardCanvas() {
   const lastSavedRef = useRef('');
   const pendingRef = useRef(null);
   const timerRef = useRef(null);
+  const savedTimerRef = useRef(null);
   const savingRef = useRef(false);
   const [problem, setProblem] = useState(null);
+  const [saveStatus, setSaveStatus] = useState(null);
+  const showSaveStatus = useCallback(phase => {
+    window.clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = null;
+    if (!phase) {
+      setSaveStatus(null);
+      return;
+    }
+    const text = phase === 'saved' ? 'Saved' : 'Saving…';
+    setSaveStatus(current => (
+      current?.phase === phase ? current : { phase, text }
+    ));
+    if (phase === 'saved') {
+      savedTimerRef.current = window.setTimeout(() => {
+        setSaveStatus(current => current?.phase === 'saved' ? null : current);
+      }, SAVED_VISIBLE_MS);
+    }
+  }, []);
   const updateProblem = useCallback((tone, text) => {
     setProblem(current => (
       current?.tone === tone && current?.text === text ? current : { tone, text }
@@ -68,11 +87,13 @@ function WizardCanvas() {
     if (!serialized || serialized === lastSavedRef.current) return;
     if (byteLength(serialized) > CLIENT_MAX_BYTES) {
       lockedRef.current = true;
+      showSaveStatus(null);
       updateProblem('error', 'Canvas is too large to save');
       return;
     }
 
     savingRef.current = true;
+    showSaveStatus('saving');
     try {
       const response = await fetch(ENDPOINT, {
         method: 'PUT',
@@ -88,6 +109,7 @@ function WizardCanvas() {
       });
       if (response.status === 409) {
         lockedRef.current = true;
+        showSaveStatus(null);
         updateProblem('conflict', 'Changed in another tab');
         return;
       }
@@ -97,8 +119,12 @@ function WizardCanvas() {
       lastSavedRef.current = serialized;
       if (pendingRef.current === serialized) pendingRef.current = null;
       setProblem(null);
+      showSaveStatus(
+        pendingRef.current && pendingRef.current !== lastSavedRef.current ? 'saving' : 'saved'
+      );
     } catch (error) {
       console.error('[wizard-canvas] save failed', error);
+      showSaveStatus(null);
       updateProblem('error', 'Not saved — retrying');
     } finally {
       savingRef.current = false;
@@ -107,7 +133,7 @@ function WizardCanvas() {
         timerRef.current = window.setTimeout(flushSave, SAVE_DELAY_MS);
       }
     }
-  }, [updateProblem]);
+  }, [showSaveStatus, updateProblem]);
 
   const handleChange = useCallback((elements, appState, files) => {
     if (!readyRef.current || lockedRef.current) return;
@@ -118,6 +144,7 @@ function WizardCanvas() {
       serialized = serializeAsJSON(elements, appState, files, 'local');
     } catch (error) {
       console.error('[wizard-canvas] serialize failed', error);
+      showSaveStatus(null);
       updateProblem('error', 'Canvas could not be prepared');
       return;
     }
@@ -129,9 +156,10 @@ function WizardCanvas() {
     }
     if (serialized === lastSavedRef.current) return;
     pendingRef.current = serialized;
+    showSaveStatus('saving');
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(flushSave, SAVE_DELAY_MS);
-  }, [flushSave, updateProblem]);
+  }, [flushSave, showSaveStatus, updateProblem]);
 
   useEffect(() => {
     const flushOnHide = () => {
@@ -142,22 +170,36 @@ function WizardCanvas() {
     return () => {
       window.removeEventListener('pagehide', flushOnHide);
       window.clearTimeout(timerRef.current);
+      window.clearTimeout(savedTimerRef.current);
     };
   }, [flushSave]);
 
-  const recoveryUi = useCallback(() => problem ? (
-    <div className={`wizard-canvas-recovery is-${problem.tone}`} role="alert">
-      <span>{problem.text}</span>
-      <button type="button" onClick={() => window.location.reload()}>Reload</button>
-    </div>
-  ) : null, [problem]);
+  const topRightUi = useCallback(() => {
+    if (problem) {
+      return (
+        <div className={`wizard-canvas-recovery is-${problem.tone}`} role="alert">
+          <span>{problem.text}</span>
+          <button type="button" onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      );
+    }
+    return saveStatus ? (
+      <div
+        className={`wizard-canvas-save is-${saveStatus.phase}`}
+        role="status"
+        aria-live="polite"
+      >
+        {saveStatus.text}
+      </div>
+    ) : null;
+  }, [problem, saveStatus]);
 
   return (
     <main className="wizard-canvas-shell" aria-label="Persistent Wizard canvas">
       <Excalidraw
         initialData={loadInitialData}
         onChange={handleChange}
-        renderTopRightUI={recoveryUi}
+        renderTopRightUI={topRightUi}
         theme="light"
         name="Wizard Canvas"
         langCode="en"
@@ -183,13 +225,6 @@ function WizardCanvas() {
           <MainMenu.DefaultItems.ClearCanvas />
         </MainMenu>
       </Excalidraw>
-      <img
-        className="wizard-canvas-brand"
-        src={wizardBackground}
-        alt=""
-        aria-hidden="true"
-        draggable="false"
-      />
     </main>
   );
 }
