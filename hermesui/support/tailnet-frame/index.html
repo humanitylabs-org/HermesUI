@@ -13,17 +13,18 @@
     .status{position:fixed;inset:0;z-index:2;display:grid;place-items:center;background:#f7f7f4;text-align:center;padding:24px}
     .status[hidden]{display:none}
     .status-card{max-width:360px}
-    .status-title{font-weight:700;margin:0 0 8px}
-    .status-copy{color:#666;margin:0}
-    .status-action{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:18px;padding:10px 16px;border-radius:9px;background:#181818;color:#fff;text-decoration:none;font-weight:650}
+    .status-title{font-size:20px;font-weight:720;letter-spacing:-.015em;margin:0 0 8px}
+    .status-copy{color:#666;font-size:16px;margin:0}
+    .countdown-number{color:#7357c6;font-size:1.25em;font-weight:760;font-variant-numeric:tabular-nums}
+    .status-action{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:18px;padding:10px 16px;border-radius:9px;background:#7357c6;color:#fff;text-decoration:none;font-weight:650}
     .status-action[hidden]{display:none}
     .manual-browser{position:fixed;z-index:3;top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));display:inline-flex;align-items:center;min-height:40px;padding:8px 12px;border:1px solid #d8d8d2;border-radius:9px;background:rgba(247,247,244,.94);color:#181818;text-decoration:none;font-size:13px;font-weight:650;box-shadow:0 3px 14px rgba(0,0,0,.12);backdrop-filter:blur(8px)}
     .manual-browser[hidden]{display:none}
-    @media(prefers-color-scheme:dark){html,body,iframe,.status{background:#111;color:#f5f5f0}.status-copy{color:#aaa}.status-action{background:#f5f5f0;color:#111}.manual-browser{border-color:#343434;background:rgba(17,17,17,.94);color:#f5f5f0}}
+    @media(prefers-color-scheme:dark){html,body,iframe,.status{background:#111;color:#f5f5f0}.status-copy{color:#aaa}.countdown-number{color:#ae98ef}.status-action{background:#8d72dc;color:#fff}.manual-browser{border-color:#343434;background:rgba(17,17,17,.94);color:#f5f5f0}}
   </style>
 </head>
 <body>
-  <div class="status" id="status" role="status">
+  <div class="status" id="status" role="status" aria-live="assertive" aria-atomic="true">
     <div class="status-card">
       <p class="status-title" id="statusTitle">Opening app…</p>
       <p class="status-copy" id="statusCopy">Checking whether it can open inside Wizard OS.</p>
@@ -46,6 +47,7 @@
     const frame=document.getElementById('appFrame');
     const params=new URL(location.href).searchParams;
     const generation=params.get('generation')||'';
+    let fallbackCountdownTimer=null;
 
     function cleanDestination(candidate){
       if(!candidate||typeof candidate!=='object')return null;
@@ -107,17 +109,55 @@
       },location.origin);
     }
 
+    function renderFallbackCount(value){
+      const number=document.createElement('strong');
+      number.className='countdown-number';
+      number.textContent=String(value);
+      copy.replaceChildren(document.createTextNode('Opening in '),number,document.createTextNode('…'));
+    }
+
+    function startFallbackCountdown(){
+      if(fallbackCountdownTimer!==null)clearTimeout(fallbackCountdownTimer);
+      let remaining=3;
+      renderFallbackCount(remaining);
+      const tick=()=>{
+        remaining-=1;
+        if(remaining>0){
+          renderFallbackCount(remaining);
+          fallbackCountdownTimer=setTimeout(tick,1000);
+          return;
+        }
+        fallbackCountdownTimer=null;
+        copy.textContent='Opening…';
+        action.hidden=false;
+      };
+      fallbackCountdownTimer=setTimeout(tick,1000);
+    }
+
     function showBrowserFallback(app,token,{notify=false,reason=''}={}){
       document.title=`${app.label} — browser`;
       frame.hidden=true;
       status.hidden=false;
-      title.textContent='Opening in your browser';
-      copy.textContent=`${app.label} does not support the in-app panel, so it is opening in a regular browser tab.`;
+      title.textContent='Not supported here';
       action.href=app.href;
-      action.hidden=false;
+      action.hidden=true;
       manualAction.hidden=true;
+      startFallbackCountdown();
       if(notify)notifyParent(token,'browser',reason);
     }
+
+    window.addEventListener('message',event=>{
+      if(event.origin!==location.origin||event.source!==window.parent)return;
+      const payload=event.data;
+      if(!payload||payload.type!=='hermesui:bookmark-browser-result')return;
+      if(fallbackCountdownTimer!==null){
+        clearTimeout(fallbackCountdownTimer);
+        fallbackCountdownTimer=null;
+      }
+      action.hidden=false;
+      title.textContent=payload.opened?'Opened in browser':'Browser blocked';
+      copy.textContent=payload.opened?'You can return here anytime.':'Choose Open in browser to continue.';
+    });
 
     const browserToken=params.get('browser')||'';
     const bookmarkToken=params.get('bookmark')||'';

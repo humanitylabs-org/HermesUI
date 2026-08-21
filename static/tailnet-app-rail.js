@@ -8,6 +8,7 @@
   const FRAME_CHECK_PATH='/frame-check/';
   const FRAME_INLINE_DECISION_TTL_MS=6*60*60*1000;
   const FRAME_BROWSER_DECISION_TTL_MS=5*60*1000;
+  const BROWSER_FALLBACK_DELAY_MS=3000;
   const URL_SCHEME_RE=/^[a-z][a-z0-9+.-]*:/i;
   const GROUPS={
     company:{label:'work app',plural:'work apps',icon:'company'},
@@ -55,6 +56,8 @@
   let longPress=null;
   let suppressBookmarkClick='';
   let frameDecisions=readFrameDecisions();
+  let browserFallbackTimer=null;
+  let browserFallbackSequence=0;
 
 
   function normalizeBookmarkUrl(raw){
@@ -232,6 +235,7 @@
   }
 
   function activateHermes({remember=true,openMobileMenu=false}={}){
+    cancelBrowserFallback();
     hideTooltip();
     closeBookmarkMenu();
     activeId='';
@@ -256,6 +260,7 @@
 
   function activateApp(app,{bookmarkGeneration=''}={}){
     if(!workspace||!frame)return;
+    cancelBrowserFallback();
     const token=bookmarkToken(app);
     hideTooltip();
     closeBookmarkMenu();
@@ -297,8 +302,54 @@
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:app.id,label:app.label}}));
   }
 
-  function openBrowserTab(href){
-    try{return window.open(href,'_blank','noopener,noreferrer');}catch(_){return null;}
+  function cancelBrowserFallback(){
+    browserFallbackSequence+=1;
+    if(browserFallbackTimer!==null){
+      clearTimeout(browserFallbackTimer);
+      browserFallbackTimer=null;
+    }
+  }
+
+  function openBrowserWindow(href){
+    try{
+      const availableWidth=Math.max(720,Number(screen.availWidth)||window.innerWidth||1180);
+      const availableHeight=Math.max(640,Number(screen.availHeight)||window.innerHeight||820);
+      const width=Math.min(1180,Math.max(720,availableWidth-96));
+      const height=Math.min(820,Math.max(640,availableHeight-96));
+      const left=Math.max(0,Math.round((availableWidth-width)/2));
+      const top=Math.max(0,Math.round((availableHeight-height)/2));
+      const features=`popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`;
+      const opened=window.open(href,'_blank',features);
+      if(opened){
+        try{opened.opener=null;}catch(_){}
+        try{opened.focus();}catch(_){}
+      }
+      return opened;
+    }catch(_){return null;}
+  }
+
+  function notifyBrowserFallbackResult(opened){
+    try{
+      frame.contentWindow.postMessage({
+        type:'hermesui:bookmark-browser-result',
+        opened:Boolean(opened)
+      },location.origin);
+    }catch(_){}
+  }
+
+  function scheduleBrowserFallback(app){
+    cancelBrowserFallback();
+    const sequence=browserFallbackSequence;
+    browserFallbackTimer=window.setTimeout(()=>{
+      browserFallbackTimer=null;
+      if(
+        sequence!==browserFallbackSequence||
+        activeId!==app.id||
+        frame.dataset.tailnetAppId!==app.id||
+        frame.dataset.browserFallback!=='true'
+      )return;
+      notifyBrowserFallbackResult(openBrowserWindow(app.href));
+    },BROWSER_FALLBACK_DELAY_MS);
   }
 
   function activateBrowserFallback(app,{open=true,reopen=false}={}){
@@ -308,21 +359,21 @@
     activeId=app.id;
     activeBookmarkNavigation=null;
     const alreadyShowing=frame.dataset.tailnetAppId===app.id&&frame.dataset.browserFallback==='true';
-    if(open&&(!alreadyShowing||reopen)){
-      openBrowserTab(app.href);
-    }
+    const shouldOpen=open&&(!alreadyShowing||reopen);
+    cancelBrowserFallback();
     frame.dataset.tailnetAppId=app.id;
     frame.dataset.tailnetFrameKey=`browser:${bookmarkToken(app)}`;
     frame.dataset.browserFallback='true';
     frame.title=`${app.label} — browser fallback`;
-    if(!alreadyShowing)frame.src=app.browserHref;
-    workspace.setAttribute('aria-label',`${app.label} opened in browser`);
+    if(!alreadyShowing||reopen)frame.src=app.browserHref;
+    workspace.setAttribute('aria-label',`${app.label} will open in browser`);
     if(wizardHome)wizardHome.hidden=true;
     if(frame)frame.hidden=false;
     workspace.hidden=false;
     root.setAttribute('data-tailnet-view','external');
     markSelected(app.id);
     closeSessionsOverlay();
+    if(shouldOpen)scheduleBrowserFallback(app);
     try{sessionStorage.setItem(STORAGE_KEY,app.id);}catch(_){}
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{
       id:app.id,

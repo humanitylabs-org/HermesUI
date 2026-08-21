@@ -99,8 +99,11 @@ def test_work_and_web_entries_are_browser_local_panel_buttons():
     assert "link.setAttribute('aria-haspopup','menu')" in bookmark_renderer
     assert "FRAME_DECISION_STORAGE_KEY" in JS
     assert "FRAME_CHECK_PATH='/frame-check/'" in JS
-    assert "window.open(href,'_blank','noopener,noreferrer')" in JS
-    assert "does not support the in-app panel" in FRAME_BRIDGE
+    assert "const BROWSER_FALLBACK_DELAY_MS=3000" in JS
+    assert "window.open(href,'_blank',features)" in JS
+    assert "popup=yes" in JS
+    assert "Not supported here" in FRAME_BRIDGE
+    assert "Opening in " in FRAME_BRIDGE
 
 
 def test_browser_only_frame_decisions_are_rechecked_after_checker_cache_window():
@@ -171,13 +174,16 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "activateBookmark(app)" in JS
     assert "privateAdd.addEventListener('click',()=>activateApp(privateMarketplace))" in JS
     fallback = JS[JS.index("function activateBrowserFallback"):JS.index("function activateBookmark")]
-    assert "openBrowserTab(app.href)" in fallback
+    assert "const shouldOpen=open&&(!alreadyShowing||reopen)" in fallback
+    assert "if(!alreadyShowing||reopen)frame.src=app.browserHref" in fallback
+    assert "if(shouldOpen)scheduleBrowserFallback(app)" in fallback
     activation = JS[JS.index("function activateBookmark"):JS.index("function appIcon")]
     assert "activateBrowserFallback(app,{reopen:true})" in activation
     assert "if(activeId===app.id&&frame.dataset.browserFallback!=='true')" in activation
     assert "reserveBrowserTab" not in activation
     assert "function activateBrowserFallback(app,{open=true,reopen=false}={})" in JS
-    assert "if(open&&(!alreadyShowing||reopen))" in JS
+    assert "cancelBrowserFallback();" in fallback
+    assert "BROWSER_FALLBACK_DELAY_MS" in JS[JS.index("function scheduleBrowserFallback"):JS.index("function activateBrowserFallback")]
     assert "refreshFrameDecision(app).then" not in activation
     assert "reservedBrowserTabs" not in JS
     assert "browserReservationHref" not in JS
@@ -275,8 +281,26 @@ def test_work_web_links_do_not_preopen_a_browser_before_inline_decision():
     assert "activateApp(app,{bookmarkGeneration:generation})" in activation
     assert "decision&&decision.mode==='browser'" in activation
     assert "activateBrowserFallback(app,{reopen:true})" in activation
-    assert "bookmark-fallback=v2" in INDEX
-    assert "bookmark-fallback=v2" in (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
+    assert "bookmark-fallback=v3" in INDEX
+    assert "bookmark-fallback=v3" in (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
+
+
+def test_browser_fallback_countdown_is_delayed_cancellable_and_accessible():
+    schedule = JS[JS.index("function scheduleBrowserFallback"):JS.index("function activateBrowserFallback")]
+    assert "window.setTimeout" in schedule
+    assert "BROWSER_FALLBACK_DELAY_MS" in schedule
+    assert "openBrowserWindow(app.href)" in schedule
+    assert "frame.dataset.browserFallback!=='true'" in schedule
+    assert "type:'hermesui:bookmark-browser-result'" in JS
+    assert "cancelBrowserFallback();\n    hideTooltip();" in JS
+    assert "cancelBrowserFallback();\n    const token=bookmarkToken(app);" in JS
+    assert 'aria-live="assertive"' in FRAME_BRIDGE
+    assert "let remaining=3" in FRAME_BRIDGE
+    assert "fallbackCountdownTimer=setTimeout(tick,1000)" in FRAME_BRIDGE
+    assert "title.textContent='Not supported here'" in FRAME_BRIDGE
+    assert "action.hidden=true" in FRAME_BRIDGE
+    assert "copy.textContent='Opening…'" in FRAME_BRIDGE
+    assert "Choose Open in browser to continue." in FRAME_BRIDGE
 
 
 def test_app_tooltips_escape_the_clipped_rail_and_bookmarks_have_two_actions():
@@ -406,7 +430,7 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v3&bookmark-fallback=v2"'
+        '&overlay=wizard-canvas-v3&bookmark-fallback=v3"'
         in INDEX
     )
     assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__"' in INDEX
