@@ -146,8 +146,8 @@
     const label=typeof raw.label==='string'?raw.label.trim():'';
     const href=normalizeBookmarkUrl(raw.href);
     if(!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id)||!label||label.length>48||!href)return null;
-    const frameHref=new URL(`/tailnet-frame/?bookmark=${encodeURIComponent(`${group}:${id}`)}`,location.origin).href;
-    const browserHref=new URL(`/tailnet-frame/?browser=${encodeURIComponent(`${group}:${id}`)}`,location.origin).href;
+    const frameHref=new URL(`/tailnet-frame/?bookmark=${encodeURIComponent(`${group}:${id}`)}&handoff=countdown-v2`,location.origin).href;
+    const browserHref=new URL(`/tailnet-frame/?browser=${encodeURIComponent(`${group}:${id}`)}&handoff=countdown-v2`,location.origin).href;
     return {id,label,href,frameHref,browserHref,group,icon:GROUPS[group].icon};
   }
 

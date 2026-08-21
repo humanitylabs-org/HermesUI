@@ -34,7 +34,7 @@ const SHELL_ASSETS = [
   './static/messages.js' + VQ,
   './static/sessions.js' + VQ,
   './static/session-swipe-navigation.js' + VQ,
-  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v3&bookmark-fallback=v3',
+  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v3&bookmark-fallback=v4',
   './static/tailnet-app-manager.js' + VQ,
   './static/panels.js' + VQ,
   './static/commands.js' + VQ,

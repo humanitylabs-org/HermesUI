@@ -12,8 +12,8 @@
     iframe[hidden]{display:none}
     .status{position:fixed;inset:0;z-index:2;display:grid;place-items:center;background:#f7f7f4;text-align:center;padding:24px}
     .status[hidden]{display:none}
-    .status-card{max-width:360px}
-    .status-title{font-size:20px;font-weight:720;letter-spacing:-.015em;margin:0 0 8px}
+    .status-card{max-width:420px}
+    .status-title{font-size:22px;font-weight:720;letter-spacing:-.015em;margin:0 0 8px}
     .status-copy{color:#666;font-size:16px;margin:0}
     .countdown-number{color:#7357c6;font-size:1.25em;font-weight:760;font-variant-numeric:tabular-nums}
     .status-action{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:18px;padding:10px 16px;border-radius:9px;background:#7357c6;color:#fff;text-decoration:none;font-weight:650}
@@ -113,7 +113,7 @@
       const number=document.createElement('strong');
       number.className='countdown-number';
       number.textContent=String(value);
-      copy.replaceChildren(document.createTextNode('Opening in '),number,document.createTextNode('…'));
+      title.replaceChildren(document.createTextNode('Opening in your browser in '),number,document.createTextNode('…'));
     }
 
     function startFallbackCountdown(){
@@ -128,7 +128,7 @@
           return;
         }
         fallbackCountdownTimer=null;
-        copy.textContent='Opening…';
+        title.textContent='Opening in your browser…';
         action.hidden=false;
       };
       fallbackCountdownTimer=setTimeout(tick,1000);
@@ -138,7 +138,7 @@
       document.title=`${app.label} — browser`;
       frame.hidden=true;
       status.hidden=false;
-      title.textContent='Not supported here';
+      copy.hidden=true;
       action.href=app.href;
       action.hidden=true;
       manualAction.hidden=true;
@@ -155,8 +155,7 @@
         fallbackCountdownTimer=null;
       }
       action.hidden=false;
-      title.textContent=payload.opened?'Opened in browser':'Browser blocked';
-      copy.textContent=payload.opened?'You can return here anytime.':'Choose Open in browser to continue.';
+      title.textContent=payload.opened?'Opened in browser':'Popup blocked';
     });
 
     const browserToken=params.get('browser')||'';
