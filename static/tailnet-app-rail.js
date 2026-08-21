@@ -791,6 +791,12 @@
     privateAdd.addEventListener('click',()=>activateApp(privateMarketplace));
     companyAdd.addEventListener('click',()=>void addSavedApp('company'));
     publicAdd.addEventListener('click',()=>void addSavedApp('public'));
+    document.addEventListener('hermesui:tailnet-app-selected',event=>{
+      const id=event&&event.detail&&event.detail.id;
+      if(!id||id==='hermes-ui')return;
+      activeId=id;
+      if(orbHome)orbHome.hidden=true;
+    });
     savedGroups=readSavedGroups();
     renderSavedGroup('company');
     renderSavedGroup('public');
