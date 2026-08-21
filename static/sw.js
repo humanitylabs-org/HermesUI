@@ -7,7 +7,7 @@
 
 // Cache version is injected by the server at request time (routes.py /sw.js handler).
 // Bumps automatically whenever the git commit changes — no manual edits needed.
-// HermesUI frontend delivery marker: wizard-os-home-v4. This intentionally
+// HermesUI frontend delivery marker: wizard-os-home-v5. This intentionally
 // changes the worker bytes so hot frontend deployments refresh an existing
 // process's shell cache without interrupting active agent runs.
 const CACHE_NAME = 'hermes-shell-__WEBUI_VERSION__';
@@ -25,7 +25,7 @@ const CACHE_NAME = 'hermes-shell-__WEBUI_VERSION__';
 // Navigations populate './' only after a successful non-redirect network load.
 const VQ = '?v=__WEBUI_VERSION__';
 const SHELL_ASSETS = [
-  './static/style.css' + VQ + '&overlay=wizard-home-v4',
+  './static/style.css' + VQ + '&overlay=wizard-home-v5',
   './static/pwa-startup.js' + VQ,
   './static/boot.js' + VQ,
   './static/assistant_turn_anchors.js' + VQ,
@@ -33,7 +33,7 @@ const SHELL_ASSETS = [
   './static/messages.js' + VQ,
   './static/sessions.js' + VQ,
   './static/session-swipe-navigation.js' + VQ,
-  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-home-v4',
+  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-home-v5',
   './static/tailnet-app-manager.js' + VQ,
   './static/panels.js' + VQ,
   './static/commands.js' + VQ,
@@ -54,6 +54,7 @@ const SHELL_ASSETS = [
   './static/wizard-hat-maskable-512.png',
   './static/wizard-hat-apple-touch.png',
   './static/wizard-hat.ico',
+  './static/wizard-home-caustic-v5.webp',
   './manifest.json',
 ];
 

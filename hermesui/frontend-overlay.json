@@ -46,7 +46,7 @@
       "upstream_sha256": "b883cc5f4e2fa5ee01cc87e1ed1546ba9ab47079632ce692a77cfa65178bb6d6"
     },
     {
-      "hermesui_sha256": "c03548de8ee59c07e9f59ca0a8c1368a66a74c6f1e28f6cbf0b11eb63f7329d1",
+      "hermesui_sha256": "10467be531d9a203180f719974c7d05eb0e6efb0ffa716da4bdf33ae0c7d5ae0",
       "path": "static/index.html",
       "upstream_sha256": "4850e0f609c56ef5619dcb023f95398224b053fcca6b1125d4f8a2923f9b2a3c"
     },
@@ -96,12 +96,12 @@
       "upstream_sha256": "087f2a5d42fa71bceaa650138875d2cb1ed41129ef58f0d749072eec0d395c2f"
     },
     {
-      "hermesui_sha256": "335efef81497a447cfd4d2444b57624d00db891f2b538448060550ab6ae25aca",
+      "hermesui_sha256": "8e3734ee545d130c63b417b1a94928483856167b5c94d36b4f5fe935270c86a6",
       "path": "static/style.css",
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },
     {
-      "hermesui_sha256": "bc2cbc6efc141d4655efe2051d1a5098ca3cd5a8f809ae434f204675807fa9a0",
+      "hermesui_sha256": "488702303cf4bc19fbd319988b9428816abeb1d21182cfeb8d973b935548479c",
       "path": "static/sw.js",
       "upstream_sha256": "cfdc35b1dd3f20f9ef8e885008dd76c3bcd2fe3deb61c1708f2e6d88514e2ff8"
     },
@@ -168,6 +168,11 @@
     {
       "hermesui_sha256": "505c29f47fc20e495726762f0f721983ea94f92bbd0932ea71cf422d557dbadf",
       "path": "static/wizard-hat.svg",
+      "upstream_sha256": null
+    },
+    {
+      "hermesui_sha256": "da6b8f680a066eca615325b760106fdbbfa8ea2fbb968aa603c8a320874520c3",
+      "path": "static/wizard-home-caustic-v5.webp",
       "upstream_sha256": null
     }
   ],
