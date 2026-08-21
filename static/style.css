@@ -2202,6 +2202,17 @@
   .tailnet-app-manager-notice{max-width:1440px;min-height:18px;margin:0 auto 10px;color:var(--muted);font-size:12px;font-weight:650;line-height:1.45;}
   .tailnet-app-manager-notice.is-error{color:var(--danger,#f87171);}
   .tailnet-app-manager-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:10px;max-width:1440px;margin:0 auto;padding-bottom:24px;}
+  .tailnet-app-manager-hidden{max-width:1440px;margin:0 auto 24px;border-top:1px solid var(--border);}
+  .tailnet-app-manager-hidden[hidden]{display:none!important;}
+  .tailnet-app-manager-hidden summary{display:flex;align-items:center;gap:8px;width:max-content;padding:13px 0 8px;cursor:pointer;color:var(--muted);font-size:12px;font-weight:750;list-style-position:inside;}
+  .tailnet-app-manager-hidden-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;box-sizing:border-box;border-radius:999px;background:var(--hover-bg);color:var(--text);font-size:11px;}
+  .tailnet-app-manager-hidden-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:8px;padding:2px 0 10px;}
+  .tailnet-hidden-route{display:flex;align-items:center;gap:12px;min-width:0;padding:10px 11px;border:1px solid var(--border);border-radius:10px;background:color-mix(in srgb,var(--surface) 72%,transparent);}
+  .tailnet-hidden-route-copy{min-width:0;flex:1 1 auto;}
+  .tailnet-hidden-route-copy strong,.tailnet-hidden-route-copy span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tailnet-hidden-route-copy strong{font-size:12px;line-height:1.35;}
+  .tailnet-hidden-route-copy span{margin-top:2px;color:var(--muted);font-size:10px;line-height:1.35;}
+  .tailnet-hidden-route code{flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;}
   .tailnet-managed-app{display:flex;flex-direction:column;gap:11px;min-width:0;padding:13px;border:1px solid var(--border);border-radius:11px;background:color-mix(in srgb,var(--surface) 94%,transparent);}
   .tailnet-managed-app-top{display:flex;align-items:flex-start;gap:11px;min-width:0;}
   .tailnet-managed-app-icon{display:flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;border:1px solid var(--border);border-radius:10px;background:var(--hover-bg);color:var(--accent);}

@@ -26,6 +26,9 @@ def test_native_manager_panel_is_part_of_the_tailnet_workspace():
     rail = INDEX.index('<nav class="rail tailnet-app-rail"')
     assert workspace < frame < manager < rail
     assert 'id="tailnetAppManagerList"' in INDEX
+    assert 'id="tailnetAppManagerHidden"' in INDEX
+    assert 'id="tailnetAppManagerHiddenCount"' in INDEX
+    assert 'id="tailnetAppManagerHiddenList"' in INDEX
     assert '.tailnet-app-workspace iframe[hidden]{display:none!important;}' in CSS
     assert '.tailnet-app-manager[hidden]{display:none!important;}' in CSS
     assert 'id="tailnetAppManagerOrigin"' in INDEX
@@ -90,3 +93,15 @@ def test_manager_copy_is_concise_and_cards_expand_to_four_columns():
     assert "Start at boot" not in JS
     assert "setAutostart" not in JS
     assert '@container(min-width:680px){.tailnet-app-manager-list{grid-template-columns:repeat(4,minmax(0,1fr));}}' in CSS
+
+
+def test_hidden_routes_are_transparent_but_read_only_and_collapsed():
+    assert '<details class="tailnet-app-manager-hidden" id="tailnetAppManagerHidden" hidden>' in INDEX
+    assert 'function managedHiddenRoutes()' in JS
+    assert 'function renderHiddenRoutes()' in JS
+    assert "statusPayload.serve.hiddenRoutes" in JS
+    assert "hiddenPanel.hidden=!routes.length" in JS
+    hidden_render = JS[JS.index('function renderHiddenRoutes()'):JS.index('function managedApps()')]
+    assert "document.createElement('button')" not in hidden_render
+    assert "runAction(" not in hidden_render
+    assert "changePrivateApp(" not in hidden_render

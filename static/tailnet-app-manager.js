@@ -17,8 +17,11 @@
   const originLink=document.getElementById('tailnetAppManagerOrigin');
   const notice=document.getElementById('tailnetAppManagerNotice');
   const list=document.getElementById('tailnetAppManagerList');
+  const hiddenPanel=document.getElementById('tailnetAppManagerHidden');
+  const hiddenCount=document.getElementById('tailnetAppManagerHiddenCount');
+  const hiddenList=document.getElementById('tailnetAppManagerHiddenList');
   const privateLinks=document.getElementById('tailnetAppLinks');
-  if(!workspace||!frame||!panel||!managerButton||!refreshButton||!originLink||!notice||!list||!privateLinks)return;
+  if(!workspace||!frame||!panel||!managerButton||!refreshButton||!originLink||!notice||!list||!hiddenPanel||!hiddenCount||!hiddenList||!privateLinks)return;
 
   const nodeUrl=new URL('/',location.origin);
   originLink.href=nodeUrl.href;
@@ -185,6 +188,40 @@
 
   function approvedKeys(){return new Set(approvedApps.map(app=>app.sourceKey));}
 
+  function managedHiddenRoutes(){
+    const routes=statusPayload&&statusPayload.serve&&statusPayload.serve.hiddenRoutes;
+    if(!Array.isArray(routes))return [];
+    const seen=new Set();
+    return routes.filter(route=>{
+      const path=route&&typeof route.path==='string'?route.path.trim():'';
+      if(!path||seen.has(path))return false;
+      seen.add(path);
+      return true;
+    });
+  }
+
+  function renderHiddenRoutes(){
+    const routes=managedHiddenRoutes();
+    hiddenCount.textContent=String(routes.length);
+    hiddenPanel.hidden=!routes.length;
+    hiddenList.replaceChildren();
+    routes.forEach(route=>{
+      const row=document.createElement('div');
+      row.className='tailnet-hidden-route';
+      const copy=document.createElement('div');
+      copy.className='tailnet-hidden-route-copy';
+      const name=document.createElement('strong');
+      name.textContent=String(route.name||route.path||'Internal route');
+      const description=document.createElement('span');
+      description.textContent=String(route.description||'Internal Tailnet route');
+      const path=document.createElement('code');
+      path.textContent=String(route.path||'');
+      copy.append(name,description);
+      row.append(copy,path);
+      hiddenList.appendChild(row);
+    });
+  }
+
   function managedApps(){
     if(!statusPayload||!Array.isArray(statusPayload.apps))return [];
     const seen=new Set();
@@ -263,6 +300,7 @@
     const apps=managedApps();
     const pinned=pinnedApps();
     const approved=approvedKeys();
+    renderHiddenRoutes();
     list.replaceChildren();
     if(!apps.length){
       const empty=document.createElement('div');
