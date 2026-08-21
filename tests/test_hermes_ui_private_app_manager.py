@@ -53,6 +53,13 @@ def test_manager_replaces_legacy_apps_manager_card_without_removing_fallback_con
     assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__"' in INDEX
 
 
+def test_detected_routes_share_stable_identity_with_existing_private_apps():
+    assert "sourceKey.length>500" in RAIL
+    assert "link.dataset.tailnetAppSourceKey=app.sourceKey" in RAIL
+    assert "occupiedSourceKeys.has(app.sourceKey)" in JS
+    assert "pinned.sourceKeys.has(app.actionKey)" in JS
+
+
 def test_service_worker_delivers_both_private_app_scripts_without_caching_apis():
     assert "'./static/tailnet-app-rail.js' + VQ" in SW
     assert "'./static/tailnet-app-manager.js' + VQ" in SW

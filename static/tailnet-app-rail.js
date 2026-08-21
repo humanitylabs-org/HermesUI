@@ -63,8 +63,9 @@
     const label=typeof raw.label==='string'?raw.label.trim():'';
     const href=typeof raw.href==='string'?raw.href.trim():'';
     const frameHref=typeof raw.frameHref==='string'?raw.frameHref.trim():'';
+    const sourceKey=typeof raw.sourceKey==='string'?raw.sourceKey.trim():'';
     if(!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id)||!label||label.length>48)return null;
-    if(!href||!frameHref)return null;
+    if(!href||!frameHref||sourceKey.length>500)return null;
     let url;
     let frameUrl;
     try{
@@ -73,7 +74,7 @@
     }catch(_){return null;}
     if(url.protocol!=='https:'&&url.origin!==location.origin)return null;
     if(frameUrl.origin!==location.origin)return null;
-    return {id,label,href:url.href,frameHref:frameUrl.href,icon:ICONS[raw.icon]?raw.icon:'link'};
+    return {id,label,href:url.href,frameHref:frameUrl.href,...(sourceKey?{sourceKey}:{}),icon:ICONS[raw.icon]?raw.icon:'link'};
   }
 
   function normalizeBookmarkUrl(raw){
@@ -412,6 +413,7 @@
     link.className='rail-btn tailnet-app-link has-tooltip';
     link.type='button';
     link.dataset.tailnetAppId=app.id;
+    if(app.sourceKey)link.dataset.tailnetAppSourceKey=app.sourceKey;
     link.dataset.tooltip=app.label;
     link.setAttribute('aria-label',app.label);
     link.addEventListener('click',()=>activateApp(app));

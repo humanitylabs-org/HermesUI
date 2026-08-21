@@ -84,13 +84,18 @@
 
   function renderApprovedApps(){
     privateLinks.querySelectorAll('[data-private-dynamic="true"]').forEach(node=>node.remove());
-    const occupied=new Set(
+    const occupiedIds=new Set(
       Array.from(privateLinks.querySelectorAll('[data-tailnet-app-id]:not([data-private-dynamic="true"])'))
         .map(node=>node.dataset.tailnetAppId)
         .filter(Boolean)
     );
+    const occupiedSourceKeys=new Set(
+      Array.from(privateLinks.querySelectorAll('[data-tailnet-app-source-key]:not([data-private-dynamic="true"])'))
+        .map(node=>node.dataset.tailnetAppSourceKey)
+        .filter(Boolean)
+    );
     approvedApps.forEach(app=>{
-      if(occupied.has(app.id))return;
+      if(occupiedIds.has(app.id)||occupiedSourceKeys.has(app.sourceKey))return;
       const button=document.createElement('button');
       button.className='rail-btn tailnet-app-link has-tooltip';
       button.type='button';
@@ -154,12 +159,12 @@
     return !BLOCKED_PATHS.has(path);
   }
 
-  function pinnedIds(){
-    return new Set(
-      Array.from(privateLinks.querySelectorAll('[data-tailnet-app-id]:not([data-private-dynamic="true"])'))
-        .map(node=>node.dataset.tailnetAppId)
-        .filter(id=>id&&id!=='apps-manager')
-    );
+  function pinnedApps(){
+    const nodes=Array.from(privateLinks.querySelectorAll('[data-tailnet-app-id]:not([data-private-dynamic="true"])'));
+    return {
+      ids:new Set(nodes.map(node=>node.dataset.tailnetAppId).filter(id=>id&&id!=='apps-manager')),
+      sourceKeys:new Set(nodes.map(node=>node.dataset.tailnetAppSourceKey).filter(Boolean))
+    };
   }
 
   function approvedKeys(){return new Set(approvedApps.map(app=>app.sourceKey));}
@@ -177,9 +182,9 @@
   }
 
   function updateBadge(apps=managedApps()){
-    const pinned=pinnedIds();
+    const pinned=pinnedApps();
     const approved=approvedKeys();
-    const count=apps.filter(app=>appIsEligible(app)&&!pinned.has(app.id)&&!approved.has(app.actionKey)).length;
+    const count=apps.filter(app=>appIsEligible(app)&&!pinned.ids.has(app.id)&&!pinned.sourceKeys.has(app.actionKey)&&!approved.has(app.actionKey)).length;
     badge.textContent=count>9?'9+':String(count);
     badge.hidden=count===0;
     managerButton.dataset.tooltip=count?`Manage private apps · ${count} detected`:'Manage private apps';
@@ -248,7 +253,7 @@
 
   function renderStatus(){
     const apps=managedApps();
-    const pinned=pinnedIds();
+    const pinned=pinnedApps();
     const approved=approvedKeys();
     list.replaceChildren();
     updateBadge(apps);
@@ -281,7 +286,7 @@
       top.append(icon,copy,health);
       const state=document.createElement('div');
       state.className='tailnet-managed-app-state';
-      const isPinned=pinned.has(app.id);
+      const isPinned=pinned.ids.has(app.id)||pinned.sourceKeys.has(app.actionKey);
       const isApproved=approved.has(app.actionKey);
       state.textContent=isPinned?'Pinned in PRIVATE':(isApproved?'Shown in PRIVATE':'Detected · not shown in PRIVATE');
       const actions=document.createElement('div');
