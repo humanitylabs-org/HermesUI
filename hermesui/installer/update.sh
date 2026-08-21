@@ -40,7 +40,7 @@ fi
 
 helper_dir="$(mktemp -d "${TMPDIR:-/tmp}/hermesui-update-helper.XXXXXX")"
 tag_ref="refs/hermesui-update/tag-$$"
-for helper in tailnet-setup.sh acquire-lifecycle-lock.py stop-owned-process.py systemd-start-owned.py systemd-launcher-unit.py owned-path-op.py; do
+for helper in tailnet-setup.sh acquire-lifecycle-lock.py stop-owned-process.py systemd-start-owned.py systemd-launcher-unit.py runtime-home-guard.py owned-path-op.py; do
   cp "$INSTALLER_DIR/$helper" "$helper_dir/$helper"
 done
 chmod 0700 "$helper_dir/tailnet-setup.sh"

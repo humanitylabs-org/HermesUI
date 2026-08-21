@@ -200,6 +200,8 @@ def verify_owned_process(
     port: int,
     systemd_unit: str | None = None,
     allowed_runtime_identities: frozenset[tuple[str, str]] | None = None,
+    hermes_home: Path | None = None,
+    profile: str | None = None,
 ) -> None:
     proc = Path("/proc") / str(pid)
     if proc.stat().st_uid != os.getuid():
@@ -216,6 +218,18 @@ def verify_owned_process(
         "HERMES_WEBUI_HOST": "127.0.0.1",
         "HERMES_WEBUI_PORT": str(port),
     }
+    if (hermes_home is None) != (profile is None):
+        raise RuntimeError("Hermes home and profile ownership checks must be supplied together")
+    if hermes_home is not None and profile is not None:
+        if profile != "default":
+            raise RuntimeError("v0.2.2 standalone installation supports only the default Hermes profile")
+        required_env.update(
+            {
+                "HERMESUI_MODE": "standalone",
+                "HERMESUI_PROFILE": profile,
+                "HERMES_HOME": str(hermes_home.expanduser().resolve(strict=False)),
+            }
+        )
     for key, expected in required_env.items():
         if environ.get(key) != expected:
             raise RuntimeError(f"service process failed the {key} ownership check")
@@ -328,6 +342,8 @@ def stop_owned_process(
     systemd_unit: str | None = None,
     systemctl: str | None = None,
     allowed_runtime_identities: frozenset[tuple[str, str]] | None = None,
+    hermes_home: Path | None = None,
+    profile: str | None = None,
 ) -> None:
     if pid <= 1:
         raise RuntimeError("systemd returned an invalid MainPID")
@@ -340,6 +356,8 @@ def stop_owned_process(
             port,
             systemd_unit,
             allowed_runtime_identities,
+            hermes_home,
+            profile,
         )
         if (systemd_unit is None) != (systemctl is None):
             raise RuntimeError("systemd unit and systemctl must be supplied together")
@@ -374,6 +392,8 @@ def main() -> int:
     parser.add_argument("--verify-only", action="store_true")
     parser.add_argument("--systemd-unit")
     parser.add_argument("--systemctl")
+    parser.add_argument("--hermes-home", type=Path)
+    parser.add_argument("--profile")
     parser.add_argument(
         "--runtime-identity",
         action="append",
@@ -399,6 +419,8 @@ def main() -> int:
             args.systemd_unit,
             args.systemctl,
             frozenset(identities) if identities else None,
+            args.hermes_home,
+            args.profile,
         )
         return 0
     except Exception as exc:

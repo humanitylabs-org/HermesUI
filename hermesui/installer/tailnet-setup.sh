@@ -25,6 +25,7 @@ SERVE_CAS="${HERMESUI_SERVE_CAS_HELPER:-${INSTALLER_DIR}/tailscale-serve-cas.py}
 PROCESS_STOP="${HERMESUI_PROCESS_STOP:-${INSTALLER_DIR}/stop-owned-process.py}"
 SERVICE_START="${HERMESUI_SERVICE_START:-${INSTALLER_DIR}/systemd-start-owned.py}"
 LAUNCHER_UNIT="${HERMESUI_LAUNCHER_UNIT_HELPER:-${INSTALLER_DIR}/systemd-launcher-unit.py}"
+RUNTIME_GUARD="${HERMESUI_RUNTIME_HOME_GUARD:-${INSTALLER_DIR}/runtime-home-guard.py}"
 LOCK_HELPER="${HERMESUI_LIFECYCLE_LOCK_HELPER:-${INSTALLER_DIR}/acquire-lifecycle-lock.py}"
 SYSTEMD_RUN="${HERMESUI_SYSTEMD_RUN:-systemd-run}"
 LIFECYCLE_LOCK="${HERMESUI_LIFECYCLE_LOCK_FILE:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/hermesui-${UID}/lifecycle.lock}"
@@ -38,6 +39,23 @@ acquire_lifecycle_lock() {
 }
 
 acquire_lifecycle_lock "$@"
+
+requested_mode="${HERMESUI_MODE:-standalone}"
+case "$requested_mode" in
+  standalone) ;;
+  external)
+    printf 'ERROR: HermesUI external/client-only mode is not supported safely in v0.2.2 because the current backend protocol cannot prove runtime-home and profile identity. Nothing was changed.\n' >&2
+    exit 1
+    ;;
+  isolated)
+    printf 'ERROR: HermesUI isolated mode is not yet supported. Nothing was changed.\n' >&2
+    exit 1
+    ;;
+  *)
+    printf 'ERROR: HERMESUI_MODE must be standalone. Nothing was changed.\n' >&2
+    exit 1
+    ;;
+esac
 
 RUNTIME_COMMIT="$(git -C "$REPO_ROOT" rev-parse --verify HEAD 2>/dev/null)" || runtime_identity_failed=1
 RUNTIME_TREE="$(git -C "$REPO_ROOT" rev-parse --verify 'HEAD^{tree}' 2>/dev/null)" || runtime_identity_failed=1
@@ -72,6 +90,19 @@ unit_preimage_digest=''
 state_installed_digest=''
 unit_installed_digest=''
 tcp_443_created=''
+unit_schema=current
+requested_hermes_home="${HERMES_HOME:-}"
+requested_profile="${HERMES_PROFILE:-default}"
+[[ "$requested_profile" == "default" ]] || {
+  printf 'ERROR: HermesUI v0.2.2 standalone installation supports only the default Hermes profile.\n' >&2
+  exit 1
+}
+default_hermes_home="$(python3 "$RUNTIME_GUARD" normalize "$HOME/.hermes")" || exit 1
+if [[ -n "$requested_hermes_home" ]]; then
+  requested_hermes_home="$(python3 "$RUNTIME_GUARD" normalize "$requested_hermes_home")" || exit 1
+fi
+RESOLVED_HERMES_HOME="${requested_hermes_home:-$default_hermes_home}"
+RESOLVED_PROFILE=default
 
 state_owned=0
 if [[ -e "$STATE_FILE" ]]; then
@@ -81,6 +112,10 @@ if [[ -e "$STATE_FILE" ]]; then
   fi
   saved_port=''
   saved_tcp_443_created=''
+  saved_state_version=''
+  saved_mode=''
+  saved_hermes_home=''
+  saved_profile=''
   state_invalid=0
   while IFS='=' read -r key value; do
     case "$key" in
@@ -90,9 +125,30 @@ if [[ -e "$STATE_FILE" ]]; then
       HERMESUI_TCP_443_CREATED)
         if [[ -n "$saved_tcp_443_created" ]]; then state_invalid=1; else saved_tcp_443_created="$value"; fi
         ;;
+      HERMESUI_STATE_VERSION)
+        if [[ -n "$saved_state_version" ]]; then state_invalid=1; else saved_state_version="$value"; fi
+        ;;
+      HERMESUI_MODE)
+        if [[ -n "$saved_mode" ]]; then state_invalid=1; else saved_mode="$value"; fi
+        ;;
+      HERMESUI_HERMES_HOME)
+        if [[ -n "$saved_hermes_home" ]]; then state_invalid=1; else saved_hermes_home="$value"; fi
+        ;;
+      HERMESUI_PROFILE)
+        if [[ -n "$saved_profile" ]]; then state_invalid=1; else saved_profile="$value"; fi
+        ;;
       *) state_invalid=1 ;;
     esac
   done <"$STATE_FILE"
+  if [[ -z "$saved_state_version$saved_mode$saved_hermes_home$saved_profile" ]]; then
+    unit_schema=legacy
+    saved_hermes_home="$default_hermes_home"
+    saved_profile=default
+  elif [[ "$saved_state_version" != "2" || "$saved_mode" != "standalone" || "$saved_profile" != "default" ]]; then
+    state_invalid=1
+  else
+    saved_hermes_home="$(python3 "$RUNTIME_GUARD" normalize "$saved_hermes_home")" || state_invalid=1
+  fi
   if [[ "$state_invalid" != "0" || ! "$saved_port" =~ ^[0-9]+$ || ! "$saved_tcp_443_created" =~ ^[01]$ ]]; then
     printf 'ERROR: HermesUI install state is invalid; refusing to replace the persisted port with a default.\n' >&2
     exit 1
@@ -101,8 +157,14 @@ if [[ -e "$STATE_FILE" ]]; then
     printf 'ERROR: HERMESUI_PORT does not match the installer-owned port in install.env. Nothing was changed.\n' >&2
     exit 1
   fi
+  if [[ -n "$requested_hermes_home" && "$requested_hermes_home" != "$saved_hermes_home" ]]; then
+    printf 'ERROR: HERMES_HOME does not match the installer-owned runtime home in install.env. Nothing was changed.\n' >&2
+    exit 1
+  fi
   PORT="$saved_port"
   tcp_443_created="$saved_tcp_443_created"
+  RESOLVED_HERMES_HOME="$saved_hermes_home"
+  RESOLVED_PROFILE="$saved_profile"
   state_owned=1
   state_preimage_digest="$("$PATH_OP" digest "$STATE_FILE")" || exit 1
 fi
@@ -258,11 +320,18 @@ rollback_on_exit() {
 }
 
 unit_is_owned() {
+  local -a schema_args
+  if [[ "$unit_schema" == "legacy" ]]; then
+    schema_args=(--legacy)
+  else
+    schema_args=(--hermes-home "$RESOLVED_HERMES_HOME" --profile "$RESOLVED_PROFILE")
+  fi
   "$LAUNCHER_UNIT" verify "$1" \
     --repo-root "$REPO_ROOT" \
     --home "$HOME" \
     --host "$HOST" \
-    --port "$PORT"
+    --port "$PORT" \
+    "${schema_args[@]}"
 }
 
 published_unit_matches() {
@@ -334,7 +403,7 @@ PY
 
 stop_owned_service() {
   local identity
-  local -a identity_args=()
+  local -a identity_args=() runtime_args=()
   query_service_state || return 1
   if [[ "$service_active_state" != "active" ]]; then
     [[ "$service_main_pid" == "0" ]] || return 1
@@ -344,7 +413,10 @@ stop_owned_service() {
   for identity in "$@"; do
     identity_args+=(--runtime-identity "$identity")
   done
-  "$PROCESS_STOP" --pid "$service_main_pid" --repo-root "$REPO_ROOT" --home "$HOME" --port "$PORT" --systemd-unit "$SERVICE_NAME" --systemctl "$SYSTEMCTL" "${identity_args[@]}" || return 1
+  if [[ "$unit_schema" == "current" ]]; then
+    runtime_args=(--hermes-home "$RESOLVED_HERMES_HOME" --profile "$RESOLVED_PROFILE")
+  fi
+  "$PROCESS_STOP" --pid "$service_main_pid" --repo-root "$REPO_ROOT" --home "$HOME" --port "$PORT" --systemd-unit "$SERVICE_NAME" --systemctl "$SYSTEMCTL" "${runtime_args[@]}" "${identity_args[@]}" || return 1
   for _ in $(seq 1 50); do
     query_service_state || return 1
     if [[ "$service_active_state" == "inactive" && "$service_load_state" == "not-found" && "$service_main_pid" == "0" ]]; then
@@ -358,7 +430,7 @@ stop_owned_service() {
 verify_owned_service_pid() {
   local main_pid="$1" identity
   shift
-  local -a identity_args=()
+  local -a identity_args=() runtime_args=()
   [[ "$main_pid" =~ ^[0-9]+$ && "$main_pid" -gt 1 ]] || return 1
   if [[ "$#" == "0" ]]; then
     set -- "$RUNTIME_COMMIT:$RUNTIME_TREE"
@@ -366,7 +438,10 @@ verify_owned_service_pid() {
   for identity in "$@"; do
     identity_args+=(--runtime-identity "$identity")
   done
-  "$PROCESS_STOP" --pid "$main_pid" --repo-root "$REPO_ROOT" --home "$HOME" --port "$PORT" --systemd-unit "$SERVICE_NAME" --systemctl "$SYSTEMCTL" "${identity_args[@]}" --verify-only
+  if [[ "$unit_schema" == "current" ]]; then
+    runtime_args=(--hermes-home "$RESOLVED_HERMES_HOME" --profile "$RESOLVED_PROFILE")
+  fi
+  "$PROCESS_STOP" --pid "$main_pid" --repo-root "$REPO_ROOT" --home "$HOME" --port "$PORT" --systemd-unit "$SERVICE_NAME" --systemctl "$SYSTEMCTL" "${runtime_args[@]}" "${identity_args[@]}" --verify-only
 }
 
 start_owned_service() {
@@ -375,6 +450,8 @@ start_owned_service() {
     --unit "$SERVICE_NAME" \
     --repo-root "$REPO_ROOT" \
     --home "$HOME" \
+    --hermes-home "$RESOLVED_HERMES_HOME" \
+    --profile "$RESOLVED_PROFILE" \
     --port "$PORT"
 }
 
@@ -541,6 +618,8 @@ if [[ -n "$runtime_operation" ]]; then
       ;;
     stop|ensure-inactive)
       if [[ "$runtime_was_active" == "1" ]]; then
+        "$RUNTIME_GUARD" check --hermes-home "$RESOLVED_HERMES_HOME" --allow-pid "$service_main_pid" || \
+          fail "Runtime-only operation found another or ambiguous execution backend using the managed Hermes home. Nothing was stopped."
         stop_owned_service "$expected_runtime_commit:$expected_runtime_tree" || fail "Runtime-only operation could not stop the exact managed runtime safely."
       fi
       printf 'inactive\n'
@@ -598,6 +677,12 @@ elif [[ "$service_main_pid" != "0" ]]; then
   fail "$SERVICE_NAME reported a nonzero MainPID while inactive. Nothing was changed."
 fi
 
+guard_args=(--hermes-home "$RESOLVED_HERMES_HOME")
+if [[ "$managed_running" == "1" ]]; then
+  guard_args+=(--allow-pid "$service_main_pid")
+fi
+python3 "$RUNTIME_GUARD" check "${guard_args[@]}" || exit 1
+
 port_busy="$(python3 - "$HOST" "$PORT" <<'PY'
 import socket, sys
 sock = socket.socket()
@@ -610,7 +695,7 @@ print('1' if busy else '0')
 PY
 )"
 if [[ "$port_busy" == "1" ]]; then
-  [[ "$managed_running" == "1" ]] || fail "Port $PORT is already in use by a process not managed by $SERVICE_NAME. Choose another HERMESUI_PORT."
+  [[ "$managed_running" == "1" ]] || fail "Port $PORT is already in use by a process not managed by $SERVICE_NAME. Nothing was changed."
   current_manifest="$($CURL -fsS --max-time 5 "http://${HOST}:${PORT}/manifest.json" 2>/dev/null || true)"
   python3 - "$current_manifest" <<'PY' || fail "Port is used by $SERVICE_NAME, but its manifest is not HermesUI. Stop and inspect the service before continuing."
 import json, sys
@@ -679,7 +764,8 @@ transaction_started=1
 
 mkdir -p "$STATE_DIR"
 state_tmp="$(mktemp "${STATE_DIR}/.install.env.candidate.XXXXXX")" || fail "Could not create install state candidate."
-printf 'HERMESUI_PORT=%s\nHERMESUI_TCP_443_CREATED=%s\n' "$PORT" "$tcp_443_created" >"$state_tmp"
+printf 'HERMESUI_STATE_VERSION=2\nHERMESUI_MODE=standalone\nHERMESUI_HERMES_HOME=%s\nHERMESUI_PROFILE=%s\nHERMESUI_PORT=%s\nHERMESUI_TCP_443_CREATED=%s\n' \
+  "$RESOLVED_HERMES_HOME" "$RESOLVED_PROFILE" "$PORT" "$tcp_443_created" >"$state_tmp"
 chmod 600 "$state_tmp"
 cp -p "$state_tmp" "$txn_dir/state.installed" || fail "Could not record the managed install state for rollback."
 state_installed_digest="$("$PATH_OP" digest "$txn_dir/state.installed")" || exit 1
@@ -692,10 +778,13 @@ fi
 state_tmp=''
 
 mkdir -p "$SYSTEMD_DIR"
+unit_schema=current
 unit_candidate="$(mktemp "${SYSTEMD_DIR}/hermesui-launcher-candidate-XXXXXX.service")" || fail "Could not create systemd unit candidate."
 "$LAUNCHER_UNIT" write "$unit_candidate" \
   --repo-root "$REPO_ROOT" \
   --home "$HOME" \
+  --hermes-home "$RESOLVED_HERMES_HOME" \
+  --profile "$RESOLVED_PROFILE" \
   --host "$HOST" \
   --port "$PORT" || fail "Could not render the exact systemd launcher."
 if ! "$SYSTEMD_ANALYZE" --user verify "$unit_candidate"; then

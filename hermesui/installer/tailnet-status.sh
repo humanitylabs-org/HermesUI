@@ -19,28 +19,47 @@ PROCESS_STOP="${HERMESUI_PROCESS_STOP:-${INSTALLER_DIR}/stop-owned-process.py}"
 PATH_OP="${HERMESUI_PATH_OP:-${INSTALLER_DIR}/owned-path-op.py}"
 LAUNCHER_UNIT="${HERMESUI_LAUNCHER_UNIT_HELPER:-${INSTALLER_DIR}/systemd-launcher-unit.py}"
 
+RUNTIME_GUARD="${HERMESUI_RUNTIME_HOME_GUARD:-${INSTALLER_DIR}/runtime-home-guard.py}"
+
 requested_port="${HERMESUI_PORT:-}"
 [[ -r "$STATE_FILE" ]] || { printf 'ERROR: HermesUI install.env is missing or unreadable; ownership cannot be verified.\n' >&2; exit 1; }
 saved_port=''
 tcp_443_created=''
+saved_state_version=''
+saved_mode=''
+saved_hermes_home=''
+saved_profile=''
 state_invalid=0
 while IFS='=' read -r key value; do
   case "$key" in
-    HERMESUI_PORT)
-      if [[ -n "$saved_port" ]]; then state_invalid=1; else saved_port="$value"; fi
-      ;;
-    HERMESUI_TCP_443_CREATED)
-      if [[ -n "$tcp_443_created" ]]; then state_invalid=1; else tcp_443_created="$value"; fi
-      ;;
+    HERMESUI_PORT) [[ -z "$saved_port" ]] && saved_port="$value" || state_invalid=1 ;;
+    HERMESUI_TCP_443_CREATED) [[ -z "$tcp_443_created" ]] && tcp_443_created="$value" || state_invalid=1 ;;
+    HERMESUI_STATE_VERSION) [[ -z "$saved_state_version" ]] && saved_state_version="$value" || state_invalid=1 ;;
+    HERMESUI_MODE) [[ -z "$saved_mode" ]] && saved_mode="$value" || state_invalid=1 ;;
+    HERMESUI_HERMES_HOME) [[ -z "$saved_hermes_home" ]] && saved_hermes_home="$value" || state_invalid=1 ;;
+    HERMESUI_PROFILE) [[ -z "$saved_profile" ]] && saved_profile="$value" || state_invalid=1 ;;
     *) state_invalid=1 ;;
   esac
 done <"$STATE_FILE"
+unit_schema=current
+if [[ -z "$saved_state_version$saved_mode$saved_hermes_home$saved_profile" ]]; then
+  unit_schema=legacy
+  saved_mode=standalone
+  saved_hermes_home="$(python3 "$RUNTIME_GUARD" normalize "$HOME/.hermes")" || exit 1
+  saved_profile=default
+elif [[ "$saved_state_version" != "2" || "$saved_mode" != "standalone" || "$saved_profile" != "default" ]]; then
+  state_invalid=1
+else
+  saved_hermes_home="$(python3 "$RUNTIME_GUARD" normalize "$saved_hermes_home")" || state_invalid=1
+fi
 [[ "$state_invalid" == "0" && "$saved_port" =~ ^[0-9]+$ && "$tcp_443_created" =~ ^[01]$ ]] || { printf 'ERROR: invalid HermesUI install state.\n' >&2; exit 1; }
 if [[ -n "$requested_port" && "$requested_port" != "$saved_port" ]]; then
   printf 'ERROR: HERMESUI_PORT does not match the installer-owned port in install.env.\n' >&2
   exit 1
 fi
 PORT="$saved_port"
+RESOLVED_HERMES_HOME="$saved_hermes_home"
+RESOLVED_PROFILE="$saved_profile"
 if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1024 || PORT > 65535 )); then
   printf 'ERROR: invalid HermesUI port in install.env.\n' >&2
   exit 1
@@ -59,11 +78,14 @@ fi
   printf 'ERROR: the HermesUI launcher is not loaded from the exact managed unit path.\n' >&2
   exit 1
 }
+schema_args=(--hermes-home "$RESOLVED_HERMES_HOME" --profile "$RESOLVED_PROFILE")
+[[ "$unit_schema" != "legacy" ]] || schema_args=(--legacy)
 "$LAUNCHER_UNIT" verify "$UNIT_FILE" \
   --repo-root "$REPO_ROOT" \
   --home "$HOME" \
   --host 127.0.0.1 \
-  --port "$PORT"
+  --port "$PORT" \
+  "${schema_args[@]}"
 unit_digest="$("$PATH_OP" digest "$UNIT_FILE")"
 [[ -L "$ENABLE_LINK" && "$("$PATH_OP" readlink "$ENABLE_LINK")" == "$UNIT_FILE" ]] || {
   printf 'ERROR: the HermesUI launcher enablement does not match the managed unit.\n' >&2
@@ -78,7 +100,11 @@ unit_digest="$("$PATH_OP" digest "$UNIT_FILE")"
 "$SYSTEMCTL" --user is-active "$SERVICE_NAME"
 main_pid="$($SYSTEMCTL --user show "$SERVICE_NAME" --property=MainPID --value)"
 [[ "$main_pid" =~ ^[0-9]+$ && "$main_pid" -gt 1 ]] || { printf 'ERROR: systemd returned an invalid HermesUI MainPID.\n' >&2; exit 1; }
-"$PROCESS_STOP" --pid "$main_pid" --repo-root "$REPO_ROOT" --home "$HOME" --port "$PORT" --systemd-unit "$SERVICE_NAME" --systemctl "$SYSTEMCTL" --verify-only
+process_schema_args=()
+if [[ "$unit_schema" == "current" ]]; then
+  process_schema_args=(--hermes-home "$RESOLVED_HERMES_HOME" --profile "$RESOLVED_PROFILE")
+fi
+"$PROCESS_STOP" --pid "$main_pid" --repo-root "$REPO_ROOT" --home "$HOME" --port "$PORT" --systemd-unit "$SERVICE_NAME" --systemctl "$SYSTEMCTL" "${process_schema_args[@]}" --verify-only
 "$CURL" -fsS --max-time 5 "${TARGET}/health"
 
 dns_name="$($TAILSCALE status --self --json | python3 -c 'import json,sys; print(((json.load(sys.stdin).get("Self") or {}).get("DNSName") or "").rstrip("."))')"
@@ -127,6 +153,7 @@ if len(found) != 1:
 PY
 
 public_base="https://${dns_name}${BASE_PATH}/"
+printf 'Mode: standalone\nHermes home: %s\nProfile: %s\n' "$RESOLVED_HERMES_HOME" "$RESOLVED_PROFILE"
 "$CURL" -fsS --max-time 8 "${public_base}health"
 manifest="$($CURL -fsS --max-time 8 "${public_base}manifest.json")"
 python3 - "$manifest" <<'PY'

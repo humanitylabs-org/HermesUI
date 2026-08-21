@@ -142,6 +142,30 @@ rm -f "$HERMESUI_QA_STOPPED_STATE"
 : >"$HERMESUI_QA_SERVICE_STATE"
 SH
 
+cat >"$TMP/bin/runtime-home-guard" <<'PY'
+#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+with Path(os.environ["HERMESUI_QA_LOG"]).open("a", encoding="utf-8") as handle:
+    handle.write("runtime-home-guard " + " ".join(sys.argv[1:]) + "\n")
+
+command = sys.argv[1] if len(sys.argv) > 1 else ""
+if command == "normalize" and len(sys.argv) == 3:
+    print(Path(sys.argv[2]).expanduser().resolve(strict=False))
+elif command == "check":
+    if os.environ.get("HERMESUI_QA_RUNTIME_HOME_CONFLICT", "0") == "1":
+        print(
+            "ERROR: refusing to start a second Hermes/WebUI execution backend "
+            "over the requested HERMES_HOME.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+else:
+    raise SystemExit(2)
+PY
+
 cat >"$TMP/bin/tailscale" <<'SH'
 #!/usr/bin/env bash
 printf 'tailscale %s\n' "$*" >>"$HERMESUI_QA_LOG"
@@ -324,9 +348,10 @@ else
 fi
 SH
 
-chmod +x "$TMP/bin/systemctl" "$TMP/bin/stop-owned-process" "$TMP/bin/start-owned-service" "$TMP/bin/tailscale" "$TMP/bin/curl" "$TMP/bin/hermes" "$TMP/bin/hermesui-rm" "$TMP/bin/path-op" "$TMP/bin/serve-cas" "$TMP/bin/sleep"
+chmod +x "$TMP/bin/systemctl" "$TMP/bin/stop-owned-process" "$TMP/bin/start-owned-service" "$TMP/bin/runtime-home-guard" "$TMP/bin/tailscale" "$TMP/bin/curl" "$TMP/bin/hermes" "$TMP/bin/hermesui-rm" "$TMP/bin/path-op" "$TMP/bin/serve-cas" "$TMP/bin/sleep"
 
 export HOME="$TMP/home"
+export HERMES_HOME="$TMP/home/.hermes"
 export PATH="$TMP/bin:$PATH"
 export HERMESUI_QA_LOG="$LOG"
 export HERMESUI_QA_ROUTE_STATE="$ROUTE_STATE"
@@ -352,6 +377,7 @@ export HERMESUI_QA_REAL_PATH_OP="$ROOT/hermesui/installer/owned-path-op.py"
 export HERMESUI_PATH_OP="$TMP/bin/path-op"
 export HERMESUI_PROCESS_STOP="$TMP/bin/stop-owned-process"
 export HERMESUI_SERVICE_START="$TMP/bin/start-owned-service"
+export HERMESUI_RUNTIME_HOME_GUARD="$TMP/bin/runtime-home-guard"
 export HERMESUI_SERVE_CAS_HELPER="$TMP/bin/serve-cas"
 export HERMESUI_LIFECYCLE_LOCK_FILE="$TMP/lifecycle.lock"
 export HERMESUI_QA_PASSWORD_ROOT_BLOCK=1
@@ -371,6 +397,38 @@ exec 8>&-
 [[ "$lock_status" == "75" ]]
 [[ ! -e "$TMP/systemd/hermesui-launcher.service" && ! -e "$TMP/state/install.env" && ! -e "$ROUTE_STATE" && ! -e "$SERVICE_STATE" ]]
 grep -q 'another HermesUI setup, update, or uninstall is already running' "$TMP/lock-contention.err"
+
+# Unsupported client-only or isolated modes fail before any local or Tailnet
+# discovery/mutation. v0.2.2 intentionally supports standalone only.
+for unsupported_mode in external isolated; do
+  : >"$LOG"
+  export HERMESUI_MODE="$unsupported_mode"
+  if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/mode-${unsupported_mode}.out" 2>"$TMP/mode-${unsupported_mode}.err"; then
+    printf '%s mode unexpectedly succeeded.\n' "$unsupported_mode" >&2
+    exit 1
+  fi
+  [[ ! -e "$TMP/systemd/hermesui-launcher.service" && ! -e "$TMP/state/install.env" && ! -e "$ROUTE_STATE" && ! -e "$SERVICE_STATE" ]]
+  [[ ! -s "$LOG" ]]
+  grep -Eq 'not supported safely|not yet supported' "$TMP/mode-${unsupported_mode}.err"
+done
+unset HERMESUI_MODE
+
+# A same-home execution backend must stop standalone setup before any managed
+# state, service, or route is created. Choosing another port is not offered.
+: >"$LOG"
+export HERMESUI_QA_RUNTIME_HOME_CONFLICT=1
+if "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/runtime-home-conflict.out" 2>"$TMP/runtime-home-conflict.err"; then
+  printf 'Shared runtime-home conflict unexpectedly succeeded.\n' >&2
+  exit 1
+fi
+unset HERMESUI_QA_RUNTIME_HOME_CONFLICT
+[[ ! -e "$TMP/systemd/hermesui-launcher.service" && ! -e "$TMP/state/install.env" && ! -e "$ROUTE_STATE" && ! -e "$SERVICE_STATE" ]]
+grep -q 'refusing to start a second Hermes/WebUI execution backend' "$TMP/runtime-home-conflict.err"
+if grep -qi 'choose another port' "$TMP/runtime-home-conflict.err"; then
+  printf 'Shared runtime-home conflict incorrectly suggested another port.\n' >&2
+  exit 1
+fi
+: >"$LOG"
 
 # A failed Tailscale prerequisite must not execute the suggested state-changing command.
 export HERMESUI_QA_TAILSCALE_STATUS_FAIL=1
@@ -554,6 +612,22 @@ tailscale_calls_before="$(grep -c '^tailscale ' "$LOG" || true)"
 HERMESUI_RUNTIME_OPERATION=probe HERMESUI_EXPECTED_RUNTIME_COMMIT="$runtime_commit" HERMESUI_EXPECTED_RUNTIME_TREE="$runtime_tree" \
   "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/runtime-probe-active.out"
 grep -qx active "$TMP/runtime-probe-active.out"
+
+# A runtime-only stop used by update must rerun the shared-home guard at the
+# mutation boundary. The verified managed PID is allowed, but another or
+# ambiguous same-home backend leaves the managed service active and un-signaled.
+stop_calls_before="$(grep 'stop-owned-process --pid' "$LOG" | grep -vc -- '--verify-only' || true)"
+export HERMESUI_QA_RUNTIME_HOME_CONFLICT=1
+if HERMESUI_RUNTIME_OPERATION=stop HERMESUI_EXPECTED_RUNTIME_COMMIT="$runtime_commit" HERMESUI_EXPECTED_RUNTIME_TREE="$runtime_tree" \
+  "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/runtime-stop-conflict.out" 2>"$TMP/runtime-stop-conflict.err"; then
+  printf 'Shared-home runtime-only stop conflict unexpectedly succeeded.\n' >&2
+  exit 1
+fi
+unset HERMESUI_QA_RUNTIME_HOME_CONFLICT
+stop_calls_after="$(grep 'stop-owned-process --pid' "$LOG" | grep -vc -- '--verify-only' || true)"
+[[ "$stop_calls_after" == "$stop_calls_before" && -e "$SERVICE_STATE" ]]
+grep -q 'Nothing was stopped' "$TMP/runtime-stop-conflict.err"
+
 HERMESUI_RUNTIME_OPERATION=stop HERMESUI_EXPECTED_RUNTIME_COMMIT="$runtime_commit" HERMESUI_EXPECTED_RUNTIME_TREE="$runtime_tree" \
   "$ROOT/hermesui/installer/tailnet-setup.sh" >"$TMP/runtime-stop.out"
 grep -qx inactive "$TMP/runtime-stop.out"
@@ -616,6 +690,7 @@ from pathlib import Path
 import sys
 unit_path = Path(sys.argv[1])
 enable_link = Path(sys.argv[2])
+runtime_home = unit_path.parents[1] / 'home' / '.hermes'
 unit = unit_path.read_text(encoding='utf-8')
 state, log, setup, status, port_err, unit_err, missing_state_err, route_err, foreground_route_err, manual_route_err, foreground_owned_err, mixed_owned_err, funnel_err = [Path(value).read_text(encoding='utf-8') for value in sys.argv[3:]]
 assert enable_link.is_symlink()
@@ -628,17 +703,31 @@ assert 'HERMES_WEBUI_PRESERVE_ENV=1' in unit
 assert 'HERMES_WEBUI_SECURE=1' in unit
 assert 'HERMES_WEBUI_COOKIE_NAME=hermesui_session' in unit
 assert 'HERMES_WEBUI_PROFILE_COOKIE_NAME=hermesui_profile' in unit
+assert 'HERMESUI_MODE=standalone' in unit
+assert 'HERMESUI_PROFILE=default' in unit
+assert f'HERMES_HOME={runtime_home}' in unit
 assert 'HERMES_WEBUI_COOKIE_PATH' not in unit
 assert 'systemd-start-owned.py' in unit
 assert '--unit hermesui.service' in unit
 assert '--port 18993' in unit
-assert state == 'HERMESUI_PORT=18993\nHERMESUI_TCP_443_CREATED=1\n'
+assert state == (
+    'HERMESUI_STATE_VERSION=2\n'
+    'HERMESUI_MODE=standalone\n'
+    f'HERMESUI_HERMES_HOME={runtime_home}\n'
+    'HERMESUI_PROFILE=default\n'
+    'HERMESUI_PORT=18993\n'
+    'HERMESUI_TCP_443_CREATED=1\n'
+)
 assert 'tailscale serve --bg --https=443 --set-path=/hermesUI http://127.0.0.1:18993' in log
 assert 'https://device.tailnet.example.ts.net/hermesUI/' in log
 assert log.count('start-owned-service ') == 3
+assert f'--hermes-home {runtime_home} --profile default --port 18993' in log
 assert 'HermesUI is ready.' in setup
 assert 'URL: https://device.tailnet.example.ts.net/hermesUI/' in setup
 assert 'HermesUI URL: https://device.tailnet.example.ts.net/hermesUI/' in status
+assert 'Mode: standalone' in status
+assert f'Hermes home: {runtime_home}' in status
+assert 'Profile: default' in status
 assert 'already in use' in port_err
 assert 'not managed by HermesUI' in unit_err
 assert 'install.env is missing' in missing_state_err
@@ -872,7 +961,7 @@ PY
 mkdir -p "$TMP/state" "$TMP/systemd"
 printf 'HERMESUI_PORT=18993\nHERMESUI_TCP_443_CREATED=1\n' >"$TMP/state/install.env"
 "$ROOT/hermesui/installer/systemd-launcher-unit.py" write "$TMP/systemd/hermesui-launcher.service" \
-  --repo-root "$ROOT" --home "$TMP/home" --host 127.0.0.1 --port 18993
+  --repo-root "$ROOT" --home "$TMP/home" --host 127.0.0.1 --port 18993 --legacy
 rm -f "$ROUTE_STATE"
 export HERMESUI_QA_SERVE_MODE=foreign HERMESUI_QA_ACTIVE=1
 before_count="$(python3 - "$LOG" <<'PY'
@@ -899,7 +988,7 @@ prepare_owned_install() {
   mkdir -p "$TMP/state" "$TMP/systemd/default.target.wants"
   printf 'HERMESUI_PORT=18993\nHERMESUI_TCP_443_CREATED=1\n' >"$TMP/state/install.env"
   "$ROOT/hermesui/installer/systemd-launcher-unit.py" write "$TMP/systemd/hermesui-launcher.service" \
-    --repo-root "$ROOT" --home "$TMP/home" --host 127.0.0.1 --port 18993
+    --repo-root "$ROOT" --home "$TMP/home" --host 127.0.0.1 --port 18993 --legacy
   rm -f "$ENABLE_LINK"
   rm -f "$STOPPED_STATE"
   ln -s "$TMP/systemd/hermesui-launcher.service" "$ENABLE_LINK"

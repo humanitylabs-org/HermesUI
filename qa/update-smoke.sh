@@ -25,6 +25,7 @@ git -C "$WORK" config user.email 'update-qa@example.invalid'
 for helper in \
   acquire-lifecycle-lock.py \
   owned-path-op.py \
+  runtime-home-guard.py \
   stop-owned-process.py \
   systemd-launcher-unit.py \
   systemd-start-owned.py \
@@ -50,6 +51,10 @@ if [[ "\$operation" != normal ]]; then
       cat "\$HERMESUI_QA_RUNTIME_STATE_FILE"
       ;;
     stop|ensure-inactive)
+      if [[ "\${HERMESUI_QA_RUNTIME_HOME_CONFLICT:-0}" == "1" ]]; then
+        printf 'ERROR: another execution backend uses the managed Hermes home; nothing was stopped.\\n' >&2
+        exit 1
+      fi
       printf 'inactive\\n' >"\$HERMESUI_QA_RUNTIME_STATE_FILE"
       printf 'inactive\\n'
       ;;
@@ -101,6 +106,20 @@ git -C "$WORK" remote add origin "$ORIGIN"
 printf 'base\n' >"$RUNTIME"
 printf '%s:%s\n' "$base_commit" "$base_tree" >"$RUNTIME_IDENTITY"
 printf 'active\n' >"$RUNTIME_STATE"
+: >"$SETUP_LOG"
+
+# Update must remain on the original checkout and keep the current runtime
+# active when the runtime-only stop boundary detects a shared-home conflict.
+export HERMESUI_QA_RUNTIME_HOME_CONFLICT=1
+if "$WORK/hermesui/installer/update.sh" v9.9.8 "$success_commit" >"$TMP/home-conflict.out" 2>"$TMP/home-conflict.err"; then
+  printf 'Shared-home update conflict unexpectedly succeeded.\n' >&2
+  exit 1
+fi
+unset HERMESUI_QA_RUNTIME_HOME_CONFLICT
+[[ "$(git -C "$WORK" symbolic-ref --short HEAD)" == main ]]
+[[ "$(git -C "$WORK" rev-parse HEAD)" == "$base_commit" ]]
+[[ "$(cat "$RUNTIME_STATE")" == active ]]
+grep -q 'nothing was stopped' "$TMP/home-conflict.err"
 : >"$SETUP_LOG"
 
 if "$WORK/hermesui/installer/update.sh" v9.9.7 "$success_commit" >"$TMP/moved.out" 2>"$TMP/moved.err"; then
