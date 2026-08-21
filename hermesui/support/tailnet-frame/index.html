@@ -73,7 +73,7 @@
     }
 
     async function readPrivateApp(id){
-      if(id==='private-marketplace')return {label:'Private app library',href:'https://humanitylabs.org/'};
+      if(id==='private-marketplace')return {label:'Private app library',href:'https://www.aiwizards.com/apps'};
       const response=await fetch('./apps.json',{cache:'no-store',credentials:'same-origin'});
       if(!response.ok)throw new Error('inventory unavailable');
       const payload=await response.json();

@@ -195,12 +195,12 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "frameHref.origin!==location.origin" in MANAGER
 
 
-def test_private_plus_is_the_humanity_labs_panel_marketplace_placeholder():
+def test_private_plus_is_the_ai_wizards_panel_app_library():
     assert "id:'private-marketplace'" in JS
-    assert "href:'https://humanitylabs.org/'" in JS
+    assert "href:'https://www.aiwizards.com/apps'" in JS
     assert "frameHref:new URL('/tailnet-frame/?app=private-marketplace',location.origin).href" in JS
     assert "privateAdd.addEventListener('click',()=>activateApp(privateMarketplace))" in JS
-    assert "if(id==='private-marketplace')return {label:'Private app library',href:'https://humanitylabs.org/'}" in FRAME_BRIDGE
+    assert "if(id==='private-marketplace')return {label:'Private app library',href:'https://www.aiwizards.com/apps'}" in FRAME_BRIDGE
 
 
 def test_same_origin_frame_bridge_resolves_only_valid_saved_work_and_web_entries():

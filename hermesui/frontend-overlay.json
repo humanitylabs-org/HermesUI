@@ -101,7 +101,7 @@
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },
     {
-      "hermesui_sha256": "03f2567fa82f2bcde4f63a891e28e814a639175f3916106ae70c7b4af3bb1d56",
+      "hermesui_sha256": "447475d183f52a4d87a0c51153a6b871fbd7b9c29618316adda905128a7b549a",
       "path": "static/sw.js",
       "upstream_sha256": "cfdc35b1dd3f20f9ef8e885008dd76c3bcd2fe3deb61c1708f2e6d88514e2ff8"
     },
@@ -111,7 +111,7 @@
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "248135f67186f47fe36bb8b518699fff3c51faa84a66d8673969ca5a2c4bd7f7",
+      "hermesui_sha256": "49950fae65e865ed37774f09feff5e9201a773f7d2994da823b4a8ce18c08a5f",
       "path": "static/tailnet-app-rail.js",
       "upstream_sha256": null
     },

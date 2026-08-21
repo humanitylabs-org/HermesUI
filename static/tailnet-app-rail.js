@@ -38,7 +38,7 @@
   const privateMarketplace={
     id:'private-marketplace',
     label:'Private app library',
-    href:'https://humanitylabs.org/',
+    href:'https://www.aiwizards.com/apps',
     frameHref:new URL('/tailnet-frame/?app=private-marketplace',location.origin).href,
     icon:'apps'
   };
