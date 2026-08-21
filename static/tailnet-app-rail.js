@@ -28,6 +28,8 @@
   const root=document.documentElement;
   const workspace=document.getElementById('tailnetAppWorkspace');
   const frame=document.getElementById('tailnetAppFrame');
+  const orbHome=document.getElementById('tailnetOrbHome');
+  const managerPanel=document.getElementById('tailnetAppManager');
   const home=document.getElementById('tailnetAppHome');
   const links=document.getElementById('tailnetAppLinks');
   const companyLinks=document.getElementById('tailnetCompanyAppLinks');
@@ -212,6 +214,14 @@
     if(typeof window.closeMobileSidebar==='function')window.closeMobileSidebar();
   }
 
+  function isPhoneWidth(){
+    try{return window.matchMedia('(max-width:640px)').matches;}catch(_){return window.innerWidth<=640;}
+  }
+
+  function isOrbDesktop(){
+    try{return window.matchMedia('(min-width:901px)').matches;}catch(_){return window.innerWidth>=901;}
+  }
+
   function markSelected(id){
     const externalLinks=document.querySelectorAll('.tailnet-app-rail [data-tailnet-app-id]');
     const hermesSelected=!id;
@@ -228,16 +238,24 @@
     });
   }
 
-  function activateHermes({remember=true}={}){
+  function activateHermes({remember=true,openMobileMenu=false}={}){
     closeReservedTabsExcept();
     hideTooltip();
     closeBookmarkMenu();
     activeId='';
     activeBookmarkNavigation=null;
-    root.setAttribute('data-tailnet-view','hermes');
-    if(workspace)workspace.hidden=true;
+    const showOrb=isOrbDesktop();
+    root.setAttribute('data-tailnet-view',showOrb?'orb':'hermes');
+    if(frame)frame.hidden=true;
+    if(managerPanel)managerPanel.hidden=true;
+    if(orbHome)orbHome.hidden=!showOrb;
+    if(workspace){
+      workspace.hidden=!showOrb;
+      workspace.setAttribute('aria-label',showOrb?'Wizard OS ambient home':'Selected Tailnet app');
+    }
     markSelected('');
-    closeSessionsOverlay();
+    if(openMobileMenu&&isPhoneWidth()&&typeof window.toggleMobileSidebar==='function')window.toggleMobileSidebar();
+    else closeSessionsOverlay();
     if(remember){
       try{sessionStorage.removeItem(STORAGE_KEY);}catch(_){}
     }
@@ -278,6 +296,8 @@
       frame.src=targetFrameHref;
     }
     workspace.setAttribute('aria-label',app.label);
+    if(orbHome)orbHome.hidden=true;
+    if(frame)frame.hidden=false;
     workspace.hidden=false;
     root.setAttribute('data-tailnet-view','external');
     markSelected(app.id);
@@ -352,6 +372,8 @@
     frame.title=`${app.label} — browser fallback`;
     if(!alreadyShowing)frame.src=app.browserHref;
     workspace.setAttribute('aria-label',`${app.label} opened in browser`);
+    if(orbHome)orbHome.hidden=true;
+    if(frame)frame.hidden=false;
     workspace.hidden=false;
     root.setAttribute('data-tailnet-view','external');
     markSelected(app.id);
@@ -763,7 +785,7 @@
     bindOverlayInteractions();
     home.addEventListener('click',event=>{
       event.preventDefault();
-      activateHermes();
+      activateHermes({openMobileMenu:true});
     });
     appsById.set(privateMarketplace.id,privateMarketplace);
     privateAdd.addEventListener('click',()=>activateApp(privateMarketplace));
@@ -777,6 +799,10 @@
     try{remembered=sessionStorage.getItem(STORAGE_KEY)||'';}catch(_){}
     if(remembered&&appsById.has(remembered))activateApp(appsById.get(remembered));
     else activateHermes({remember:false});
+    const desktopOrbMedia=window.matchMedia('(min-width:901px)');
+    const syncHomeAcrossBreakpoint=()=>{if(!activeId)activateHermes({remember:false});};
+    if(typeof desktopOrbMedia.addEventListener==='function')desktopOrbMedia.addEventListener('change',syncHomeAcrossBreakpoint);
+    else if(typeof desktopOrbMedia.addListener==='function')desktopOrbMedia.addListener(syncHomeAcrossBreakpoint);
     root.dataset.tailnetAppsReady='true';
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-apps-ready',{detail:{
       count:savedGroups.company.length+savedGroups.public.length+2,

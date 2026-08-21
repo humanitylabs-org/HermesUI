@@ -70,7 +70,7 @@
     };
   }
 })()</script>
-<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__">
+<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-orb-v1">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
@@ -126,9 +126,6 @@
       <span class="app-titlebar-profile-label" id="titlebarProfileLabel">default</span>
       <span class="app-titlebar-profile-chevron" aria-hidden="true"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
     </button>
-    <button class="app-titlebar-hamburger has-tooltip has-tooltip--bottom" id="btnHamburger" onclick="toggleMobileSidebar()" type="button" data-tooltip="Menu" aria-label="Menu">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-  </button>
   </div>
   <div class="app-titlebar-inner">
     <span class="app-titlebar-icon" aria-hidden="true"><img class="wizard-brand-icon" src="static/wizard-hat.svg" alt="" width="16" height="16"></span>
@@ -158,6 +155,23 @@
 </header>
 <div class="layout">
   <section class="tailnet-app-workspace" id="tailnetAppWorkspace" aria-label="Selected Tailnet app" hidden>
+    <section class="tailnet-orb-home" id="tailnetOrbHome" aria-label="Wizard OS ambient home" hidden>
+      <div class="wizard-orb-backdrop" aria-hidden="true">
+        <span class="wizard-orb-nebula wizard-orb-nebula-one"></span>
+        <span class="wizard-orb-nebula wizard-orb-nebula-two"></span>
+        <div class="wizard-orb-stage">
+          <span class="wizard-orb-ring wizard-orb-ring-one"></span>
+          <span class="wizard-orb-ring wizard-orb-ring-two"></span>
+          <span class="wizard-orb-ring wizard-orb-ring-three"></span>
+          <div class="wizard-orb-shell">
+            <span class="wizard-orb-surface"></span>
+            <span class="wizard-orb-core"></span>
+            <img class="wizard-orb-sigil" src="static/wizard-hat.svg" alt="">
+          </div>
+        </div>
+        <div class="wizard-orb-caption"><span></span>WIZARD OS</div>
+      </div>
+    </section>
     <iframe id="tailnetAppFrame" title="Selected Tailnet app" loading="eager" referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
     <section class="tailnet-app-manager" id="tailnetAppManager" aria-labelledby="tailnetAppManagerTitle" hidden>
       <header class="tailnet-app-manager-head">
@@ -1899,7 +1913,7 @@
 <script src="static/panels.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/session-dashboard.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=aiwizards-v2" defer></script>
+<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-orb-v1" defer></script>
 <script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/boot.js?v=__WEBUI_VERSION__" defer></script>
