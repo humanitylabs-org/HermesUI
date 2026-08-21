@@ -78,6 +78,13 @@ def test_session_switch_cache_is_frontend_only_and_integrated_before_clear():
     assert "_ensureMessagesLoaded(sid, {force:_keepStaleUntilLoaded" not in load_body
 
 
+def test_warm_session_switch_avoids_a_short_loading_label_flash():
+    assert "const _warmSwitchCandidate=Boolean(" in SESSIONS_JS
+    assert "if(_warmSwitchCandidate){" in SESSIONS_JS
+    assert "_msgInner.innerHTML='';" in SESSIONS_JS
+    assert "},200);" in SESSIONS_JS
+
+
 def test_warm_cache_lru_freshness_clone_and_prefetch_deduplication():
     harness = f"""
 const assert = require('assert');
@@ -110,6 +117,12 @@ assert.strictEqual(_storeSessionMessageCache('streaming',{{message_count:1,activ
 assert.strictEqual(_storeSessionMessageCache('pending',{{message_count:1,pending_started_at:'2026-08-20T16:00:00Z',messages:[]}}),false);
 assert.strictEqual(_storeSessionMessageCache('pending-take',{{message_count:1,messages:[{{role:'user',content:'old'}}]}}),true);
 assert.strictEqual(_takeFreshSessionMessageCache('pending-take',{{message_count:1,pending_started_at:'2026-08-20T16:00:00Z'}}),null);
+assert.strictEqual(_storeSessionMessageCache('shape-drift',{{message_count:12,updated_at:123,messages:[{{role:'user',content:'stable'}}]}}),true);
+const shapeDrift=_takeFreshSessionMessageCache('shape-drift',{{message_count:7,updated_at:123}});
+assert.strictEqual(shapeDrift.session.messages[0].content,'stable');
+assert.strictEqual(_storeSessionMessageCache('revision-stale',{{message_count:1,updated_at:123,messages:[{{role:'user',content:'old'}}]}}),true);
+assert.strictEqual(_takeFreshSessionMessageCache('revision-stale',{{message_count:1,updated_at:124}}),null);
+assert.strictEqual(_sessionMessageCache.has('revision-stale'),false);
 
 for(let i=0;i<6;i++) _storeSessionMessageCache('lru-'+i,{{message_count:1,messages:[{{role:'user',content:String(i)}}]}});
 assert.strictEqual(_sessionMessageCache.size,5);

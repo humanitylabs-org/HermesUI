@@ -1727,6 +1727,16 @@ async function loadSession(sid){
   const _loadGeneration = ++_loadSessionGeneration;
   const _isCurrentLoad = () => _loadingSessionId === sid && _loadSessionGeneration === _loadGeneration;
   _loadingSessionId = sid;
+  const _warmSwitchMetadata=typeof _allSessions!=='undefined'&&Array.isArray(_allSessions)
+    ? _allSessions.find(item=>item&&String(item.session_id)===String(sid))
+    : null;
+  const _warmSwitchCandidate=Boolean(
+    currentSid!==sid &&
+    !forceReload &&
+    _warmSwitchMetadata &&
+    typeof _hasWarmSessionMessageCache==='function' &&
+    _hasWarmSessionMessageCache(sid,_warmSwitchMetadata)
+  );
   if(currentSid!==sid&&typeof _uploadPendingFilesSyncProgressForSession==='function')_uploadPendingFilesSyncProgressForSession(sid);
   // Reset scroll state for fresh session navigation — the reader expects to
   // land at the bottom of the new transcript, not wherever a stale unpin flag
@@ -1835,7 +1845,22 @@ async function loadSession(sid){
     }
     _loadingOlder = false;
     const _msgInner = $('msgInner');
-    if (_msgInner && currentSid !== sid) _msgInner.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:14px;padding:40px;text-align:center;">Loading conversation...</div>';
+    if (_msgInner && currentSid !== sid) {
+      const loadingMarkup='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:14px;padding:40px;text-align:center;">Loading conversation...</div>';
+      if(_warmSwitchCandidate){
+        // A validated warm switch normally settles before this delay. Keep the
+        // pane quiet instead of flashing a loading label for a few milliseconds;
+        // if validation misses or rendering is genuinely slow, show the normal
+        // recovery state after the short grace period.
+        _msgInner.innerHTML='';
+        setTimeout(()=>{
+          if(!_isCurrentLoad()||_msgInner.childElementCount||!_msgInner.isConnected) return;
+          _msgInner.innerHTML=loadingMarkup;
+        },200);
+      }else{
+        _msgInner.innerHTML=loadingMarkup;
+      }
+    }
   }
   // Phase 1: Load metadata only (~1KB) for fast session switching. Keep model
   // resolution out of the first-paint path; old provider-shaped model IDs are
@@ -3061,6 +3086,14 @@ function _sessionMessageCacheProfile(session){
   return String(session&&session.profile||S.activeProfile||'default').trim()||'default';
 }
 
+function _sessionMessageCacheRevision(session){
+  if(!session) return '';
+  const value=session.updated_at!==undefined&&session.updated_at!==null
+    ? session.updated_at
+    : session.last_message_at;
+  return value===undefined||value===null?'':String(value).trim();
+}
+
 function _sessionMessageCacheClone(data){
   if(!data) return null;
   try{
@@ -3094,6 +3127,7 @@ function _storeSessionMessageCache(sid,session){
   _sessionMessageCache.set(sid,{
     storedAt:Date.now(),
     messageCount,
+    revision:_sessionMessageCacheRevision(session),
     profile:_sessionMessageCacheProfile(session),
     data:snapshot,
   });
@@ -3109,12 +3143,19 @@ function _freshSessionMessageCacheEntry(sid,metadata){
   const entry=_sessionMessageCache.get(sid);
   if(!entry) return null;
   const expectedCount=_sessionMessageCacheCount(metadata);
+  const expectedRevision=_sessionMessageCacheRevision(metadata);
   const expectedProfile=_sessionMessageCacheProfile(metadata);
   const expired=(Date.now()-Number(entry.storedAt||0))>_SESSION_MESSAGE_CACHE_TTL_MS;
   const profileMismatch=typeof _profileMatchesActiveProfile==='function'
     ? !_profileMatchesActiveProfile(entry.profile,expectedProfile)
     : entry.profile!==expectedProfile;
-  if(expired||profileMismatch||_sessionMessageCacheBusy(metadata)||expectedCount===null||entry.messageCount!==expectedCount){
+  // messages=0 and messages=1 can legitimately report different row-shaped
+  // counts for the same long transcript. Prefer the stable session revision;
+  // only fall back to count equality when either response lacks a revision.
+  const authorityMatches=(expectedRevision&&entry.revision)
+    ? expectedRevision===entry.revision
+    : expectedCount!==null&&entry.messageCount===expectedCount;
+  if(expired||profileMismatch||_sessionMessageCacheBusy(metadata)||!authorityMatches){
     _sessionMessageCache.delete(sid);
     return null;
   }
@@ -3137,11 +3178,13 @@ function _hasWarmSessionMessageCache(sid,session){
   const entry=_sessionMessageCache.get(sid);
   if(!entry) return false;
   const expired=(Date.now()-Number(entry.storedAt||0))>_SESSION_MESSAGE_CACHE_TTL_MS;
+  const revision=_sessionMessageCacheRevision(session);
+  const revisionMismatch=Boolean(revision&&entry.revision&&revision!==entry.revision);
   const profile=_sessionMessageCacheProfile(session);
   const profileMismatch=typeof _profileMatchesActiveProfile==='function'
     ? !_profileMatchesActiveProfile(entry.profile,profile)
     : entry.profile!==profile;
-  if(expired||profileMismatch){
+  if(expired||profileMismatch||revisionMismatch){
     _sessionMessageCache.delete(sid);
     return false;
   }

@@ -281,8 +281,8 @@ def test_work_web_links_do_not_preopen_a_browser_before_inline_decision():
     assert "activateApp(app,{bookmarkGeneration:generation})" in activation
     assert "decision&&decision.mode==='browser'" in activation
     assert "activateBrowserFallback(app,{reopen:true})" in activation
-    assert "bookmark-fallback=v4" in INDEX
-    assert "bookmark-fallback=v4" in (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
+    assert "bookmark-fallback=v5" in INDEX
+    assert "bookmark-fallback=v5" in (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
 
 
 def test_browser_fallback_countdown_is_delayed_cancellable_and_accessible():
@@ -300,8 +300,10 @@ def test_browser_fallback_countdown_is_delayed_cancellable_and_accessible():
     assert "copy.hidden=true" in FRAME_BRIDGE
     assert "Opening in your browser in " in FRAME_BRIDGE
     assert "action.hidden=true" in FRAME_BRIDGE
-    assert "title.textContent='Opening in your browser…'" in FRAME_BRIDGE
-    assert "title.textContent=payload.opened?'Opened in browser':'Popup blocked'" in FRAME_BRIDGE
+    assert "title.textContent='Open in browser'" in FRAME_BRIDGE
+    assert "This site doesn’t support opening inside Hermes." in FRAME_BRIDGE
+    assert "title.textContent=payload.opened?'Opened in browser':'Open in browser'" in FRAME_BRIDGE
+    assert 'font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif' in FRAME_BRIDGE
 
 
 def test_app_tooltips_escape_the_clipped_rail_and_bookmarks_have_two_actions():
@@ -431,7 +433,7 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v3&bookmark-fallback=v4"'
+        '&overlay=wizard-canvas-v3&bookmark-fallback=v5"'
         in INDEX
     )
     assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__"' in INDEX

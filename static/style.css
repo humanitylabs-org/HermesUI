@@ -2292,6 +2292,12 @@
   .composer-workspace-chip{border-left:0!important;border-radius:999px!important;padding-left:12px!important;}
   .composer-footer.cf-burger .composer-workspace-group{display:none!important;}
   .sidebar .panel-view{margin-left:0!important;}
+  /* Wizard OS keeps workspace selection, but not the desktop workspace-browser
+     launchers, in either Classic or High Signal view. */
+  @media(min-width:901px){
+    html body .workspace-panel-edge-toggle,
+    html body .composer-workspace-files-btn{display:none!important;}
+  }
   .chat-settings-footer{flex-shrink:0;padding:8px;border-top:1px solid var(--border);}
   .chat-settings-toggle{width:100%;display:flex;align-items:center;gap:9px;padding:9px 10px;border:0;border-radius:8px;background:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;}
   .chat-settings-toggle:hover,.chat-settings-toggle.active{background:var(--hover-bg);color:var(--text);}
