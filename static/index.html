@@ -17,13 +17,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Hermes">
 <link rel="apple-touch-icon" sizes="512x512" href="static/wizard-hat-apple-touch.png">
-<script>(function(){try{var migrationKey='hermesui-eink-default-v1',_hadAppearance=localStorage.getItem('hermes-theme')!==null||localStorage.getItem('hermes-skin')!==null;var themes={light:1,dark:1,system:1},skins={'e-ink':1,codex:1,terracotta:1,default:1,ares:1,mono:1,graphite:1,github:1,slate:1,poseidon:1,sisyphus:1,charizard:1,sienna:1,catppuccin:1,hepburn:1,nous:1,'geist-contrast':1,neon:1,'neon-soft':1,'neon-paint':1,zeus:1,'verdigris':1},legacy={slate:['dark','slate'],solarized:['dark','poseidon'],monokai:['dark','sisyphus'],nord:['dark','slate'],oled:['dark','default']},t=(localStorage.getItem('hermes-theme')||'dark').toLowerCase(),s=(localStorage.getItem('hermes-skin')||'').toLowerCase();if(!localStorage.getItem(migrationKey)&&s==='default'){s='e-ink';localStorage.setItem('hermes-skin',s);localStorage.setItem(migrationKey,'1');_hadAppearance=true;}var m=legacy[t],theme=m?m[0]:(themes[t]?t:'dark');var pendingExt=s&&s!=='default'&&!skins[s]&&!legacy[s];var skin=skins[s]?s:(pendingExt?s:(m?m[1]:'e-ink'));if(_hadAppearance){localStorage.setItem('hermes-theme',theme);localStorage.setItem('hermes-skin',skin);}var resolvedTheme=skin==='e-ink'?'light':theme;if(resolvedTheme==='system')resolvedTheme=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';if(resolvedTheme==='dark')document.documentElement.classList.add('dark');if(skin!=='default')document.documentElement.dataset.skin=skin;}catch(e){document.documentElement.classList.add('dark');}})()</script>
+<script>(function(){try{var migrationKey='hermesui-eink-default-v1',_hadAppearance=localStorage.getItem('hermes-theme')!==null||localStorage.getItem('hermes-skin')!==null;var themes={light:1,dark:1,system:1},skins={'e-ink':1,codex:1,terracotta:1,default:1,ares:1,mono:1,graphite:1,github:1,slate:1,poseidon:1,sisyphus:1,charizard:1,sienna:1,catppuccin:1,hepburn:1,nous:1,'geist-contrast':1,neon:1,'neon-soft':1,'neon-paint':1,zeus:1,'verdigris':1},legacy={slate:['dark','slate'],solarized:['dark','poseidon'],monokai:['dark','sisyphus'],nord:['dark','slate'],oled:['dark','default']},t=(localStorage.getItem('hermes-theme')||'dark').toLowerCase(),s=(localStorage.getItem('hermes-skin')||'').toLowerCase();if(!localStorage.getItem(migrationKey)&&s==='default'){s='e-ink';localStorage.setItem('hermes-skin',s);localStorage.setItem(migrationKey,'1');_hadAppearance=true;}var m=legacy[t],theme=m?m[0]:(themes[t]?t:'dark');var pendingExt=s&&s!=='default'&&!skins[s]&&!legacy[s];var skin=skins[s]?s:(pendingExt?s:(m?m[1]:'e-ink'));if(skin==='e-ink'&&!localStorage.getItem('hermesui-eink-adaptive-v1')){theme='light';localStorage.setItem('hermes-theme',theme);localStorage.setItem('hermes-skin',skin);localStorage.setItem('hermesui-eink-adaptive-v1','1');}if(_hadAppearance){localStorage.setItem('hermes-theme',theme);localStorage.setItem('hermes-skin',skin);}var resolvedTheme=theme;if(resolvedTheme==='system')resolvedTheme=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';if(resolvedTheme==='dark')document.documentElement.classList.add('dark');if(skin!=='default')document.documentElement.dataset.skin=skin;}catch(e){document.documentElement.classList.add('dark');}})()</script>
 <script>(function(){try{var fs=localStorage.getItem('hermes-font-size');if(fs&&fs!=='default')document.documentElement.dataset.fontSize=fs;}catch(e){}})()</script>
 <!-- theme-color: surfaces the active app chrome color to native status bars (Safari status bar, PWA, native WKWebView wrappers). Updated dynamically by boot.js when theme/skin changes. The light/dark default values match style.css :root --sidebar / :root.dark --sidebar. -->
 <meta name="theme-color" content="#FAF7F0" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#141425" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" id="hermes-theme-color" content="#0D0D1A">
-<script>(function(){try{var s=document.documentElement.dataset.skin||'default',t=localStorage.getItem('hermes-theme')||'dark';if(s==='e-ink')t='light';else if(t==='system')t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';var c=s==='e-ink'?'#ffffff':(t==='dark'?'#141425':'#FAF7F0');document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute('content',c);m.removeAttribute('media');});}catch(e){}})()</script>
+<script>(function(){try{var s=document.documentElement.dataset.skin||'default',t=localStorage.getItem('hermes-theme')||'light';if(t==='system')t=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';var c=s==='e-ink'?(t==='dark'?'#0f0f0f':'#ffffff'):(t==='dark'?'#141425':'#FAF7F0');document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute('content',c);m.removeAttribute('media');});}catch(e){}})()</script>
 <script>(function(){try{document.documentElement.dataset.workspacePanel=localStorage.getItem('hermes-webui-workspace-panel')==='open'?'open':'closed';}catch(e){document.documentElement.dataset.workspacePanel='closed';}})()</script>
 <script>(function(){try{if(localStorage.getItem('hermes-webui-sidebar-collapsed')==='1')document.documentElement.dataset.sidebarCollapsed='1';}catch(e){}})()</script>
 <script>(function(){try{var q=new URLSearchParams(location.search).get('session_view'),saved=localStorage.getItem('hermes-session-view'),v=q==='classic'?'classic':(q==='high-signal'||q==='dashboard')?'dashboard':saved;v=v==='dashboard'?'dashboard':'classic';localStorage.setItem('hermes-session-view',v);document.documentElement.dataset.sessionView=v;}catch(e){document.documentElement.dataset.sessionView='classic';}})()</script>
@@ -70,7 +70,7 @@
     };
   }
 })()</script>
-<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v6&cron-notifications=v8&high-signal-model=v2">
+<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v7&cron-notifications=v9&high-signal-model=v2&shell-theme=v1">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
@@ -156,7 +156,7 @@
 <div class="layout">
   <section class="tailnet-app-workspace" id="tailnetAppWorkspace" aria-label="Selected Tailnet app" hidden>
     <section class="tailnet-wizard-home" id="tailnetWizardHome" aria-label="Wizard Canvas" hidden>
-      <iframe class="wizard-canvas-frame" id="wizardCanvasFrame" title="Wizard Canvas" src="static/wizard-canvas/index.html?overlay=wizard-canvas-v6" loading="eager" referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write"></iframe>
+      <iframe class="wizard-canvas-frame" id="wizardCanvasFrame" title="Wizard Canvas" src="static/wizard-canvas/index.html?overlay=wizard-canvas-v7" loading="eager" referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write"></iframe>
     </section>
     <iframe id="tailnetAppFrame" title="Selected Tailnet app" loading="eager" referrerpolicy="no-referrer" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
     <section class="tailnet-app-manager" id="tailnetAppManager" aria-labelledby="tailnetAppManagerTitle" hidden>
@@ -223,6 +223,15 @@
         <div class="tailnet-app-links" id="tailnetPublicAppLinks"></div>
         <button class="tailnet-app-add has-tooltip" id="tailnetPublicAdd" type="button" aria-label="Add web bookmark" data-tooltip="Add web bookmark"><span aria-hidden="true">+</span></button>
       </section>
+    </div>
+    <div class="tailnet-app-controls" aria-label="Appearance and settings">
+      <button class="rail-btn tailnet-rail-control has-tooltip" id="tailnetThemeToggle" type="button" aria-label="Switch to dark mode" data-tooltip="Dark mode">
+        <span class="tailnet-theme-icon tailnet-theme-icon--moon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.6 6.6 0 0 0 21 12.8z"/></svg></span>
+        <span class="tailnet-theme-icon tailnet-theme-icon--sun" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg></span>
+      </button>
+      <button type="button" id="chatSettingsToggle" class="rail-btn tailnet-rail-control has-tooltip" onclick="toggleSettings()" aria-label="Settings" data-tooltip="Settings" data-i18n-aria-label="tab_settings">
+        <span class="tailnet-app-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+      </button>
     </div>
   </nav>
   <aside class="sidebar">
@@ -468,10 +477,6 @@
       </div>
     </div>
     <div class="chat-settings-footer">
-      <button type="button" id="chatSettingsToggle" class="chat-settings-toggle" data-panel="settings" onclick="toggleSettings()" aria-label="Settings" data-i18n-aria-label="tab_settings">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span data-i18n="tab_settings">Settings</span>
-      </button>
       <button type="button" id="sessionViewToggle" class="session-view-toggle" onclick="toggleSessionView()" aria-label="Switch to High Signal mode" title="Switch to High Signal mode">Switch to High Signal mode</button>
     </div>
   <div class="resize-handle" id="sidebarResize"></div>
@@ -1932,7 +1937,7 @@
 <script src="static/panels.js?v=__WEBUI_VERSION__&cron-notifications=v3&high-signal-model=v1" defer></script>
 <script src="static/session-dashboard.js?v=__WEBUI_VERSION__&tab-polish=v1&high-signal-model=v5" defer></script>
 <script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v6" defer></script>
+<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v7&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1" defer></script>
 <script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3" defer></script>
 <script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/boot.js?v=__WEBUI_VERSION__&tab-polish=v1" defer></script>

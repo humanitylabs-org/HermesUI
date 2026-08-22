@@ -127,11 +127,9 @@
   /* ── Skin: Default (gold — matches base) ── */
   /* No overrides needed — :root and .dark already use gold accent */
   /* ── Skin: E-Ink (HermesUI default) ──
-     Maximum-contrast near-monochrome palette restored from the original
-     trusted local E-Ink extension. The duplicate dark selector prevents a
-     first-paint flash before boot.js forces this light-only skin's scheme. */
-  :root[data-skin="e-ink"],
-  :root.dark[data-skin="e-ink"]{
+     Maximum-contrast near-monochrome palette with matching light and dark
+     treatments. Theme changes keep the same restrained visual language. */
+  :root[data-skin="e-ink"]{
     color-scheme:light;
     --bg:#ffffff;--surface:#ffffff;--surface2:#f4f4f4;--surface-subtle:#f4f4f4;
     --text:#000000;--text2:#1a1a1a;--muted:#3a3a3a;
@@ -140,6 +138,17 @@
     --border:#000000;--border2:#555555;--hover-bg:#eaeaea;
     --code-bg:#f4f4f4;--code-text:#000000;--sidebar:#ffffff;--sidebar-text:#000000;
     --user-bubble:#eaeaea;--assistant-bubble:#ffffff;--link:#000000;
+  }
+  :root.dark[data-skin="e-ink"]{
+    color-scheme:dark;
+    --bg:#0f0f0f;--surface:#151515;--surface2:#1d1d1d;--surface-subtle:#1a1a1a;--surface-subtle-hover:#242424;
+    --text:#f7f7f7;--text2:#e5e5e5;--muted:#a0a0a0;--strong:#ffffff;--em:#d7d7d7;
+    --accent:#ffffff;--accent2:#e8e8e8;--accent-hover:#ffffff;--accent-text:#ffffff;--accent-contrast:#000000;
+    --accent-bg:#252525;--accent-bg-strong:#3a3a3a;--accent-rgb:255,255,255;
+    --border:#444444;--border2:#707070;--border-subtle:#2b2b2b;--border-muted:#505050;
+    --input-bg:#171717;--hover-bg:#242424;--code-bg:#191919;--code-inline-bg:#252525;--code-text:#f7f7f7;--pre-text:#ededed;
+    --sidebar:#101010;--sidebar-text:#f7f7f7;--main-bg:#0f0f0f;--topbar-bg:rgba(15,15,15,.94);
+    --user-bubble:#242424;--assistant-bubble:#0f0f0f;--user-bubble-bg:#242424;--user-bubble-border:#4a4a4a;--user-bubble-text:#f7f7f7;--link:#ffffff;
   }
   /* ── Skin: Ares (red) ── */
   :root[data-skin="ares"]{--accent:#C0392B;--accent-hover:#A93226;--accent-bg:rgba(192,57,43,0.08);--accent-bg-strong:rgba(192,57,43,0.15);--accent-text:#922B21;}
@@ -2176,6 +2185,13 @@
   .tailnet-app-home-icon{display:block;width:34px;height:34px;border-radius:6px;}
   .tailnet-app-groups{width:100%;min-height:0;flex:1 1 auto;display:flex;flex-direction:column;align-items:center;gap:6px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;padding-bottom:4px;box-sizing:border-box;}
   .tailnet-app-groups::-webkit-scrollbar{display:none;}
+  .tailnet-app-controls{width:100%;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 0 0;border-top:1px solid var(--border);box-sizing:border-box;}
+  .tailnet-rail-control{flex:0 0 auto;}
+  .tailnet-theme-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
+  .tailnet-theme-icon svg{display:block;width:20px;height:20px;}
+  :root:not(.dark) .tailnet-theme-icon--sun,
+  :root.dark .tailnet-theme-icon--moon{display:none;}
+  :root.dark #tailnetThemeToggle{color:var(--text);background:var(--hover-bg);}
   .tailnet-app-group{width:100%;display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:6px;border-top:1px solid var(--border);box-sizing:border-box;}
   .tailnet-app-group-head{width:40px;min-height:20px;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:0 0 auto;position:relative;}
   .tailnet-app-group-badge{min-width:0;max-width:40px;flex:1 1 auto;font-size:6.5px;line-height:1;font-weight:800;letter-spacing:.015em;text-align:center;color:var(--muted);}
@@ -2197,6 +2213,8 @@
   .tailnet-wizard-home{position:relative;height:100%;min-height:0;overflow:hidden;background:#fff;color:#1b1235;}
   .tailnet-wizard-home[hidden]{display:none!important;}
   .tailnet-wizard-home .wizard-canvas-frame{display:block;width:100%;height:100%;border:0;background:#fff;}
+  :root.dark .tailnet-wizard-home,
+  :root.dark .tailnet-wizard-home .wizard-canvas-frame{background:#101010;color:#f4f4f4;}
   .tailnet-app-manager-link{position:relative;}
   .tailnet-app-manager{container-type:inline-size;height:100%;overflow:auto;box-sizing:border-box;padding:clamp(16px,2.4vw,30px);background:linear-gradient(180deg,color-mix(in srgb,var(--main-bg) 96%,var(--accent) 4%),var(--main-bg));color:var(--text);}
   .tailnet-app-manager[hidden]{display:none!important;}
@@ -2354,6 +2372,7 @@
   .chat-settings-toggle{min-width:0;flex:1 1 auto;display:flex;align-items:center;gap:9px;padding:9px 10px;border:0;border-radius:8px;background:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;}
   .chat-settings-toggle:hover,.chat-settings-toggle.active{background:var(--hover-bg);color:var(--text);}
   .session-view-toggle{flex:0 1 auto;max-width:178px;min-height:36px;padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface-subtle);color:var(--muted);font:inherit;font-size:11px;font-weight:650;line-height:1.2;text-align:center;cursor:pointer;white-space:normal;}
+  .chat-settings-footer .session-view-toggle{flex:1 1 auto;max-width:none;}
   .session-view-toggle:hover,.session-view-toggle:focus-visible{border-color:var(--accent-bg-strong);background:var(--hover-bg);color:var(--text);outline:none;}
   .settings-field:has(#themePickerGrid),.settings-field:has(#skinPickerGrid){display:none;}
   /* Sidebar navigation tabs */

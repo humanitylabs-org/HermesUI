@@ -7,7 +7,7 @@
 
 // Cache version is injected by the server at request time (routes.py /sw.js handler).
 // Bumps automatically whenever the git commit changes — no manual edits needed.
-// HermesUI frontend delivery marker: wizard-canvas-v6. This intentionally
+// HermesUI frontend delivery marker: wizard-canvas-v7. This intentionally
 // changes the worker bytes so hot frontend deployments refresh an existing
 // process's shell cache without interrupting active agent runs. Bookmark
 // fallback marker v2 keeps successful WORK/WEB frames entirely in this shell.
@@ -26,7 +26,7 @@ const CACHE_NAME = 'hermes-shell-__WEBUI_VERSION__';
 // Navigations populate './' only after a successful non-redirect network load.
 const VQ = '?v=__WEBUI_VERSION__';
 const SHELL_ASSETS = [
-  './static/style.css' + VQ + '&overlay=wizard-canvas-v6&cron-notifications=v8&high-signal-model=v2',
+  './static/style.css' + VQ + '&overlay=wizard-canvas-v7&cron-notifications=v9&high-signal-model=v2&shell-theme=v1',
   './static/pwa-startup.js' + VQ,
   './static/boot.js' + VQ + '&tab-polish=v1',
   './static/assistant_turn_anchors.js' + VQ,
@@ -34,7 +34,7 @@ const SHELL_ASSETS = [
   './static/messages.js' + VQ + '&tab-polish=v1',
   './static/sessions.js' + VQ + '&tab-polish=v1',
   './static/session-swipe-navigation.js' + VQ,
-  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v6',
+  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v7&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1',
   './static/tailnet-app-manager.js' + VQ + '&cron-notifications=v3',
   './static/panels.js' + VQ + '&cron-notifications=v3&high-signal-model=v1',
   './static/commands.js' + VQ,

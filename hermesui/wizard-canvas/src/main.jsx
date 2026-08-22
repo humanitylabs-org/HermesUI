@@ -12,18 +12,35 @@ const ENDPOINT = '/apps/api/wizard-canvas';
 const SAVE_DELAY_MS = 800;
 const SAVED_VISIBLE_MS = 2600;
 const CLIENT_MAX_BYTES = 8 * 1024 * 1024;
+const LIGHT_BACKGROUND = '#ffffff';
+
+function storedTheme() {
+  try {
+    const value = localStorage.getItem('hermes-theme');
+    if (value === 'dark' || value === 'light') return value;
+    if (value === 'system') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+  } catch (_) {}
+  return window.parent !== window && window.parent.document.documentElement.classList.contains('dark')
+    ? 'dark'
+    : 'light';
+}
 
 function byteLength(value) {
   return new TextEncoder().encode(value).byteLength;
 }
 
-function sceneData(scene) {
+function sceneData(scene, theme) {
   if (!scene || typeof scene !== 'object' || Array.isArray(scene)) return null;
   return {
     elements: Array.isArray(scene.elements) ? scene.elements : [],
     appState: {
       ...(scene.appState && typeof scene.appState === 'object' ? scene.appState : {}),
-      viewBackgroundColor: '#ffffff',
+      theme,
+      // Excalidraw's dark renderer maps the canonical white scene background
+      // into its dark canvas. Supplying a dark color here would invert it light.
+      viewBackgroundColor: LIGHT_BACKGROUND,
     },
     files: scene.files && typeof scene.files === 'object' ? scene.files : {},
   };
@@ -43,10 +60,28 @@ function WizardCanvas() {
   const timerRef = useRef(null);
   const savedTimerRef = useRef(null);
   const savingRef = useRef(false);
+  const initialThemeRef = useRef(storedTheme());
+  const canvasThemeRef = useRef(initialThemeRef.current);
+  const excalidrawApiRef = useRef(null);
   const [problem, setProblem] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
   const [sceneReady, setSceneReady] = useState(false);
   const [sceneBlank, setSceneBlank] = useState(false);
+  const [canvasTheme, setCanvasTheme] = useState(initialThemeRef.current);
+  const applyCanvasTheme = useCallback(theme => {
+    const next = theme === 'dark' ? 'dark' : 'light';
+    canvasThemeRef.current = next;
+    setCanvasTheme(next);
+    document.documentElement.dataset.canvasTheme = next;
+    if (excalidrawApiRef.current) {
+      excalidrawApiRef.current.updateScene({
+        appState: {
+          theme: next,
+          viewBackgroundColor: LIGHT_BACKGROUND,
+        },
+      });
+    }
+  }, []);
   const showSaveStatus = useCallback(phase => {
     window.clearTimeout(savedTimerRef.current);
     savedTimerRef.current = null;
@@ -79,7 +114,7 @@ function WizardCanvas() {
       if (!response.ok) throw new Error(`Canvas load failed (${response.status})`);
       const payload = await response.json();
       revisionRef.current = Number.isInteger(payload.revision) ? payload.revision : 0;
-      const initialScene = sceneData(payload.scene);
+      const initialScene = sceneData(payload.scene, canvasThemeRef.current);
       setSceneBlank(isSceneBlank(initialScene?.elements));
       setSceneReady(true);
       readyRef.current = true;
@@ -154,7 +189,14 @@ function WizardCanvas() {
     try {
       // The local serializer is self-contained: it retains bounded embedded files.
       // No Excalidraw cloud or browser file action is enabled by this choice.
-      serialized = serializeAsJSON(elements, appState, files, 'local');
+      // Theme is a local view preference. Normalize it out of the shared scene
+      // so a light/dark toggle never creates a server save or changes another tab.
+      const persistentAppState = {
+        ...appState,
+        theme: 'light',
+        viewBackgroundColor: LIGHT_BACKGROUND,
+      };
+      serialized = serializeAsJSON(elements, persistentAppState, files, 'local');
     } catch (error) {
       console.error('[wizard-canvas] serialize failed', error);
       showSaveStatus(null);
@@ -187,6 +229,40 @@ function WizardCanvas() {
     };
   }, [flushSave]);
 
+  useEffect(() => {
+    document.documentElement.dataset.canvasTheme = canvasTheme;
+  }, [canvasTheme]);
+
+  useEffect(() => {
+    const handleThemeMessage = event => {
+      if (event.origin !== location.origin || event.source !== window.parent) return;
+      if (!event.data || event.data.type !== 'hermesui:theme') return;
+      applyCanvasTheme(event.data.theme);
+    };
+    const handleStoredTheme = event => {
+      if (!event || event.key === 'hermes-theme') applyCanvasTheme(storedTheme());
+    };
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleSystemTheme = () => {
+      try {
+        if (localStorage.getItem('hermes-theme') === 'system') applyCanvasTheme(storedTheme());
+      } catch (_) {}
+    };
+    window.addEventListener('message', handleThemeMessage);
+    window.addEventListener('storage', handleStoredTheme);
+    media.addEventListener('change', handleSystemTheme);
+    return () => {
+      window.removeEventListener('message', handleThemeMessage);
+      window.removeEventListener('storage', handleStoredTheme);
+      media.removeEventListener('change', handleSystemTheme);
+    };
+  }, [applyCanvasTheme]);
+
+  const captureExcalidrawApi = useCallback(api => {
+    excalidrawApiRef.current = api;
+    applyCanvasTheme(canvasThemeRef.current);
+  }, [applyCanvasTheme]);
+
   const topRightUi = useCallback(() => {
     if (problem) {
       return (
@@ -210,10 +286,11 @@ function WizardCanvas() {
   return (
     <main className="wizard-canvas-shell" aria-label="Persistent Wizard canvas">
       <Excalidraw
+        excalidrawAPI={captureExcalidrawApi}
         initialData={loadInitialData}
         onChange={handleChange}
         renderTopRightUI={topRightUi}
-        theme="light"
+        theme={canvasTheme}
         name="Wizard Canvas"
         langCode="en"
         autoFocus={false}

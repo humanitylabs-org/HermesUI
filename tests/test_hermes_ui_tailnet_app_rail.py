@@ -102,6 +102,24 @@ def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
     assert "postProcessRenderedMessages(body)" in JS
     assert "loadPdfInline(body)" in JS
     assert 'className=\'tailnet-notification-rich msg-body\'' in JS
+    assert "refreshCronNotificationBadge" not in JS
+    assert "setNotificationsBadge(0);\n    void loadCronNotifications();" in JS
+    assert "if(jobIds.length)void loadCronNotifications({jobIds});" in JS
+
+
+def test_theme_and_settings_controls_are_fixed_at_the_bottom_of_the_app_rail():
+    rail = _rail_markup()
+    groups = rail.index('id="tailnetAppGroups"')
+    theme = rail.index('id="tailnetThemeToggle"')
+    settings = rail.index('id="chatSettingsToggle"')
+    assert groups < theme < settings
+    assert INDEX.count('id="chatSettingsToggle"') == 1
+    assert 'aria-label="Switch to dark mode"' in rail
+    assert ".tailnet-app-controls" in CSS
+    assert "tailnetThemeToggle" in JS
+    assert "window._pickTheme" in JS
+    assert "postMessage(" in JS
+    assert "{type:'hermesui:theme',theme:resolvedTheme()}" in JS
 
 
 def test_cron_notification_rows_are_compact_full_row_disclosures():
@@ -510,7 +528,7 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v6"'
+        '&overlay=wizard-canvas-v7&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1"'
         in INDEX
     )
     assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3"' in INDEX

@@ -15,9 +15,10 @@ API_CONFIG = (ROOT / "api" / "config.py").read_text(encoding="utf-8")
 PANELS = (ROOT / "static" / "panels.js").read_text(encoding="utf-8")
 
 
-def test_contextual_view_action_sits_beside_settings_and_never_reloads():
+def test_contextual_view_action_stays_in_the_session_footer_and_never_reloads():
     footer = INDEX[INDEX.index('<div class="chat-settings-footer">'):INDEX.index('<div class="resize-handle"')]
-    assert footer.index('id="chatSettingsToggle"') < footer.index('id="sessionViewToggle"')
+    assert 'id="chatSettingsToggle"' not in footer
+    assert 'id="sessionViewToggle"' in footer
     assert "Switch to High Signal mode" in footer
     assert "session-view-toggle-track" not in footer
     assert "Switch to Classic view" in DASHBOARD

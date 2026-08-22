@@ -2646,7 +2646,7 @@ const _THEMES=[
 const _HERMESUI_DEFAULT_SKIN='e-ink';
 const _HERMESUI_DEFAULT_SKIN_MIGRATION_KEY='hermesui-eink-default-v1';
 const _SKINS=[
-  {name:'E-Ink', value:'e-ink', scheme:'light', colors:['#000000','#ffffff','#000000']},
+  {name:'E-Ink', value:'e-ink', colors:['#000000','#ffffff','#000000']},
   {name:'Default',  colors:['#FFD700','#FFBF00','#CD7F32']},
   {name:'Ares',     colors:['#FF4444','#CC3333','#992222']},
   {name:'Mono',     colors:['#CCCCCC','#999999','#666666']},

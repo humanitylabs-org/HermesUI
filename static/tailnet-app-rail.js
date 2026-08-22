@@ -12,6 +12,7 @@
   const BROWSER_FALLBACK_DELAY_MS=3000;
   const NOTIFICATIONS_ID='cron-notifications';
   const NOTIFICATION_STATE_KEY='hermesui.cron-notifications.v1';
+  const THEME_STORAGE_KEY='hermes-theme';
   const NOTIFICATION_OUTPUT_LIMIT=4;
   const NOTIFICATION_LIST_LIMIT=40;
   const URL_SCHEME_RE=/^[a-z][a-z0-9+.-]*:/i;
@@ -35,6 +36,7 @@
   const workspace=document.getElementById('tailnetAppWorkspace');
   const frame=document.getElementById('tailnetAppFrame');
   const wizardHome=document.getElementById('tailnetWizardHome');
+  const wizardCanvasFrame=document.getElementById('wizardCanvasFrame');
   const managerPanel=document.getElementById('tailnetAppManager');
   const notificationsPanel=document.getElementById('tailnetNotifications');
   const notificationsButton=document.getElementById('tailnetNotificationsButton');
@@ -44,6 +46,7 @@
   const notificationsReadAll=document.getElementById('tailnetNotificationsReadAll');
   const notificationFilterButtons=Array.from(document.querySelectorAll('[data-notification-filter]'));
   const home=document.getElementById('tailnetAppHome');
+  const themeToggle=document.getElementById('tailnetThemeToggle');
   const links=document.getElementById('tailnetAppLinks');
   const companyLinks=document.getElementById('tailnetCompanyAppLinks');
   const publicLinks=document.getElementById('tailnetPublicAppLinks');
@@ -77,6 +80,44 @@
   let notificationItems=new Map();
   let notificationsLoading=false;
   let notificationFilter='unread';
+
+  function resolvedTheme(){
+    return root.classList.contains('dark')?'dark':'light';
+  }
+
+  function sendThemeToWizardCanvas(){
+    if(!wizardCanvasFrame||!wizardCanvasFrame.contentWindow)return;
+    try{
+      wizardCanvasFrame.contentWindow.postMessage(
+        {type:'hermesui:theme',theme:resolvedTheme()},
+        location.origin
+      );
+    }catch(_){}
+  }
+
+  function syncThemeToggle(){
+    if(themeToggle){
+      const dark=resolvedTheme()==='dark';
+      const label=dark?'Switch to light mode':'Switch to dark mode';
+      const tooltip=dark?'Light mode':'Dark mode';
+      themeToggle.setAttribute('aria-label',label);
+      themeToggle.dataset.tooltip=tooltip;
+      themeToggle.setAttribute('aria-pressed',String(dark));
+    }
+    sendThemeToWizardCanvas();
+  }
+
+  function toggleShellTheme(){
+    const next=resolvedTheme()==='dark'?'light':'dark';
+    try{
+      if(typeof window._pickTheme==='function')window._pickTheme(next);
+      else{
+        localStorage.setItem(THEME_STORAGE_KEY,next);
+        root.classList.toggle('dark',next==='dark');
+      }
+    }catch(_){root.classList.toggle('dark',next==='dark');}
+    syncThemeToggle();
+  }
 
 
   function normalizeBookmarkUrl(raw){
@@ -631,17 +672,6 @@
       article.append(button,rich);
       notificationsList.appendChild(article);
     });
-  }
-
-  async function refreshCronNotificationBadge(){
-    try{
-      const jobs=await fetchCronNotificationJobs();
-      const unread=jobs.reduce((count,job)=>{
-        const modified=Date.parse(job.last_run_at||'')/1000;
-        return count+(Number.isFinite(modified)&&modified>notificationReadCutoff(String(job.id))?1:0);
-      },0);
-      if(!notificationItems.size)setNotificationsBadge(unread);
-    }catch(_){}
   }
 
   async function loadCronNotifications({jobIds=null}={}){
@@ -1250,6 +1280,10 @@
       activateHermes({openMobileMenu:true});
     });
     notificationsButton.addEventListener('click',activateNotifications);
+    if(themeToggle)themeToggle.addEventListener('click',toggleShellTheme);
+    if(wizardCanvasFrame)wizardCanvasFrame.addEventListener('load',sendThemeToWizardCanvas);
+    new MutationObserver(syncThemeToggle).observe(root,{attributes:true,attributeFilter:['class','data-skin']});
+    syncThemeToggle();
     if(notificationsReadAll)notificationsReadAll.addEventListener('click',markAllNotificationsRead);
     notificationFilterButtons.forEach(button=>button.addEventListener('click',()=>setNotificationFilter(button.dataset.notificationFilter)));
     appsById.set(privateMarketplace.id,privateMarketplace);
@@ -1266,8 +1300,7 @@
     document.addEventListener('hermesui:cron-completions',event=>{
       const completions=event&&event.detail&&Array.isArray(event.detail.completions)?event.detail.completions:[];
       const jobIds=Array.from(new Set(completions.map(item=>String(item&&item.job_id||'')).filter(Boolean)));
-      void refreshCronNotificationBadge();
-      if(activeId===NOTIFICATIONS_ID&&jobIds.length)void loadCronNotifications({jobIds});
+      if(jobIds.length)void loadCronNotifications({jobIds});
     });
     savedGroups=readSavedGroups();
     renderSavedGroup('company');
@@ -1278,7 +1311,8 @@
     try{remembered=sessionStorage.getItem(STORAGE_KEY)||'';}catch(_){}
     if(remembered&&appsById.has(remembered))activateApp(appsById.get(remembered));
     else activateHermes({remember:false});
-    void refreshCronNotificationBadge();
+    setNotificationsBadge(0);
+    void loadCronNotifications();
     const desktopHomeMedia=window.matchMedia('(min-width:901px)');
     const syncHomeAcrossBreakpoint=()=>{if(!activeId)activateHermes({remember:false});};
     if(typeof desktopHomeMedia.addEventListener==='function')desktopHomeMedia.addEventListener('change',syncHomeAcrossBreakpoint);
