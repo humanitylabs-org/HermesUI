@@ -2359,6 +2359,12 @@
   html[data-session-view="dashboard"] body .composer-workspace-files-btn,
   html[data-session-view="dashboard"] body .workspace-toggle-btn,
   html[data-session-view="dashboard"] body .mobile-files-btn{display:none!important;}
+  /* High Signal needs the reading pane more than the session list needs empty
+     width. Keep Classic at its normal 300px, while using the sidebar's proven
+     desktop floor for High Signal everywhere the sidebar is an inline pane. */
+  @media(min-width:641px){
+    html[data-session-view="dashboard"] .layout > .sidebar{width:180px;}
+  }
   .composer-workspace-chip{border-left:0!important;border-radius:999px!important;padding-left:12px!important;}
   .composer-footer.cf-burger .composer-workspace-group{display:none!important;}
   .sidebar .panel-view{margin-left:0!important;}
@@ -2368,7 +2374,7 @@
     html body .workspace-panel-edge-toggle,
     html body .composer-workspace-files-btn{display:none!important;}
   }
-  .chat-settings-footer{flex-shrink:0;padding:8px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px;}
+  .chat-settings-footer{flex-shrink:0;padding:8px;display:flex;align-items:center;gap:6px;}
   .chat-settings-toggle{min-width:0;flex:1 1 auto;display:flex;align-items:center;gap:9px;padding:9px 10px;border:0;border-radius:8px;background:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;}
   .chat-settings-toggle:hover,.chat-settings-toggle.active{background:var(--hover-bg);color:var(--text);}
   .session-view-toggle{flex:0 1 auto;max-width:178px;min-height:36px;padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface-subtle);color:var(--muted);font:inherit;font-size:11px;font-weight:650;line-height:1.2;text-align:center;cursor:pointer;white-space:normal;}

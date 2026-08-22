@@ -25,6 +25,17 @@ def test_contextual_view_action_stays_in_the_session_footer_and_never_reloads():
     assert "Switch to High Signal mode" in DASHBOARD
     assert "window.history.replaceState" in DASHBOARD
     assert "location.reload" not in DASHBOARD
+    footer_rule = CSS[CSS.index(".chat-settings-footer{"):CSS.index("}", CSS.index(".chat-settings-footer{"))]
+    assert "border-top" not in footer_rule
+
+
+def test_high_signal_uses_the_available_inline_width_without_changing_classic():
+    assert '@media(min-width:641px){\n    html[data-session-view="dashboard"] .layout > .sidebar{width:180px;}\n  }' in CSS
+    assert 'html[data-session-view="classic"] .layout > .sidebar{width:180px;}' not in CSS
+    dashboard_rule = CSS[CSS.index(".session-dashboard{"):CSS.index("}", CSS.index(".session-dashboard{"))]
+    section_rule = CSS[CSS.index(".session-dashboard-section{"):CSS.index("}", CSS.index(".session-dashboard-section{"))]
+    assert "width:100%" in dashboard_rule and "max-width:none" in dashboard_rule
+    assert "min-width:0" in section_rule and "max-width:100%" in section_rule
 
 
 def test_high_signal_keeps_one_unboxed_goal_and_exactly_three_cards():
