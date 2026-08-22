@@ -13,11 +13,8 @@
   const grokSummaryCache=new Map();
   const grokSummaryRequests=new Map();
   const grokSummaryErrors=new Map();
-  const grokSummaryAutoChecks=new Map();
   const OPENING_EVIDENCE_LIMIT=30;
   const GROK_SUMMARY_ENDPOINT='/apps/api/high-signal-summary';
-  const SUMMARY_AUTO_CHECK_MS=60*1000;
-  const SUMMARY_AUTO_REFRESH_FLOOR_MS=5*60*1000;
   const structuredContentText=value=>{
     if(Array.isArray(value)){
       let recognized=false;
@@ -315,7 +312,7 @@
   }
 
   function refreshDashboardSummary(){
-    void refreshGrokSummary('goal',{force:true});
+    void refreshGrokSummary('goal');
   }
 
   function activeStep(){
@@ -470,7 +467,9 @@
     const error=grokSummaryErrors.get(key);
     const targetId=kind==='goal'?'sessionDashboardOriginalRequest':'sessionDashboardStatus';
     const metaId=kind==='goal'?'sessionDashboardSummaryUpdated':'sessionDashboardUpdated';
-    const emptyText='Preparing summary…';
+    const emptyText=kind==='goal'
+      ? 'Select Refresh to generate the goal summary.'
+      : 'Select Refresh to generate the current status.';
     const label=record&&(
       String(record.provider||'').includes('xai')
       || String(record.model||'').toLowerCase().includes('grok')
@@ -480,8 +479,8 @@
     else if(error) setText(metaId,`AI • ${error}`);
     else if(record){
       const currentFingerprint=grokEvidence(kind).fingerprint;
-      setText(metaId,record.fingerprint===currentFingerprint?`${label} • Updated ${record.updated}`:`${label} • Auto-refresh pending`);
-    }else setText(metaId,'AI • Preparing…');
+      setText(metaId,record.fingerprint===currentFingerprint?`${label} • Updated ${record.updated}`:`${label} • Refresh for latest`);
+    }else setText(metaId,'AI • Manual refresh');
   }
 
   function setSummaryButtonBusy(kind,busy){
@@ -492,7 +491,7 @@
     button.textContent=busy?'Updating…':'Refresh';
   }
 
-  async function refreshGrokSummary(kind,options={}){
+  async function refreshGrokSummary(kind){
     const sid=sessionKey();
     if(!sid||!['goal','status'].includes(kind)) return;
     const key=grokCacheKey(kind,sid);
@@ -507,11 +506,6 @@
     const evidence=grokEvidence(kind);
     if(!evidence.lines.length){
       grokSummaryErrors.set(key,'No usable session evidence');
-      renderGrokSummary(kind);
-      return;
-    }
-    const existing=grokSummaryCache.get(key);
-    if(!options.force&&existing&&existing.fingerprint===evidence.fingerprint){
       renderGrokSummary(kind);
       return;
     }
@@ -537,7 +531,6 @@
           text:String(payload.summary).trim(),
           fingerprint:evidence.fingerprint,
           updated:new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}),
-          updatedAt:Date.now(),
           provider:String(payload.provider||'auto'),
           model:String(payload.model||'')
         });
@@ -560,32 +553,7 @@
   }
 
   function refreshDashboardStatus(){
-    void refreshGrokSummary('status',{force:true});
-  }
-
-  function maybeAutoRefreshSummaries(options={}){
-    const root=document.documentElement;
-    if(!root||!root.dataset||root.dataset.sessionView==='classic'||document.hidden) return;
-    const sid=sessionKey();
-    if(!sid) return;
-    const now=Date.now();
-    const lastCheck=Number(grokSummaryAutoChecks.get(sid)||0);
-    if(!options.forceCheck&&now-lastCheck<SUMMARY_AUTO_CHECK_MS) return;
-    grokSummaryAutoChecks.set(sid,now);
-    while(grokSummaryAutoChecks.size>40) grokSummaryAutoChecks.delete(grokSummaryAutoChecks.keys().next().value);
-    for(const kind of ['goal','status']){
-      const key=grokCacheKey(kind,sid);
-      const record=grokSummaryCache.get(key);
-      const evidence=grokEvidence(kind);
-      if(!evidence.lines.length||grokSummaryRequests.has(key)) continue;
-      if(!record){
-        void refreshGrokSummary(kind);
-        continue;
-      }
-      const changed=record.fingerprint!==evidence.fingerprint;
-      const oldEnough=now-Number(record.updatedAt||0)>=SUMMARY_AUTO_REFRESH_FLOOR_MS;
-      if(changed&&oldEnough) void refreshGrokSummary(kind);
-    }
+    void refreshGrokSummary('status');
   }
 
   function syncSessionDashboard(){
@@ -605,16 +573,13 @@
     if(!hasSession) return;
 
     const completed=dashboardCompleted(entries);
-    const openingOffset=typeof _oldestIdx!=='undefined'?Number(_oldestIdx):0;
-    const openingIsMissing=(typeof _messagesTruncated!=='undefined'&&!!_messagesTruncated)||(Number.isFinite(openingOffset)&&openingOffset>0);
     renderGrokSummary('goal');
     setMarkdown('sessionDashboardInstruction',dashboardInstruction(entries));
     setMarkdown('sessionDashboardCompleted',completed||'Not completed yet.');
     renderGrokSummary('status');
     const completedCard=byId('sessionDashboardCompletedCard');
     if(completedCard) completedCard.dataset.empty=completed?'0':'1';
-    if(openingIsMissing&&!openingEvidenceCache.has(sessionKey())) void hydrateDashboardOpeningEvidence();
-    maybeAutoRefreshSummaries();
+
   }
 
   function updateSessionViewToggle(){
@@ -699,11 +664,6 @@
     const summaryRefresh=byId('sessionDashboardSummaryRefresh');
     if(summaryRefresh) summaryRefresh.addEventListener('click',refreshDashboardSummary);
     syncSessionDashboard();
-    const timer=setInterval(maybeAutoRefreshSummaries,SUMMARY_AUTO_CHECK_MS);
-    if(timer&&typeof timer.unref==='function') timer.unref();
-    document.addEventListener('visibilitychange',()=>{
-      if(!document.hidden) maybeAutoRefreshSummaries({forceCheck:true});
-    });
   };
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();

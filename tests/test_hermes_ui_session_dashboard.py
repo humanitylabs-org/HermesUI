@@ -48,15 +48,19 @@ def test_high_signal_keeps_one_unboxed_goal_and_exactly_three_cards():
     assert 'data-session-view="classic"' in CSS
 
 
-def test_goal_and_status_are_stateless_auto_refreshed_model_summaries():
+def test_goal_and_status_are_stateless_manual_only_model_summaries():
     assert "GROK_SUMMARY_ENDPOINT='/apps/api/high-signal-summary'" in DASHBOARD
     assert "method:'POST'" in DASHBOARD
     assert "credentials:'same-origin'" in DASHBOARD
-    assert "const emptyText='Preparing summary…'" in DASHBOARD
-    assert "SUMMARY_AUTO_CHECK_MS=60*1000" in DASHBOARD
-    assert "SUMMARY_AUTO_REFRESH_FLOOR_MS=5*60*1000" in DASHBOARD
-    assert "maybeAutoRefreshSummaries();" in DASHBOARD
-    assert "record.fingerprint!==evidence.fingerprint" in DASHBOARD
+    assert "Select Refresh to generate the goal summary." in DASHBOARD
+    assert "Select Refresh to generate the current status." in DASHBOARD
+    assert "AI • Manual refresh" in DASHBOARD
+    assert "Refresh for latest" in DASHBOARD
+    assert "maybeAutoRefreshSummaries" not in DASHBOARD
+    assert "SUMMARY_AUTO_CHECK_MS" not in DASHBOARD
+    assert "SUMMARY_AUTO_REFRESH_FLOOR_MS" not in DASHBOARD
+    assert "setInterval(" not in DASHBOARD
+    assert "visibilitychange" not in DASHBOARD
     assert "grokSummaryCache=new Map()" in DASHBOARD
     assert "localStorage.setItem('hermes-session-view'" in DASHBOARD
     assert "localStorage.setItem('grok" not in DASHBOARD.lower()
@@ -152,8 +156,8 @@ vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-d
     assert payload["status"] == "The dashboard has been shipped and the agent is waiting."
     assert payload["instruction"] == "Build and ship the live dashboard."
     assert payload["result"] == "The dashboard is live and verified."
-    assert payload["automaticRequests"] == 2
-    assert len(payload["requests"]) == 4
+    assert payload["automaticRequests"] == 0
+    assert len(payload["requests"]) == 2
     assert {request["kind"] for request in payload["requests"]} == {"goal", "status"}
     combined = json.dumps(payload["requests"])
     assert "Independent review" not in combined
