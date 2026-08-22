@@ -13,20 +13,75 @@
   const grokSummaryCache=new Map();
   const grokSummaryRequests=new Map();
   const grokSummaryErrors=new Map();
+  const grokSummaryAutoChecks=new Map();
   const OPENING_EVIDENCE_LIMIT=30;
   const GROK_SUMMARY_ENDPOINT='/apps/api/high-signal-summary';
+  const SUMMARY_AUTO_CHECK_MS=60*1000;
+  const SUMMARY_AUTO_REFRESH_FLOOR_MS=5*60*1000;
+  const structuredContentText=value=>{
+    if(Array.isArray(value)){
+      let recognized=false;
+      const text=[];
+      for(const part of value){
+        const extracted=structuredContentText(part);
+        recognized=recognized||extracted.recognized;
+        if(extracted.text) text.push(extracted.text);
+      }
+      return {recognized,text:text.join('\n').trim()};
+    }
+    if(value&&typeof value==='object'){
+      const type=String(value.type||'').toLowerCase();
+      if(['image','image_url','input_image','output_image'].includes(type)) return {recognized:true,text:''};
+      if(['text','input_text','output_text'].includes(type)&&typeof value.text==='string'){
+        return {recognized:true,text:value.text.trim()};
+      }
+      if(Object.prototype.hasOwnProperty.call(value,'content')){
+        const extracted=structuredContentText(value.content);
+        return {recognized:true,text:extracted.text};
+      }
+      return {recognized:false,text:''};
+    }
+    return {recognized:false,text:''};
+  };
+  const serializedStructuredText=value=>{
+    const text=String(value||'').trim();
+    const explicitlySerialized=/^json\s*:/i.test(text);
+    const source=explicitlySerialized?text.replace(/^json\s*:\s*/i,''):text;
+    if(!/^[\[{]/.test(source)) return null;
+    try{
+      const extracted=structuredContentText(JSON.parse(source));
+      return extracted.recognized?extracted.text:null;
+    }catch(_){
+      // Some live message adapters prefix structured parts with `json:` after
+      // expanding escaped newlines into literal control characters. Recover
+      // only text parts from that known shape and ignore every image payload.
+      if(!explicitlySerialized) return null;
+      const parts=[];
+      const pattern=/"type"\s*:\s*"(?:text|input_text|output_text)"[\s\S]*?"text"\s*:\s*"((?:\\.|[^"\\])*)"/gi;
+      let match;
+      while((match=pattern.exec(source))){
+        const quoted=String(match[1]||'').replace(/\r/g,'\\r').replace(/\n/g,'\\n').replace(/\t/g,'\\t');
+        try{parts.push(JSON.parse(`"${quoted}"`));}
+        catch(_decode){parts.push(String(match[1]||'').replace(/\\n/g,'\n').replace(/\\"/g,'"').replace(/\\\\/g,'\\'));}
+      }
+      return parts.length?parts.join('\n').trim():null;
+    }
+  };
   const rawText=message=>{
     if(!message) return '';
-    if(typeof msgContent==='function') return msgContent(message);
-    const content=message.content||'';
-    if(Array.isArray(content)) return content.filter(part=>part&&part.type==='text').map(part=>part.text||'').join('').trim();
-    return String(content).trim();
+    const direct=structuredContentText(message.content);
+    if(direct.recognized) return direct.text;
+    const fallback=typeof msgContent==='function'?msgContent(message):message.content||'';
+    const parsed=serializedStructuredText(fallback);
+    return parsed===null?String(fallback||'').trim():parsed;
   };
   const cleanUserText=message=>{
     let text=rawText(message);
     if(typeof _stripWorkspaceDisplayPrefix==='function') text=_stripWorkspaceDisplayPrefix(text);
     else text=String(text||'').replace(/^\s*\[Workspace(?:::[^\]]*|:[^\]]*)\]\s*/i,'').trim();
     if(typeof _stripAttachedFilesMarkerForDisplay==='function') text=_stripAttachedFilesMarkerForDisplay(text);
+    else text=String(text||'').replace(/\s*\[Attached files?:[\s\S]*?\]\s*$/i,'').trim();
+    text=String(text||'').replace(/\s*<memory-context>[\s\S]*?<\/memory-context>\s*$/i,'').trim();
     return String(text||'').trim();
   };
   const isSystemLike=message=>{
@@ -65,7 +120,7 @@
       message.id||message.message_id||message.event_id||'',
       message.created_at||message.timestamp||'',
       message._live?'1':'0',
-      rawText(message)
+      message.role==='user'?cleanUserText(message):rawText(message)
     ].join('\u001f');
   };
   const appendMessageEntry=(cached,message,index)=>{
@@ -260,7 +315,7 @@
   }
 
   function refreshDashboardSummary(){
-    void refreshGrokSummary('goal');
+    void refreshGrokSummary('goal',{force:true});
   }
 
   function activeStep(){
@@ -315,22 +370,6 @@
     return current.session&&String(current.session.session_id||current.session.id||'');
   };
 
-  function evidenceToolNames(message){
-    const names=[];
-    if(message&&Array.isArray(message.tool_calls)){
-      for(const call of message.tool_calls){
-        const name=call&&(
-          call.name
-          || call.function&&call.function.name
-          || call.tool_name
-        );
-        if(name) names.push(String(name));
-      }
-    }
-    const direct=message&&(message.name||message.tool_name||message._tool_name);
-    if(direct) names.push(String(direct));
-    return [...new Set(names)].slice(0,8);
-  }
 
   function backgroundFreeMessages(messages){
     const filtered=[];
@@ -362,18 +401,13 @@
 
   function evidenceLine(message,kind){
     if(!message) return '';
-    const tools=evidenceToolNames(message);
-    if(message.role==='tool') return tools.length?`TOOL COMPLETED: ${tools.join(', ')}`:'TOOL COMPLETED';
     if(message.role==='user'){
       const text=compact(cleanUserText(message),kind==='goal'?1400:1000);
       return text?`USER: ${text}`:'';
     }
     if(message.role==='assistant'){
       const text=compact(rawText(message),kind==='goal'?1600:1800);
-      const activity=tools.length?`ACTIVE TOOL CALLS: ${tools.join(', ')}`:'';
-      if(text&&activity) return `ASSISTANT: ${text}\n${activity}`;
       if(text) return `ASSISTANT: ${text}`;
-      return activity;
     }
     return '';
   }
@@ -408,10 +442,12 @@
       const opening=openingEvidenceCache.get(sessionKey());
       const openingMessages=opening&&Array.isArray(opening.messages)?opening.messages:[];
       const all=backgroundFreeMessages(uniqueMessages([...openingMessages,...recent]))
-        .filter(message=>message.role==='user'||message.role==='assistant');
-      candidates=all.length>48?[...all.slice(0,12),...all.slice(-36)]:all;
+        .filter(message=>message.role==='user');
+      candidates=all.length>30?[...all.slice(0,8),...all.slice(-22)]:all;
     }else{
-      candidates=backgroundFreeMessages(recent).slice(-64);
+      candidates=backgroundFreeMessages(recent)
+        .filter(message=>message.role==='user'||message.role==='assistant')
+        .slice(-64);
     }
     const lines=candidates.map(message=>evidenceLine(message,kind)).filter(Boolean);
     if(kind==='status'){
@@ -434,9 +470,7 @@
     const error=grokSummaryErrors.get(key);
     const targetId=kind==='goal'?'sessionDashboardOriginalRequest':'sessionDashboardStatus';
     const metaId=kind==='goal'?'sessionDashboardSummaryUpdated':'sessionDashboardUpdated';
-    const emptyText=kind==='goal'
-      ? 'Select Refresh goal to generate a one-sentence summary.'
-      : 'Select Refresh status to evaluate what is happening in this session now.';
+    const emptyText='Preparing summary…';
     const label=record&&(
       String(record.provider||'').includes('xai')
       || String(record.model||'').toLowerCase().includes('grok')
@@ -446,8 +480,8 @@
     else if(error) setText(metaId,`AI • ${error}`);
     else if(record){
       const currentFingerprint=grokEvidence(kind).fingerprint;
-      setText(metaId,record.fingerprint===currentFingerprint?`${label} • Updated ${record.updated}`:`${label} • Refresh for latest`);
-    }else setText(metaId,'AI • Not generated');
+      setText(metaId,record.fingerprint===currentFingerprint?`${label} • Updated ${record.updated}`:`${label} • Auto-refresh pending`);
+    }else setText(metaId,'AI • Preparing…');
   }
 
   function setSummaryButtonBusy(kind,busy){
@@ -455,10 +489,10 @@
     if(!button) return;
     button.disabled=!!busy;
     button.setAttribute('aria-busy',busy?'true':'false');
-    button.textContent=busy?'Evaluating…':kind==='goal'?'Refresh goal':'Refresh status';
+    button.textContent=busy?'Updating…':'Refresh';
   }
 
-  async function refreshGrokSummary(kind){
+  async function refreshGrokSummary(kind,options={}){
     const sid=sessionKey();
     if(!sid||!['goal','status'].includes(kind)) return;
     const key=grokCacheKey(kind,sid);
@@ -469,9 +503,15 @@
       const cached=openingEvidenceCache.get(sid);
       if(openingMissing&&(!cached||cached.error)) await hydrateDashboardOpeningEvidence({force:!!cached});
     }
+    if(grokSummaryRequests.has(key)) return grokSummaryRequests.get(key);
     const evidence=grokEvidence(kind);
     if(!evidence.lines.length){
       grokSummaryErrors.set(key,'No usable session evidence');
+      renderGrokSummary(kind);
+      return;
+    }
+    const existing=grokSummaryCache.get(key);
+    if(!options.force&&existing&&existing.fingerprint===evidence.fingerprint){
       renderGrokSummary(kind);
       return;
     }
@@ -497,6 +537,7 @@
           text:String(payload.summary).trim(),
           fingerprint:evidence.fingerprint,
           updated:new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}),
+          updatedAt:Date.now(),
           provider:String(payload.provider||'auto'),
           model:String(payload.model||'')
         });
@@ -519,7 +560,32 @@
   }
 
   function refreshDashboardStatus(){
-    void refreshGrokSummary('status');
+    void refreshGrokSummary('status',{force:true});
+  }
+
+  function maybeAutoRefreshSummaries(options={}){
+    const root=document.documentElement;
+    if(!root||!root.dataset||root.dataset.sessionView==='classic'||document.hidden) return;
+    const sid=sessionKey();
+    if(!sid) return;
+    const now=Date.now();
+    const lastCheck=Number(grokSummaryAutoChecks.get(sid)||0);
+    if(!options.forceCheck&&now-lastCheck<SUMMARY_AUTO_CHECK_MS) return;
+    grokSummaryAutoChecks.set(sid,now);
+    while(grokSummaryAutoChecks.size>40) grokSummaryAutoChecks.delete(grokSummaryAutoChecks.keys().next().value);
+    for(const kind of ['goal','status']){
+      const key=grokCacheKey(kind,sid);
+      const record=grokSummaryCache.get(key);
+      const evidence=grokEvidence(kind);
+      if(!evidence.lines.length||grokSummaryRequests.has(key)) continue;
+      if(!record){
+        void refreshGrokSummary(kind);
+        continue;
+      }
+      const changed=record.fingerprint!==evidence.fingerprint;
+      const oldEnough=now-Number(record.updatedAt||0)>=SUMMARY_AUTO_REFRESH_FLOOR_MS;
+      if(changed&&oldEnough) void refreshGrokSummary(kind);
+    }
   }
 
   function syncSessionDashboard(){
@@ -548,6 +614,7 @@
     const completedCard=byId('sessionDashboardCompletedCard');
     if(completedCard) completedCard.dataset.empty=completed?'0':'1';
     if(openingIsMissing&&!openingEvidenceCache.has(sessionKey())) void hydrateDashboardOpeningEvidence();
+    maybeAutoRefreshSummaries();
   }
 
   function updateSessionViewToggle(){
@@ -632,6 +699,11 @@
     const summaryRefresh=byId('sessionDashboardSummaryRefresh');
     if(summaryRefresh) summaryRefresh.addEventListener('click',refreshDashboardSummary);
     syncSessionDashboard();
+    const timer=setInterval(maybeAutoRefreshSummaries,SUMMARY_AUTO_CHECK_MS);
+    if(timer&&typeof timer.unref==='function') timer.unref();
+    document.addEventListener('visibilitychange',()=>{
+      if(!document.hidden) maybeAutoRefreshSummaries({forceCheck:true});
+    });
   };
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();

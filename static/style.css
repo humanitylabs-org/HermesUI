@@ -2437,7 +2437,7 @@
   .messages-shell.session-swipe-active{overflow:hidden;}
   @media (max-width:640px) and (pointer:coarse){.messages-shell{touch-action:pan-y;}}
   .messages{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0;position:relative;z-index:0;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior-y:contain;overflow-anchor:auto;}
-  .session-dashboard{width:100%;max-width:none;height:100%;min-height:0;margin:0;padding:0;box-sizing:border-box;grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(4,minmax(0,1fr));gap:0;overflow:hidden;align-self:stretch;}
+  .session-dashboard{width:100%;max-width:none;height:100%;min-height:0;margin:0;padding:0;box-sizing:border-box;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(110px,.65fr) minmax(88px,.55fr) minmax(88px,.65fr) minmax(0,2.2fr);gap:0;overflow:hidden;align-self:stretch;}
   html[data-session-view="dashboard"] .messages{overflow:hidden;}
   html[data-session-view="dashboard"] .session-dashboard:not([hidden]){display:grid;}
   html[data-session-view="dashboard"] #msgInner,
@@ -2485,8 +2485,8 @@
   .session-dashboard-section--completed[data-empty="1"]{opacity:.72;}
   .session-dashboard-section--original{overflow:hidden;}
   .session-dashboard-section--original .session-dashboard-label{margin-bottom:10px;}
-  .session-dashboard-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;}
-  .session-dashboard-status-heading{display:flex;align-items:center;gap:8px;min-width:0;}
+  .session-dashboard-card-head{display:flex;align-items:center;justify-content:flex-start;gap:12px;}
+  .session-dashboard-heading-actions,.session-dashboard-status-heading{display:flex;align-items:center;gap:8px;min-width:0;}
   .session-dashboard-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
   .session-dashboard-card-head .session-dashboard-label{margin-bottom:0;}
   .session-dashboard-turn{display:inline-flex;align-items:center;white-space:nowrap;border:1px solid var(--border);border-radius:999px;padding:2px 7px;color:var(--muted);font-size:10px;font-weight:600;letter-spacing:0;text-transform:none;}
@@ -2507,7 +2507,7 @@
   .session-dashboard-copy--verbatim blockquote{margin:8px 0;padding:8px 10px;border-left:2px solid var(--border2);border-radius:0 8px 8px 0;background:var(--surface-subtle,var(--hover-bg));color:var(--muted);font-style:italic;}
   .session-dashboard-copy--verbatim blockquote p{margin:0;}
   .session-dashboard-copy--result{max-height:none;}
-  .session-dashboard-refresh{border:1px solid var(--border2);border-radius:8px;background:transparent;color:var(--muted);padding:6px 9px;font:inherit;font-size:11px;font-weight:600;cursor:pointer;}
+  .session-dashboard-refresh{border:1px solid var(--border2);border-radius:7px;background:transparent;color:var(--muted);padding:3px 7px;font:inherit;font-size:10px;font-weight:600;line-height:1.35;cursor:pointer;}
   .session-dashboard-refresh:hover{color:var(--text);background:var(--hover-bg);}
   .session-dashboard-updated{margin-top:8px;font-size:10px;color:var(--muted);opacity:.7;}
 @media (hover:hover) and (pointer:fine){.messages{overflow-anchor:none;}}
@@ -3311,11 +3311,11 @@
     .session-switch-skeleton-chat-row{gap:7px;}
     .session-switch-skeleton-chat-copy{gap:7px;width:calc(100% - 28px);margin-left:28px;}
     .session-switch-skeleton-line{height:10px;}
-    .session-switch-skeleton-high-signal{height:100%;grid-template-rows:repeat(4,minmax(0,1fr));}
+    .session-switch-skeleton-high-signal{height:100%;grid-template-rows:minmax(106px,.65fr) minmax(84px,.55fr) minmax(84px,.65fr) minmax(0,2.2fr);}
     .session-switch-skeleton-pane{padding:9px 12px;gap:7px;}
     .session-switch-skeleton-pane:first-child{padding-top:40px;}
     .session-switch-skeleton-pane-label{font-size:10px;margin-bottom:0;}
-    .session-dashboard{height:100%;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(4,minmax(0,1fr));overflow:hidden;}
+    .session-dashboard{height:100%;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(106px,.65fr) minmax(84px,.55fr) minmax(84px,.65fr) minmax(0,2.2fr);overflow:hidden;}
     html[data-session-view="dashboard"] .messages{overflow:hidden;}
     .session-dashboard-section{min-height:0;padding:9px 12px;overflow:hidden;}
     .session-dashboard-section:first-child{padding-top:40px;}
@@ -3324,7 +3324,7 @@
     .session-dashboard-copy{font-size:12px;line-height:1.4;}
     .session-dashboard-copy--original{font-size:13px;line-height:1.45;}
     .session-dashboard-card-head{gap:8px;}
-    .session-dashboard-refresh{padding:4px 7px;font-size:10px;}
+    .session-dashboard-refresh{padding:3px 6px;font-size:9px;}
     .session-dashboard-updated{margin-top:4px;font-size:9px;}
 
     /* Mobile PWA reflow guard (#3976): a one-frame GPU-promotion transform that

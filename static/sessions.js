@@ -2535,6 +2535,15 @@ async function _openSidebarSession(session, loadOpts={}){
       catch(_e){ /* import failed -- fall through to read-only view */ }
     }
     await _ensureSidebarSessionProfile(session);
+    // Give both desktop clicks and mobile tabs the same selected-session cache
+    // priority before loadSession reaches its transcript phase.
+    if(typeof _prioritizeSessionWarmCache==='function'&&Array.isArray(_allSessions)){
+      const visibleIds=[..._allSessions]
+        .filter(item=>item&&item.session_id&&!item.archived)
+        .sort(_sessionSidebarSortCompare)
+        .map(item=>String(item.session_id));
+      _prioritizeSessionWarmCache(visibleIds,session.session_id);
+    }
     // Tell loadSession to skip its pre-hook — we already ran it above.
     await loadSession(session.session_id, Object.assign({}, loadOpts, {_preloadNotified:true}));
     if(S.session&&S.session.session_id===session.session_id){
@@ -3297,7 +3306,7 @@ function _sessionMessagePrefetchTargets(){
   }).slice(0,_SESSION_MESSAGE_CACHE_MAX);
 }
 
-function _prioritizeMobileSessionWarmCache(visibleIds,selectedSid){
+function _prioritizeSessionWarmCache(visibleIds,selectedSid){
   if(!_sessionMessagePrefetchExecutionAllowed()) return;
   const ids=[...new Set((Array.isArray(visibleIds)?visibleIds:[]).filter(Boolean).map(String))];
   const selected=String(selectedSid||'');
@@ -3321,6 +3330,10 @@ function _prioritizeMobileSessionWarmCache(visibleIds,selectedSid){
   const generation=_sessionMessagePrefetchGeneration;
   _sessionMessagePrefetchQueue=_sessionMessagePrefetchTargets().map(session=>({session,generation}));
   _pumpSessionMessagePrefetchQueue();
+}
+
+function _prioritizeMobileSessionWarmCache(visibleIds,selectedSid){
+  return _prioritizeSessionWarmCache(visibleIds,selectedSid);
 }
 
 function _sessionMessagePrefetchExecutionAllowed(){

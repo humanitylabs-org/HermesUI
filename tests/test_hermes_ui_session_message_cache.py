@@ -85,6 +85,15 @@ def test_warm_session_switch_avoids_a_short_loading_label_flash():
     assert "},200);" in SESSIONS_JS
 
 
+def test_selected_session_cache_priority_applies_on_desktop_too():
+    open_start = SESSIONS_JS.index("async function _openSidebarSession(session")
+    open_end = SESSIONS_JS.index("function _isReadOnlySession", open_start)
+    open_body = SESSIONS_JS[open_start:open_end]
+    assert "_prioritizeSessionWarmCache(visibleIds,session.session_id);" in open_body
+    assert "function _prioritizeSessionWarmCache(visibleIds,selectedSid)" in SESSIONS_JS
+    assert "function _prioritizeMobileSessionWarmCache(visibleIds,selectedSid)" in SESSIONS_JS
+
+
 def test_warm_cache_lru_freshness_clone_and_prefetch_deduplication():
     harness = f"""
 const assert = require('assert');

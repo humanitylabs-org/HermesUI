@@ -40,16 +40,23 @@ def test_high_signal_keeps_one_unboxed_goal_and_exactly_three_cards():
     assert 'id="sessionDashboardCompleted"' in block
     assert 'id="sessionDashboardSummaryRefresh"' in block
     assert 'id="sessionDashboardRefresh"' in block
+    assert block.index('>Goal<') < block.index('>Last instruction<') < block.index('>Status<') < block.index('>Result<')
+    assert 'session-dashboard-heading-actions' in block
+    assert block.index('>Goal<') < block.index('aria-label="Refresh goal"')
+    assert block.index('>Status<') < block.index('aria-label="Refresh status"')
     assert 'data-session-view="dashboard"' in CSS
     assert 'data-session-view="classic"' in CSS
 
 
-def test_goal_and_status_are_stateless_on_demand_model_summaries():
+def test_goal_and_status_are_stateless_auto_refreshed_model_summaries():
     assert "GROK_SUMMARY_ENDPOINT='/apps/api/high-signal-summary'" in DASHBOARD
     assert "method:'POST'" in DASHBOARD
     assert "credentials:'same-origin'" in DASHBOARD
-    assert "Select Refresh goal" in DASHBOARD
-    assert "Select Refresh status" in DASHBOARD
+    assert "const emptyText='Preparing summary…'" in DASHBOARD
+    assert "SUMMARY_AUTO_CHECK_MS=60*1000" in DASHBOARD
+    assert "SUMMARY_AUTO_REFRESH_FLOOR_MS=5*60*1000" in DASHBOARD
+    assert "maybeAutoRefreshSummaries();" in DASHBOARD
+    assert "record.fingerprint!==evidence.fingerprint" in DASHBOARD
     assert "grokSummaryCache=new Map()" in DASHBOARD
     assert "localStorage.setItem('hermes-session-view'" in DASHBOARD
     assert "localStorage.setItem('grok" not in DASHBOARD.lower()
@@ -61,7 +68,8 @@ def test_goal_and_status_are_stateless_on_demand_model_summaries():
 def test_goal_uses_bounded_opening_and_recent_evidence_without_full_history_fetch():
     assert "OPENING_EVIDENCE_LIMIT=30" in DASHBOARD
     assert "msg_before=${OPENING_EVIDENCE_LIMIT}&msg_limit=${OPENING_EVIDENCE_LIMIT}" in DASHBOARD
-    assert "all.length>48?[...all.slice(0,12),...all.slice(-36)]:all" in DASHBOARD
+    assert ".filter(message=>message.role==='user')" in DASHBOARD
+    assert "all.length>30?[...all.slice(0,8),...all.slice(-22)]:all" in DASHBOARD
     assert "lines:lines.slice(-80)" in DASHBOARD
     assert "openingEvidenceCache" in DASHBOARD
 
@@ -93,7 +101,7 @@ global.location={{href:'https://device.example/hermesUI/session/session-1'}};
 global.history={{state:null,replaceState(){{}}}};
 global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
 global.S={{session:{{session_id:'session-1'}},messages:[
-  {{role:'user',content:'Build and ship the live dashboard.',id:'u1'}},
+  {{role:'user',content:'json:[{{"type":"text","text":"[Workspace::v1: /tmp]\\nBuild and ship the live dashboard.\\n\\n[Attached files: /tmp/screenshot.png]"}},{{"type":"image_url","image_url":{{"url":"data:image/png;base64,SECRET_PIXELS"}}}}]',id:'u1'}},
   {{role:'assistant',content:'I am deploying it now.',id:'a1',tool_calls:[{{function:{{name:'terminal'}}}}],finish_reason:'tool_calls'}},
   {{role:'user',content:'[ASYNC DELEGATION BATCH COMPLETE — review-1] Review finished.',_source:'process_wakeup',id:'b1'}},
   {{role:'assistant',content:'The dashboard is live and verified.',id:'a2',finish_reason:'stop'}},
@@ -102,8 +110,8 @@ global.S={{session:{{session_id:'session-1'}},messages:[
 ],busy:false,activeStreamId:null}};
 global.msgContent=m=>String(m&&m.content||'');
 global.renderMd=s=>String(s||'');
-global._stripWorkspaceDisplayPrefix=s=>String(s||'');
-global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');
+global._stripWorkspaceDisplayPrefix=s=>String(s||'').replace(/^\\s*\\[Workspace[^\\]]*\\]\\s*/i,'').trim();
+global._stripAttachedFilesMarkerForDisplay=s=>String(s||'').replace(/\\s*\\[Attached files?:[\\s\\S]*?\\]\\s*$/i,'').trim();
 global._messageIsRenderable=m=>!!(m&&m.role!=='tool'&&(m.content||(m.tool_calls||[]).length));
 global._isContextCompactionMessage=()=>false;
 global._isPreservedCompressionTaskListMessage=()=>false;
@@ -122,6 +130,8 @@ global.fetch=async(_url,opts)=>{{
 }};
 vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
 (async()=>{{
+  await new Promise(resolve=>setTimeout(resolve,25));
+  const automaticRequests=requests.length;
   element('sessionDashboardSummaryRefresh').listeners.click();
   element('sessionDashboardRefresh').listeners.click();
   await new Promise(resolve=>setTimeout(resolve,25));
@@ -131,6 +141,7 @@ vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-d
     status:element('sessionDashboardStatus').innerHTML,
     instruction:element('sessionDashboardInstruction').innerHTML,
     result:element('sessionDashboardCompleted').innerHTML,
+    automaticRequests,
     requests,
   }}));
 }})().catch(error=>{{console.error(error);process.exit(1);}});
@@ -141,11 +152,15 @@ vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-d
     assert payload["status"] == "The dashboard has been shipped and the agent is waiting."
     assert payload["instruction"] == "Build and ship the live dashboard."
     assert payload["result"] == "The dashboard is live and verified."
+    assert payload["automaticRequests"] == 2
+    assert len(payload["requests"]) == 4
     assert {request["kind"] for request in payload["requests"]} == {"goal", "status"}
     combined = json.dumps(payload["requests"])
     assert "Independent review" not in combined
     assert "ASYNC DELEGATION" not in combined
     assert "Background process" not in combined
+    assert "SECRET_PIXELS" not in combined
+    assert "image_url" not in combined
 
 
 def test_dashboard_projection_remains_incremental_for_long_sessions():
