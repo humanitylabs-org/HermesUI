@@ -137,14 +137,33 @@
     if(message&&message.role==='user'){
       if(isBackgroundUpdateTrigger(message)){
         cached.backgroundUpdateActive=!cached.userDirectedRunOpen;
+        cached.backgroundResumeBoundary=cached.backgroundUpdateActive
+          ? latestMatchingEntry(cached.entries,entry=>entry.message.role==='assistant'&&!entry.intermediary&&rawText(entry.message))
+          : null;
         return;
       }
       cached.backgroundUpdateActive=false;
+      cached.backgroundResumeBoundary=null;
       cached.userDirectedRunOpen=true;
     }
     if(cached.backgroundUpdateActive){
-      if(message&&message.role==='assistant'&&!assistantContinuesUserDirectedTurn(message)) cached.backgroundUpdateActive=false;
-      return;
+      if(message&&message.role==='assistant'&&assistantContinuesUserDirectedTurn(message)){
+        // A wakeup can resume the user's unfinished turn after an earlier
+        // progress-only assistant message closed our local run heuristic. Tool
+        // work is proof that this is an active continuation, not a standalone
+        // background note. Reopen the turn so its eventual final answer becomes
+        // the High Signal Result instead of disappearing with the wakeup row.
+        cached.backgroundUpdateActive=false;
+        cached.userDirectedRunOpen=true;
+        if(cached.backgroundResumeBoundary) cached.backgroundResumeBoundary.intermediary=true;
+        cached.backgroundResumeBoundary=null;
+      }else{
+        if(message&&message.role==='assistant'){
+          cached.backgroundUpdateActive=false;
+          cached.backgroundResumeBoundary=null;
+        }
+        return;
+      }
     }
     if(message&&message.role==='assistant'){
       if(assistantContinuesUserDirectedTurn(message)) cached.userDirectedRunOpen=true;
@@ -156,7 +175,7 @@
     if(!cached.firstUser&&message.role==='user'&&cleanUserText(message)) cached.firstUser=entry;
   };
   const rebuildProjection=(messages)=>{
-    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:'',backgroundUpdateActive:false,userDirectedRunOpen:false};
+    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:'',backgroundUpdateActive:false,backgroundResumeBoundary:null,userDirectedRunOpen:false};
     for(let index=0;index<messages.length;index++) appendMessageEntry(cached,messages[index],index);
     cached.length=messages.length;
     cached.firstSignature=messages.length?messageSignature(messages[0]):'';
@@ -246,6 +265,7 @@
         if(entry.index>=latestAssistant.index) continue;
         if(
           entry.message.role==='assistant'
+          && !entry.intermediary
           && rawText(entry.message)
           && !entry.message._live
           && !assistantContinuesUserDirectedTurn(entry.message)
@@ -474,8 +494,13 @@
         userDirectedRunOpen=true;
       }
       if(backgroundActive){
-        if(message.role==='assistant'&&!assistantContinuesUserDirectedTurn(message)) backgroundActive=false;
-        continue;
+        if(message.role==='assistant'&&assistantContinuesUserDirectedTurn(message)){
+          backgroundActive=false;
+          userDirectedRunOpen=true;
+        }else{
+          if(message.role==='assistant') backgroundActive=false;
+          continue;
+        }
       }
       if(isSystemLike(message)) continue;
       if(message.role==='assistant'){

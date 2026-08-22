@@ -248,6 +248,32 @@ const initial=reads;for(let i=0;i<20;i++)syncSessionDashboard();const repeated=r
     assert payload["classic"] == 0
 
 
+def test_wakeup_that_resumes_tool_work_promotes_its_terminal_answer_to_result():
+    node = shutil.which("node")
+    assert node is not None
+    harness = f"""
+const fs=require('fs');const vm=require('vm');const elements=new Map();
+function element(id){{if(!elements.has(id))elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},disabled:false,attrs:{{}},listeners:{{}},addEventListener(name,fn){{this.listeners[name]=fn;}},setAttribute(name,value){{this.attrs[name]=String(value);}},removeAttribute(name){{delete this.attrs[name];}}}});return elements.get(id);}}
+global.window=global;global.document={{readyState:'complete',documentElement:{{dataset:{{sessionView:'dashboard'}}}},getElementById:element,addEventListener(){{}}}};
+global.location={{href:'https://device.example/hermesUI/session/session-1'}};global.history={{state:null,replaceState(){{}}}};global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
+global.S={{session:{{session_id:'session-1'}},messages:[
+  {{role:'user',content:'[Workspace::v1: /tmp]\\nAnalyze the CRM export.',id:'u1'}},
+  {{role:'assistant',content:'The export is running; I will verify it when it finishes.',id:'progress',finish_reason:'stop'}},
+  {{role:'user',content:'[IMPORTANT: Background process proc_1 completed (exit_code=0).]',_source:'process_wakeup',id:'w1'}},
+  {{role:'assistant',content:'',id:'work',tool_calls:[{{function:{{name:'terminal'}}}}],finish_reason:'tool_calls'}},
+  {{role:'tool',content:'CRM_COUNTS_VERIFIED',id:'t1'}},
+  {{role:'assistant',content:'The CRM export contains 3,486 verified contacts.',id:'final',finish_reason:'stop'}},
+],busy:false,activeStreamId:null}};
+global.msgContent=m=>String(m&&m.content||'');global.renderMd=s=>String(s||'');global._stripWorkspaceDisplayPrefix=s=>String(s||'').replace(/^\\s*\\[Workspace[^\\]]*\\]\\s*/i,'').trim();global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');global._messageIsRenderable=m=>!!(m&&m.role!=='tool'&&(m.content||(m.tool_calls||[]).length));global._isContextCompactionMessage=()=>false;global._isPreservedCompressionTaskListMessage=()=>false;global._isRecoveryControlMessage=()=>false;global.INFLIGHT={{}};global.requestAnimationFrame=cb=>{{cb();return 1;}};global.queueMicrotask=cb=>cb();global._messagesTruncated=false;global._oldestIdx=0;global.fetch=async()=>{{throw new Error('manual summaries must not run');}};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
+setTimeout(()=>{{syncSessionDashboard();process.stdout.write(JSON.stringify({{prompt:element('sessionDashboardInstruction').innerHTML,result:element('sessionDashboardCompleted').innerHTML}}));}},20);
+"""
+    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
+    payload = json.loads(result.stdout)
+    assert payload["prompt"] == "Analyze the CRM export."
+    assert payload["result"] == "The CRM export contains 3,486 verified contacts."
+
+
 def test_result_with_assistant_only_tail_automatically_pages_until_last_prompt():
     node = shutil.which("node")
     assert node is not None

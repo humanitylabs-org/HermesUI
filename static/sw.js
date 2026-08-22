@@ -43,7 +43,7 @@ const SHELL_ASSETS = [
   './static/workspace.js' + VQ,
   './static/terminal.js' + VQ,
   './static/onboarding.js' + VQ,
-  './static/session-dashboard.js' + VQ + '&tab-polish=v1&high-signal-model=v5',
+  './static/session-dashboard.js' + VQ + '&tab-polish=v1&high-signal-model=v6',
   './static/vendor/smd.min.js' + VQ,
   './static/vendor/katex/0.16.22/katex.min.css' + VQ,
   './static/vendor/katex/0.16.22/katex.min.js' + VQ,
