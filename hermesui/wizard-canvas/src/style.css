@@ -35,6 +35,16 @@ body { background: #fff; }
 .excalidraw .Island { box-shadow: 0 5px 20px rgba(40, 21, 72, .08); }
 .excalidraw .ToolIcon__icon { border-radius: 9px; }
 
+/* Keep selected-element controls opinionated and writing-first. */
+.excalidraw .panelColumn > fieldset:has(input[name="font-size"]),
+.excalidraw .panelColumn > label.control-label:has(input[data-testid="opacity"]),
+.excalidraw .panelColumn > fieldset:has(.zIndexButton),
+.excalidraw .panelColumn > fieldset:has(
+  button[aria-label="Duplicate"],
+  button[aria-label="Delete"],
+  button[aria-label="Add link"]
+) { display: none !important; }
+
 .wizard-canvas-save {
   display: inline-flex;
   align-items: center;

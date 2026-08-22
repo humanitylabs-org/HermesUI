@@ -13,7 +13,7 @@ BUILD = ROOT / "static" / "wizard-canvas"
 def test_wizard_icon_opens_one_embedded_desktop_canvas():
     assert 'id="tailnetWizardHome" aria-label="Wizard Canvas"' in INDEX
     assert 'id="wizardCanvasFrame" title="Wizard Canvas"' in INDEX
-    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v5' in INDEX
+    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v6' in INDEX
     assert "showWizardHome=isWizardHomeDesktop()" in RAIL
     assert "wizardHome.hidden=!showWizardHome" in RAIL
     assert "if(wizardHome)wizardHome.hidden=true" in RAIL
@@ -22,7 +22,7 @@ def test_wizard_icon_opens_one_embedded_desktop_canvas():
 
 def test_canvas_is_self_hosted_and_cloud_actions_are_disabled():
     assert (BUILD / "index.html").is_file()
-    assert (BUILD / "assets" / "app-v5.min.js").is_file()
+    assert (BUILD / "assets" / "app-v6.min.js").is_file()
     assert (BUILD / "EXCALIDRAW_LICENSE.txt").is_file()
     assert (BUILD / "fonts").is_dir()
     assert "@excalidraw/excalidraw" in SOURCE
@@ -50,6 +50,15 @@ def test_canvas_has_a_transient_save_status_and_blank_only_watermark():
     assert "renderTopRightUI={topRightUi}" in SOURCE
 
 
+def test_selected_text_controls_are_reduced_to_the_writing_essentials():
+    assert ':has(input[name="font-size"])' in SOURCE_CSS
+    assert ':has(input[data-testid="opacity"])' in SOURCE_CSS
+    assert ':has(.zIndexButton)' in SOURCE_CSS
+    assert 'button[aria-label="Duplicate"]' in SOURCE_CSS
+    assert 'button[aria-label="Delete"]' in SOURCE_CSS
+    assert 'button[aria-label="Add link"]' in SOURCE_CSS
+
+
 def test_canvas_uses_only_the_server_autosave_endpoint():
     assert "const ENDPOINT = '/apps/api/wizard-canvas';" in SOURCE
     assert "serializeAsJSON" in SOURCE
@@ -57,4 +66,4 @@ def test_canvas_uses_only_the_server_autosave_endpoint():
     assert "baseRevision" in SOURCE
     assert "method: 'PUT'" in SOURCE
     assert "Changed in another tab" in SOURCE
-    assert "wizard-canvas-v5" in SW
+    assert "wizard-canvas-v6" in SW
