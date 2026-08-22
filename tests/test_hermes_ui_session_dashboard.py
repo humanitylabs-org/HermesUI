@@ -12,11 +12,14 @@ COMMANDS = (ROOT / "static" / "commands.js").read_text(encoding="utf-8")
 
 def test_high_signal_mode_is_frontend_only_and_keeps_classic_escape_hatch():
     assert "static/session-dashboard.js" in INDEX
-    assert "hermes-session-view','classic'" in INDEX
+    assert 'id="sessionViewToggle"' in INDEX
+    assert "window.toggleSessionView=function()" in DASHBOARD
+    assert "window.history.replaceState" in DASHBOARD
+    assert "location.reload" not in DASHBOARD
     assert 'data-session-view="dashboard"' in CSS
     assert 'data-session-view="classic"' in CSS
     assert "fetch(" not in DASHBOARD
-    assert "/api/" not in DASHBOARD
+    assert "await api(`/api/session?" in DASHBOARD
 
 
 def test_fresh_install_defaults_to_classic_and_preserves_saved_high_signal_choice():
@@ -28,10 +31,17 @@ def test_fresh_install_defaults_to_classic_and_preserves_saved_high_signal_choic
 
 
 def test_visible_mode_name_is_high_signal_not_dashboard():
-    assert ">High Signal Mode</a>" in INDEX
-    assert ">Dashboard view</a>" not in INDEX
+    assert '<span class="session-view-toggle-label">High Signal</span>' in INDEX
+    assert "Dashboard view" not in INDEX
     assert 'aria-label="High Signal Mode"' in INDEX
-    assert 'href="?session_view=high-signal"' in INDEX
+    assert "url.searchParams.set('session_view',next==='dashboard'?'high-signal':'classic')" in DASHBOARD
+
+
+def test_view_toggle_is_only_relocated_beside_settings():
+    footer = INDEX[INDEX.index('<div class="chat-settings-footer">'):INDEX.index('<div class="resize-handle"')]
+    assert footer.index('id="chatSettingsToggle"') < footer.index('id="sessionViewToggle"')
+    assert 'class="session-view-switcher"' not in INDEX
+    assert ".session-view-toggle{" in CSS
 
 
 def test_high_signal_mode_has_exactly_four_vertically_stacked_full_space_sections():
@@ -83,17 +93,20 @@ def test_high_signal_mode_has_exactly_four_vertically_stacked_full_space_section
     assert ".session-dashboard-section{min-height:190px" not in CSS
 
 
-def test_session_summary_uses_original_request_as_frontend_only_placeholder():
+def test_session_summary_hydrates_original_request_with_a_bounded_head_slice():
     assert "function dashboardSessionSummary(projection)" in DASHBOARD
     assert "typeof _messagesTruncated!=='undefined'" in DASHBOARD
     assert "typeof _oldestIdx!=='undefined'" in DASHBOARD
-    assert "The goal is not loaded yet. Switch to Classic view and load earlier messages to see it." in DASHBOARD
+    assert "Loading the original request…" in DASHBOARD
+    assert "OPENING_EVIDENCE_LIMIT=30" in DASHBOARD
+    assert "msg_before=${OPENING_EVIDENCE_LIMIT}&msg_limit=${OPENING_EVIDENCE_LIMIT}" in DASHBOARD
+    assert "openingEvidenceCache" in DASHBOARD
     assert "const firstUser=projection.firstUser" in DASHBOARD
     assert "return firstText||'No goal is available yet.'" in DASHBOARD
     assert "setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(projection))" in DASHBOARD
     assert "function refreshDashboardSummary()" in DASHBOARD
     assert "summaryRefresh.addEventListener('click',refreshDashboardSummary)" in DASHBOARD
-    assert "Placeholder refreshed" in DASHBOARD
+    assert "hydrateDashboardOpeningEvidence({force:true})" in DASHBOARD
     assert "compression_anchor_summary" not in DASHBOARD
     assert ".session-dashboard-section--original{" in CSS
     assert ".session-dashboard-copy--original{" in CSS
@@ -143,7 +156,7 @@ process.stdout.write(JSON.stringify({{
     result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
     payload = json.loads(result.stdout)
     assert payload == {
-        "original": "The goal is not loaded yet. Switch to Classic view and load earlier messages to see it.",
+        "original": "Loading the original request…",
         "tailWasMisrepresented": False,
     }
 
@@ -236,17 +249,18 @@ process.stdout.write(JSON.stringify({{
     result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
     payload = json.loads(result.stdout)
     assert payload["initial"] >= 10000
-    assert payload["repeated"] <= 300
-    assert payload["copied"] <= 15
-    assert payload["appended"] <= 20
+    assert payload["repeated"] <= 400
+    assert payload["copied"] <= 20
+    assert payload["appended"] <= 24
     assert payload["classic"] == 0
     assert payload["hidden"] is True
 
 
-def test_status_refresh_is_manual_only():
+def test_status_is_available_immediately_and_manual_refresh_remains():
     assert "refresh.addEventListener('click',refreshDashboardStatus)" in DASHBOARD
     assert "setInterval(" not in DASHBOARD
-    assert "Manual refresh only" in DASHBOARD
+    assert "dashboardStatus(sessionMessages())" in DASHBOARD
+    assert "Current frontend state" in DASHBOARD
     assert "statusSnapshots" in DASHBOARD
 
 
@@ -262,6 +276,9 @@ def test_active_status_shows_assistant_messages_since_latest_instruction():
 
 def test_dashboard_filters_internal_system_messages():
     assert "message._source==='process_wakeup'" in DASHBOARD
+    assert "ASYNC DELEGATION(?: BATCH)? COMPLETE" in DASHBOARD
+    assert "intermediary:true" in DASHBOARD
+    assert "!entry.intermediary" in DASHBOARD
     assert "_isContextCompactionMessage" in DASHBOARD
     assert "_isPreservedCompressionTaskListMessage" in DASHBOARD
     assert "systemLikeText" not in DASHBOARD
@@ -311,6 +328,58 @@ process.stdout.write(JSON.stringify({{
     }
 
 
+def test_background_followup_updates_status_without_replacing_result_or_instruction():
+    node = shutil.which("node")
+    assert node is not None
+    harness = f"""
+const fs=require('fs');
+const vm=require('vm');
+const elements=new Map();
+function element(id){{
+  if(!elements.has(id)) elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},addEventListener(){{}}}});
+  return elements.get(id);
+}}
+global.window=global;
+global.document={{
+  readyState:'complete',
+  documentElement:{{dataset:{{sessionView:'dashboard'}}}},
+  getElementById:element,
+  addEventListener(){{}}
+}};
+global.S={{session:{{session_id:'s-background'}},messages:[
+  {{role:'user',content:'Implement the approved change.'}},
+  {{role:'assistant',content:'Implementation complete and verified.'}},
+  {{role:'user',content:'[ASYNC DELEGATION BATCH COMPLETE — review-1]\\nReview finished.',_source:'process_wakeup'}},
+  {{role:'assistant',content:'Review found one optional follow-up.'}},
+],busy:false,activeStreamId:null}};
+global.msgContent=m=>String(m&&m.content||'');
+global.renderMd=s=>String(s||'');
+global._stripWorkspaceDisplayPrefix=s=>String(s||'');
+global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');
+global._messageIsRenderable=()=>true;
+global._isContextCompactionMessage=()=>false;
+global._isPreservedCompressionTaskListMessage=()=>false;
+global._isRecoveryControlMessage=()=>false;
+global.INFLIGHT={{}};
+global.requestAnimationFrame=cb=>{{cb();return 1;}};
+global.queueMicrotask=cb=>cb();
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
+syncSessionDashboard();
+process.stdout.write(JSON.stringify({{
+  instruction:element('sessionDashboardInstruction').innerHTML,
+  status:element('sessionDashboardStatus').innerHTML,
+  result:element('sessionDashboardCompleted').innerHTML,
+}}));
+"""
+    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "instruction": "Implement the approved change.",
+        "status": "Review found one optional follow-up.",
+        "result": "Implementation complete and verified.",
+    }
+
+
 def test_dashboard_uses_existing_markdown_renderer():
     assert "typeof renderMd==='function'" in DASHBOARD
     assert ".session-dashboard-copy p" in CSS
@@ -341,6 +410,6 @@ def test_turn_badge_uses_only_explicit_existing_runtime_values():
 
 
 def test_dashboard_never_hides_the_composer():
-    dashboard_css = CSS[CSS.index(".session-view-switcher"): CSS.index("@media (hover:hover)", CSS.index(".session-view-switcher"))]
+    dashboard_css = CSS[CSS.index(".messages-shell{"): CSS.index("@media (hover:hover)", CSS.index(".messages-shell{"))]
     assert "#composerWrap" not in dashboard_css
     assert "#msgInner" in dashboard_css

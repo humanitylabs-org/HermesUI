@@ -617,7 +617,7 @@ function _cancelMessageVirtualizedRender(){
 }
 function _messageIsRenderable(m){
   if(!m||!m.role||m.role==='tool') return false;
-  if(m._source === 'process_wakeup') return !!(msgContent(m)||m.attachments?.length);
+  if(_isBackgroundUpdateTriggerMessage(m)) return false;
   if(_isContextCompactionMessage(m)||_isPreservedCompressionTaskListMessage(m)) return false;
   if(_isRecoveryControlMessage(m)) return false;
   const hasTc=Array.isArray(m.tool_calls)&&m.tool_calls.length>0;
@@ -627,12 +627,29 @@ function _messageIsRenderable(m){
   const hasAssistantVisibleAnchor=hasTc||hasTu||hasPartialTc||_messageHasReasoningPayload(m)||_assistantMessageHasVisibleContent(m);
   return !!(msgContent(m)||m._statusCard||m.attachments?.length||(m.role==='assistant'&&(hasReasoningAnchor||hasAssistantVisibleAnchor)));
 }
+function _isBackgroundUpdateTriggerMessage(m){
+  if(!m||m.role!=='user') return false;
+  if(m._source==='process_wakeup'||m._source==='async_delegation') return true;
+  return /^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE(?:\s*(?:—|-)\s*[^\]]*)?\]/i.test(String(msgContent(m)||''));
+}
 function _getVisibleMessagesWithIdx(){
   if(!_visWithIdxCache || _visWithIdxCacheLen !== S.messages.length || _visWithIdxCacheSrc !== S.messages){
     const rebuilt=[];
     let rawIdx=0;
+    let backgroundUpdateActive=false;
     for(const m of (S.messages||[])){
-      if(_messageIsRenderable(m)) rebuilt.push({m,rawIdx});
+      if(m&&m.role==='user'){
+        backgroundUpdateActive=_isBackgroundUpdateTriggerMessage(m);
+        if(backgroundUpdateActive){rawIdx++;continue;}
+      }
+      if(backgroundUpdateActive){
+        if(m&&m.role==='assistant'&&_messageIsRenderable(m)&&!!(msgContent(m)||m.attachments?.length||m._statusCard)){
+          rebuilt.push({m,rawIdx,backgroundUpdate:true});
+        }
+        rawIdx++;
+        continue;
+      }
+      if(_messageIsRenderable(m)) rebuilt.push({m,rawIdx,backgroundUpdate:false});
       rawIdx++;
     }
     _visWithIdxCache=rebuilt;
@@ -812,6 +829,7 @@ function _syncMessageVirtualHeightCache(visWithIdx){
 function _messageVirtualRoleForEntry(entry){
   const m=entry&&entry.m;
   if(!m) return 'default';
+  if(entry&&entry.backgroundUpdate) return 'process_wakeup';
   if(m._source === 'process_wakeup') return 'process_wakeup';
   if(m.role==='user') return 'user';
   if(m.role==='assistant'){
@@ -16807,7 +16825,9 @@ function renderMessages(options){
       currentAssistantTurn=null;
       inner.appendChild(_messageVirtualSpacer(virtualWindow.bottomPad,'after'));
     }
-    const {m,rawIdx}=renderVisWithIdx[vi];
+    const entry=renderVisWithIdx[vi];
+    const {m,rawIdx}=entry;
+    const isBackgroundUpdate=!!entry.backgroundUpdate;
     const _tsSep=m._ts||m.timestamp;
     if(_tsSep){
       const _d=new Date(_tsSep*1000);
@@ -16950,6 +16970,23 @@ function renderMessages(options){
     const footHtml = `<div class="msg-foot">${timeHtml}<span class="msg-actions">${editBtn}${ttsBtn}${forkBtn}${copyBtn}${retryBtn}</span>${questionJumpBtn}</div>`;
 
     if(_isContextCompactionMessage(m)){
+      continue;
+    }
+
+    if(isBackgroundUpdate){
+      currentAssistantTurn=null;
+      const updateText=String(displayContent||'').trim();
+      if(!updateText&&!filesHtml&&!statusHtml) continue;
+      const row=document.createElement('div');
+      row.className='msg-row background-update-row';
+      row.dataset.msgIdx=rawIdx;
+      row.dataset.sessionMsgIdx=_messageSessionIndexForRawIdx(rawIdx);
+      row.dataset.messageAnchorKey=_messageViewportAnchorKeyForMessage(m);
+      row.dataset.role='background_update';
+      row.dataset.rawText=updateText;
+      row.innerHTML=`<details class="background-update-card"><summary><span class="background-update-toggle">${li('chevron-right',12)}</span><span class="background-update-label">Background update</span>${timeHtml}</summary><div class="background-update-body">${statusHtml}${filesHtml}<div class="msg-body">${bodyHtml}</div><div class="msg-foot"><span class="msg-actions">${copyBtn}</span></div></div></details>`;
+      inner.appendChild(row);
+      assistantSegments.set(rawIdx,row.querySelector('.background-update-body'));
       continue;
     }
 

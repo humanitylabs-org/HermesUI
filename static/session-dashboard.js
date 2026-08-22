@@ -8,6 +8,9 @@
   const state=()=>typeof S!=='undefined'&&S?S:{session:null,messages:[],busy:false};
   const acceptedRunSteers=new Map();
   const messageEntryCache=new Map();
+  const openingEvidenceCache=new Map();
+  const openingEvidenceRequests=new Map();
+  const OPENING_EVIDENCE_LIMIT=30;
   const rawText=message=>{
     if(!message) return '';
     if(typeof msgContent==='function') return msgContent(message);
@@ -24,12 +27,17 @@
   };
   const isSystemLike=message=>{
     if(!message) return true;
-    if(message._source==='process_wakeup'||message.recovery_control===true) return true;
+    if(isBackgroundUpdateTrigger(message)||message.recovery_control===true) return true;
     if(typeof _isContextCompactionMessage==='function'&&_isContextCompactionMessage(message)) return true;
     if(typeof _isPreservedCompressionTaskListMessage==='function'&&_isPreservedCompressionTaskListMessage(message)) return true;
     if(typeof _isRecoveryControlMessage==='function'&&_isRecoveryControlMessage(message)) return true;
     return false;
   };
+  function isBackgroundUpdateTrigger(message){
+    if(!message||message.role!=='user') return false;
+    if(message._source==='process_wakeup'||message._source==='async_delegation') return true;
+    return /^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE(?:\s*(?:—|-)\s*[^\]]*)?\]/i.test(rawText(message));
+  }
   const isRenderable=message=>{
     if(!message||!['user','assistant'].includes(message.role)) return false;
     if(isSystemLike(message)) return false;
@@ -47,13 +55,21 @@
     ].join('\u001f');
   };
   const appendMessageEntry=(cached,message,index)=>{
+    if(message&&message.role==='user'){
+      cached.backgroundUpdateActive=isBackgroundUpdateTrigger(message);
+      if(cached.backgroundUpdateActive) return;
+    }
+    if(cached.backgroundUpdateActive&&message&&message.role==='assistant'){
+      if(isRenderable(message)) cached.entries.push({message,index,intermediary:true});
+      return;
+    }
     if(!isRenderable(message)) return;
     const entry={message,index};
     cached.entries.push(entry);
     if(!cached.firstUser&&message.role==='user'&&cleanUserText(message)) cached.firstUser=entry;
   };
   const rebuildProjection=(messages)=>{
-    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:''};
+    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:'',backgroundUpdateActive:false};
     for(let index=0;index<messages.length;index++) appendMessageEntry(cached,messages[index],index);
     cached.length=messages.length;
     cached.firstSignature=messages.length?messageSignature(messages[0]):'';
@@ -75,15 +91,7 @@
         messageSignature(messages[cached.length-1])===cached.tailSignature
       );
       if(firstSignature!==cached.firstSignature||!oldTailStillMatches){
-        if(messages.length===cached.length&&firstSignature===cached.firstSignature){
-          const index=messages.length-1;
-          cached.entries=cached.entries.filter(entry=>entry.index!==index);
-          appendMessageEntry(cached,messages[index],index);
-          cached.source=messages;
-          cached.tailSignature=messages.length?messageSignature(messages[index]):'';
-        }else{
-          cached=rebuildProjection(messages);
-        }
+        cached=rebuildProjection(messages);
       }else if(messages.length>cached.length){
         for(let index=cached.length;index<messages.length;index++) appendMessageEntry(cached,messages[index],index);
         cached.source=messages;
@@ -121,8 +129,9 @@
     for(let index=entries.length-1;index>=0;index--) if(predicate(entries[index])) return entries[index];
     return undefined;
   };
-  const latestUserEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='user'&&cleanUserText(entry.message));
-  const latestAssistantEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='assistant'&&rawText(entry.message)&&!entry.message._live);
+  const latestUserEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='user'&&!entry.intermediary&&cleanUserText(entry.message));
+  const latestAssistantEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='assistant'&&!entry.intermediary&&rawText(entry.message)&&!entry.message._live);
+  const latestStatusAssistantEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='assistant'&&rawText(entry.message)&&!entry.message._live);
 
   function latestRunUserEntries(entries){
     const current=state();
@@ -181,15 +190,48 @@
     const openingIsMissing=(typeof _messagesTruncated!=='undefined'&&!!_messagesTruncated)||(
       Number.isFinite(openingOffset)&&openingOffset>0
     );
-    if(openingIsMissing) return 'The goal is not loaded yet. Switch to Classic view and load earlier messages to see it.';
+    if(openingIsMissing){
+      const evidence=openingEvidenceCache.get(sessionKey());
+      if(evidence&&evidence.text) return evidence.text;
+      if(evidence&&evidence.error) return 'The original request could not be loaded. Use Refresh goal to retry.';
+      return 'Loading the original request…';
+    }
     const firstUser=projection.firstUser;
     const firstText=firstUser?cleanUserText(firstUser.message):'';
     return firstText||'No goal is available yet.';
   }
 
+  async function hydrateDashboardOpeningEvidence(options={}){
+    const key=sessionKey();
+    if(!key||typeof api!=='function') return;
+    if(!options.force&&openingEvidenceCache.has(key)) return;
+    if(openingEvidenceRequests.has(key)) return openingEvidenceRequests.get(key);
+    openingEvidenceCache.set(key,{pending:true,text:'',error:''});
+    if(key===sessionKey()) scheduleSessionDashboardSync();
+    const request=(async()=>{
+      try{
+        const data=await api(`/api/session?session_id=${encodeURIComponent(key)}&messages=1&resolve_model=0&msg_before=${OPENING_EVIDENCE_LIMIT}&msg_limit=${OPENING_EVIDENCE_LIMIT}`,{timeoutMs:120000});
+        const session=data&&data.session?data.session:data;
+        const messages=session&&Array.isArray(session.messages)?session.messages:[];
+        const projection=rebuildProjection(messages);
+        const firstText=projection.firstUser?cleanUserText(projection.firstUser.message):'';
+        openingEvidenceCache.set(key,{pending:false,text:firstText,error:firstText?'':'missing'});
+      }catch(error){
+        openingEvidenceCache.set(key,{pending:false,text:'',error:String(error&&error.message||error||'unavailable')});
+      }finally{
+        openingEvidenceRequests.delete(key);
+        if(key===sessionKey()) scheduleSessionDashboardSync();
+      }
+    })();
+    openingEvidenceRequests.set(key,request);
+    return request;
+  }
+
   function refreshDashboardSummary(){
-    setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(sessionProjection()));
-    setText('sessionDashboardSummaryUpdated',`Placeholder refreshed ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'})}`);
+    openingEvidenceCache.delete(sessionKey());
+    setMarkdown('sessionDashboardOriginalRequest','Loading the original request…');
+    setText('sessionDashboardSummaryUpdated','Loading');
+    void hydrateDashboardOpeningEvidence({force:true});
   }
 
   function activeStep(){
@@ -251,6 +293,10 @@
         : 'Hermes is working on your latest instruction. The current run is active; refresh this card for the latest frontend state.';
     }
     const user=latestUserEntry(entries);
+    const statusAssistant=latestStatusAssistantEntry(entries);
+    if(user&&statusAssistant&&statusAssistant.intermediary&&statusAssistant.index>user.index){
+      return brief(rawText(statusAssistant.message),900);
+    }
     const assistant=latestAssistantEntry(entries);
     if(user&&assistant&&assistant.index>user.index){
       return 'The latest run has finished. Its completed result is available below.';
@@ -276,8 +322,8 @@
 
   function showStatusSnapshot(){
     const snapshot=statusSnapshots.get(sessionKey());
-    setMarkdown('sessionDashboardStatus',snapshot?snapshot.text:'Click Refresh status to check the current frontend state.');
-    setText('sessionDashboardUpdated',snapshot?`Updated ${snapshot.updated}`:'Manual refresh only');
+    setMarkdown('sessionDashboardStatus',snapshot?snapshot.text:dashboardStatus(sessionMessages()));
+    setText('sessionDashboardUpdated',snapshot?`Updated ${snapshot.updated}`:'Current frontend state');
     const turnBadge=byId('sessionDashboardTurn');
     if(turnBadge){
       turnBadge.hidden=!(snapshot&&snapshot.turnProgress);
@@ -300,6 +346,7 @@
     const dashboard=byId('sessionDashboard');
     if(!dashboard) return;
     const root=document.documentElement;
+    updateSessionViewToggle();
     if(root&&root.dataset&&root.dataset.sessionView==='classic'){
       dashboard.hidden=true;
       return;
@@ -313,11 +360,44 @@
 
     const completed=dashboardCompleted(entries);
     setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(projection));
+    const openingOffset=typeof _oldestIdx!=='undefined'?Number(_oldestIdx):0;
+    const openingIsMissing=(typeof _messagesTruncated!=='undefined'&&!!_messagesTruncated)||(Number.isFinite(openingOffset)&&openingOffset>0);
+    const openingEvidence=openingEvidenceCache.get(sessionKey());
+    setText('sessionDashboardSummaryUpdated',openingIsMissing
+      ? openingEvidence&&openingEvidence.text?'Loaded from session start':openingEvidence&&openingEvidence.error?'Unavailable':'Loading'
+      : 'From session start');
     setMarkdown('sessionDashboardInstruction',dashboardInstruction(entries));
     setMarkdown('sessionDashboardCompleted',completed||'Not completed yet.');
     showStatusSnapshot();
     const completedCard=byId('sessionDashboardCompletedCard');
     if(completedCard) completedCard.dataset.empty=completed?'0':'1';
+    if(openingIsMissing&&!openingEvidenceCache.has(sessionKey())) void hydrateDashboardOpeningEvidence();
+  }
+
+  function updateSessionViewToggle(){
+    const toggle=byId('sessionViewToggle');
+    if(!toggle||typeof toggle.setAttribute!=='function') return;
+    const root=document.documentElement;
+    const dashboard=!!(root&&root.dataset&&root.dataset.sessionView==='dashboard');
+    toggle.setAttribute('aria-pressed',dashboard?'true':'false');
+    const label=dashboard?'Disable High Signal mode':'Enable High Signal mode';
+    toggle.setAttribute('aria-label',label);
+    toggle.title=label;
+  }
+
+  function setSessionView(view,options={}){
+    const next=view==='dashboard'||view==='high-signal'?'dashboard':'classic';
+    const root=document.documentElement;
+    if(root&&root.dataset) root.dataset.sessionView=next;
+    try{localStorage.setItem('hermes-session-view',next);}catch(_){ }
+    if(options.updateUrl!==false&&window.history&&typeof window.history.replaceState==='function'){
+      const url=new URL(window.location.href);
+      url.searchParams.set('session_view',next==='dashboard'?'high-signal':'classic');
+      window.history.replaceState(window.history.state,'',url);
+    }
+    updateSessionViewToggle();
+    syncSessionDashboard();
+    return next;
   }
 
   let dashboardSyncScheduled=false;
@@ -347,6 +427,11 @@
   }
 
   window.syncSessionDashboard=syncSessionDashboard;
+  window.setSessionView=setSessionView;
+  window.toggleSessionView=function(){
+    const next=document.documentElement.dataset.sessionView==='dashboard'?'classic':'dashboard';
+    return setSessionView(next);
+  };
   window.recordSessionDashboardSteer=function(detail){
     const sid=String(detail&&detail.sessionId||'').trim();
     const streamId=String(detail&&detail.streamId||'').trim();

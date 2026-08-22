@@ -451,6 +451,10 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         <span data-i18n="tab_settings">Settings</span>
       </button>
+      <button type="button" id="sessionViewToggle" class="session-view-toggle" onclick="toggleSessionView()" aria-label="Enable High Signal mode" aria-pressed="false" title="Enable High Signal mode">
+        <span class="session-view-toggle-label">High Signal</span>
+        <span class="session-view-toggle-track" aria-hidden="true"><span class="session-view-toggle-knob"></span></span>
+      </button>
     </div>
   <div class="resize-handle" id="sidebarResize"></div>
   </aside>
@@ -488,10 +492,6 @@
     </div>
     <div id="mainChat" class="main-view">
     <div class="messages-shell">
-      <div class="session-view-switcher" aria-label="Session view">
-        <a class="session-view-action session-view-action--classic" href="?session_view=classic" onclick="try{localStorage.setItem('hermes-session-view','classic')}catch(e){};location.reload();return false">Classic View</a>
-        <a class="session-view-action session-view-action--dashboard" href="?session_view=high-signal" onclick="try{localStorage.setItem('hermes-session-view','dashboard')}catch(e){};location.reload();return false">High Signal Mode</a>
-      </div>
       <button id="jumpToSessionStartBtn" class="session-jump-btn session-jump-btn--start" aria-label="Jump to beginning of session" data-i18n-aria-label="session_jump_start_label" data-i18n-title="session_jump_start_label" onclick="jumpToSessionStart()" style="display:none"><span aria-hidden="true">↑</span><span data-i18n="session_jump_start">Start</span></button>
       <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" style="display:none" onclick="scrollToBottom()" aria-label="Scroll to bottom" data-i18n-aria-label="session_jump_end_label" data-i18n-title="session_jump_end_label"><span aria-hidden="true">↓</span><span class="session-jump-btn__text" data-i18n="session_jump_end">End</span></button>
       <button id="outlineToggleBtn" type="button" hidden
