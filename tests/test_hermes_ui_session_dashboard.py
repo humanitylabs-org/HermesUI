@@ -38,6 +38,12 @@ def test_high_signal_uses_the_available_inline_width_without_changing_classic():
     assert "min-width:0" in section_rule and "max-width:100%" in section_rule
 
 
+def test_goal_section_does_not_waste_vertical_space_with_extra_top_inset():
+    assert ".session-dashboard-section:first-child" not in CSS
+    assert ".session-switch-skeleton-pane:first-child" not in CSS
+    assert CSS.count("grid-template-rows:minmax(104px,.5fr) minmax(132px,1.12fr) minmax(78px,.5fr) minmax(0,1.7fr)") == 2
+
+
 def test_high_signal_keeps_one_unboxed_goal_and_exactly_three_cards():
     start = INDEX.index('<section class="session-dashboard"')
     end = INDEX.index('<div class="messages-inner"', start)

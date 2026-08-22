@@ -2538,7 +2538,6 @@
   .session-switch-skeleton-chat-copy{display:flex;flex-direction:column;gap:9px;width:min(680px,calc(100% - 30px));margin-left:30px;min-width:0;}
   .session-switch-skeleton-high-signal{height:100%;min-height:0;display:grid;grid-template-rows:minmax(104px,.55fr) minmax(160px,1.15fr) minmax(88px,.55fr) minmax(0,1.8fr);overflow:hidden;}
   .session-switch-skeleton-pane{min-width:0;min-height:0;padding:14px 18px;display:flex;flex-direction:column;gap:10px;overflow:hidden;box-sizing:border-box;}
-  .session-switch-skeleton-pane:first-child{padding-top:48px;}
   .session-switch-skeleton-pane:not(:last-child){border-bottom:1px solid var(--border);}
   .session-switch-skeleton-pane-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:1px;}
   .session-switch-skeleton-steer{display:flex;align-items:center;width:min(420px,92%);min-height:34px;margin-top:2px;padding:8px 10px;border:1px solid var(--border);border-left:2px solid var(--accent-bg-strong);border-radius:8px;background:var(--surface-subtle,var(--hover-bg));}
@@ -2559,7 +2558,6 @@
   .messages.session-swipe-settling,.session-swipe-preview.session-swipe-settling{transition:transform .18s cubic-bezier(.22,.72,.2,1);will-change:transform;}
   .session-swipe-preview .session-switch-skeleton{background:var(--main-bg);}
   .session-dashboard-section{min-width:0;min-height:0;max-width:100%;padding:14px 18px;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;background:transparent;border:0;border-radius:0;box-shadow:none;isolation:isolate;}
-  .session-dashboard-section:first-child{padding:48px 18px 12px;}
   .session-dashboard-section:not(:last-child){border-bottom:1px solid var(--border);}
   .session-dashboard-section--completed[data-empty="1"]{opacity:.72;}
   .session-dashboard-section--original{overflow:hidden;}
@@ -3406,14 +3404,12 @@
     .session-switch-skeleton-chat-row{gap:7px;}
     .session-switch-skeleton-chat-copy{gap:7px;width:calc(100% - 28px);margin-left:28px;}
     .session-switch-skeleton-line{height:10px;}
-    .session-switch-skeleton-high-signal{height:100%;grid-template-rows:minmax(96px,.5fr) minmax(132px,1.12fr) minmax(78px,.5fr) minmax(0,1.7fr);}
+    .session-switch-skeleton-high-signal{height:100%;grid-template-rows:minmax(104px,.5fr) minmax(132px,1.12fr) minmax(78px,.5fr) minmax(0,1.7fr);}
     .session-switch-skeleton-pane{padding:9px 12px;gap:7px;}
-    .session-switch-skeleton-pane:first-child{padding-top:40px;}
     .session-switch-skeleton-pane-label{font-size:10px;margin-bottom:0;}
-    .session-dashboard{height:100%;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(96px,.5fr) minmax(132px,1.12fr) minmax(78px,.5fr) minmax(0,1.7fr);overflow:hidden;}
+    .session-dashboard{height:100%;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(104px,.5fr) minmax(132px,1.12fr) minmax(78px,.5fr) minmax(0,1.7fr);overflow:hidden;}
     html[data-session-view="dashboard"] .messages{overflow:hidden;}
     .session-dashboard-section{min-height:0;padding:9px 12px;overflow:hidden;}
-    .session-dashboard-section:first-child{padding-top:40px;}
     .session-dashboard-label{font-size:10px;margin-bottom:4px;}
     .session-dashboard-section--original .session-dashboard-label{margin-bottom:4px;}
     .session-dashboard-copy{font-size:12px;line-height:1.4;}
