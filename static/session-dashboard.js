@@ -615,19 +615,46 @@
   function positionSummaryModelDropdown(anchor){
     if(!summaryModelDropdown||!anchor||typeof anchor.getBoundingClientRect!=='function') return;
     const margin=8;
+    const gap=6;
     const rect=anchor.getBoundingClientRect();
-    const width=Math.min(320,Math.max(240,window.innerWidth-margin*2));
-    const maxHeight=Math.min(440,Math.max(180,window.innerHeight-margin*2));
-    summaryModelDropdown.style.width=`${width}px`;
-    summaryModelDropdown.style.maxHeight=`${maxHeight}px`;
-    summaryModelDropdown.style.left=`${Math.max(margin,Math.min(rect.right-width,window.innerWidth-width-margin))}px`;
-    summaryModelDropdown.style.top=`${Math.min(rect.bottom+6,window.innerHeight-margin)}px`;
-    const rendered=summaryModelDropdown.getBoundingClientRect();
-    if(rendered.bottom>window.innerHeight-margin&&rect.top>rendered.height+margin){
-      summaryModelDropdown.style.top=`${Math.max(margin,rect.top-rendered.height-6)}px`;
-    }else if(rendered.bottom>window.innerHeight-margin){
-      summaryModelDropdown.style.top=`${Math.max(margin,window.innerHeight-rendered.height-margin)}px`;
+    const visual=window.visualViewport;
+    const viewportLeft=Number(visual&&visual.offsetLeft)||0;
+    const viewportTop=Number(visual&&visual.offsetTop)||0;
+    const viewportWidth=Math.max(0,Number(visual&&visual.width)||window.innerWidth);
+    const viewportHeight=Math.max(0,Number(visual&&visual.height)||window.innerHeight);
+    const viewportRight=viewportLeft+viewportWidth;
+    const viewportBottom=viewportTop+viewportHeight;
+    let leftEdge=viewportLeft+margin;
+    const rightEdge=viewportRight-margin;
+    if(viewportWidth<=640){
+      const rail=document.querySelector('.tailnet-app-rail');
+      const railRect=rail&&typeof rail.getBoundingClientRect==='function'?rail.getBoundingClientRect():null;
+      if(railRect&&railRect.width>0&&railRect.right>viewportLeft&&railRect.left<viewportRight){
+        leftEdge=Math.min(rightEdge,Math.max(leftEdge,railRect.right+margin));
+      }
     }
+    const availableWidth=Math.max(0,rightEdge-leftEdge);
+    const width=Math.min(320,availableWidth);
+    const left=viewportWidth<=640
+      ? leftEdge
+      : Math.max(leftEdge,Math.min(rect.right-width,rightEdge-width));
+    summaryModelDropdown.style.width=`${width}px`;
+    summaryModelDropdown.style.left=`${left}px`;
+
+    const topEdge=viewportTop+margin;
+    const bottomEdge=viewportBottom-margin;
+    const availableBelow=Math.max(0,bottomEdge-(rect.bottom+gap));
+    const availableAbove=Math.max(0,(rect.top-gap)-topEdge);
+    const naturalHeight=Math.min(440,summaryModelDropdown.scrollHeight||440);
+    const openAbove=naturalHeight>availableBelow&&availableAbove>availableBelow;
+    const availableHeight=openAbove?availableAbove:availableBelow;
+    const maxHeight=Math.min(440,availableHeight);
+    summaryModelDropdown.style.maxHeight=`${maxHeight}px`;
+    const renderedHeight=Math.min(naturalHeight,maxHeight);
+    const top=openAbove
+      ? Math.max(topEdge,rect.top-gap-renderedHeight)
+      : Math.min(rect.bottom+gap,bottomEdge-renderedHeight);
+    summaryModelDropdown.style.top=`${Math.max(topEdge,top)}px`;
   }
 
   function summaryModelOption(provider,model,label,providerLabel){

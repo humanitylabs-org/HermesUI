@@ -90,6 +90,10 @@ def test_goal_and_status_share_one_visible_global_model_selector():
     assert "hermesui:high-signal-model-changed" in DASHBOARD
     assert "task.task==='high_signal_summary'" in PANELS
     assert ".session-dashboard-model-chip" in CSS
+    assert "const visual=window.visualViewport" in DASHBOARD
+    assert "railRect.right+margin" in DASHBOARD
+    assert "const availableWidth=Math.max(0,rightEdge-leftEdge)" in DASHBOARD
+    assert "const availableHeight=openAbove?availableAbove:availableBelow" in DASHBOARD
     assert "localStorage.setItem('grok" not in DASHBOARD.lower()
     assert "setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(projection))" not in DASHBOARD
     assert "renderGrokSummary('goal')" in DASHBOARD
