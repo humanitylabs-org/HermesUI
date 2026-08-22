@@ -159,12 +159,14 @@ def test_session_switch_loading_matches_classic_or_high_signal_layout():
     assert 'class="session-switch-skeleton-classic"' in INDEX
     assert INDEX.count('class="session-switch-skeleton-chat-row') == 4
     assert 'class="session-switch-skeleton-high-signal"' in INDEX
-    assert INDEX.count('class="session-switch-skeleton-pane"') == 4
+    assert INDEX.count('<article class="session-switch-skeleton-pane') == 4
     for label in ("Goal", "Status", "Last instruction", "Result"):
         assert f'<span class="session-switch-skeleton-pane-label">{label}</span>' in INDEX
     assert 'html[data-session-view="classic"] .session-switch-skeleton-high-signal' in CSS
     assert 'html[data-session-view="dashboard"] .session-switch-skeleton-classic' in CSS
-    assert ".session-switch-skeleton-high-signal{height:100%;min-height:0;display:grid;grid-template-rows:repeat(4,minmax(0,1fr))" in CSS
+    assert ".session-switch-skeleton-high-signal{height:100%;min-height:0;display:grid;grid-template-rows:minmax(104px,.55fr) minmax(160px,1.15fr)" in CSS
+    assert "session-switch-skeleton-pane--instruction" in INDEX
+    assert "session-switch-skeleton-steer" in INDEX
     assert ".messages.session-switch-loading > .session-dashboard" in CSS
     assert "animation:skeletonSheen 1.25s ease-in-out infinite" in CSS
     reduced_motion_rule = (
@@ -210,6 +212,18 @@ def test_desktop_sidebar_and_keyboard_session_switches_use_the_same_skeleton():
     assert "if(manageSessionContentLoading&&typeof setSessionContentLoading==='function') setSessionContentLoading(true)" in SESSIONS
     assert "if(manageSessionContentLoading&&typeof setSessionContentLoading==='function') setSessionContentLoading(false)" in SESSIONS
     assert "_openSidebarSession(session,{source:'keyboard-session-navigation'})" in SESSIONS
+
+
+def test_destination_composer_is_immediate_and_draft_owned_during_loading():
+    assert "const _composerNavigationDrafts = new Map()" in SESSIONS
+    assert "function _beginComposerSessionNavigation(targetSid)" in SESSIONS
+    assert "_composerDraftOwnerSid() !== sid" in SESSIONS
+    assert "input.dataset.sessionDraftOwner = target" in SESSIONS
+    assert "_composerNavigationOwnerSid === restoreSid" in SESSIONS
+    assert "_finishComposerSessionNavigation(sid, true)" in SESSIONS
+    assert "_finishComposerSessionNavigation(sid, false)" in SESSIONS
+    assert "function _composerSessionNavigationPending()" in SESSIONS
+    assert "This conversation is still loading" in UI
 
 
 def test_mobile_session_selection_recenters_after_revealing_the_tab_strip():

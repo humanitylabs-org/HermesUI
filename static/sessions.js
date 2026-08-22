@@ -41,6 +41,93 @@ const NEW_CHAT_DRAFT_SESSION_KEY = 'hermes-new-chat-draft-session';
 const _composerDraftKnownPayloadSessions = new Set();
 const _composerDraftRestoreSuppressedUntilBySid = new Map();
 const _COMPOSER_DRAFT_RESTORE_SUPPRESS_MS = 30000;
+// The transcript changes asynchronously, but the composer must belong to the
+// tab the user selected immediately. Keep a small browser-memory draft per
+// session so rapid A → B → C navigation never leaks text between threads.
+const _composerNavigationDrafts = new Map();
+let _composerNavigationOwnerSid = '';
+
+function _composerDraftOwnerSid() {
+  return _composerNavigationOwnerSid || (S.session && S.session.session_id) || '';
+}
+
+function _composerNavigationSnapshot(sid) {
+  if (!sid) return { text: '', files: [], dirty: false };
+  const cached = _composerNavigationDrafts.get(sid);
+  if (cached) return { text: cached.text, files: [...cached.files], dirty: !!cached.dirty };
+  const session = S.session && S.session.session_id === sid ? S.session : null;
+  const draft = session && session.composer_draft;
+  return {
+    text: String(draft && draft.text || ''),
+    files: [],
+    dirty: false,
+  };
+}
+
+function _rememberComposerNavigationDraft(sid, text, files, dirty=true) {
+  if (!sid) return;
+  _composerNavigationDrafts.set(sid, {
+    text: String(text || ''),
+    files: Array.isArray(files) ? files.filter(Boolean) : [],
+    dirty: !!dirty,
+  });
+  while (_composerNavigationDrafts.size > 24) {
+    _composerNavigationDrafts.delete(_composerNavigationDrafts.keys().next().value);
+  }
+}
+
+function _applyComposerNavigationDraft(sid) {
+  const draft = _composerNavigationSnapshot(sid);
+  const input = $('msg');
+  if (input && input.value !== draft.text) input.value = draft.text;
+  S.pendingFiles = [...draft.files];
+  if (typeof renderTray === 'function') renderTray();
+  if (typeof autoResize === 'function') autoResize();
+  if (typeof updateSendBtn === 'function') updateSendBtn();
+  return draft;
+}
+
+function _beginComposerSessionNavigation(targetSid) {
+  const target = String(targetSid || '');
+  if (!target) return null;
+  const previousOwner = _composerDraftOwnerSid();
+  const input = $('msg');
+  if (previousOwner) {
+    const text = String(input && input.value || '');
+    const files = Array.isArray(S.pendingFiles) ? [...S.pendingFiles] : [];
+    _rememberComposerNavigationDraft(previousOwner, text, files, true);
+    // A superseded tab may never become S.session, so flush it now rather than
+    // letting the shared debounce timer drop its draft on the next keystroke.
+    if (previousOwner !== (S.session && S.session.session_id)) {
+      void _saveComposerDraftNow(previousOwner, text, files);
+    }
+  }
+  _composerNavigationOwnerSid = target;
+  if (input) input.dataset.sessionDraftOwner = target;
+  _applyComposerNavigationDraft(target);
+  return _composerNavigationSnapshot((S.session && S.session.session_id) || '');
+}
+
+function _finishComposerSessionNavigation(targetSid, opened) {
+  const target = String(targetSid || '');
+  if (!target || _composerNavigationOwnerSid !== target) return;
+  if (!opened) {
+    const input = $('msg');
+    _rememberComposerNavigationDraft(target, input && input.value || '', S.pendingFiles || [], true);
+    _composerNavigationOwnerSid = '';
+    if (input) delete input.dataset.sessionDraftOwner;
+    _applyComposerNavigationDraft((S.session && S.session.session_id) || '');
+    return;
+  }
+  _composerNavigationOwnerSid = '';
+  const input = $('msg');
+  if (input) delete input.dataset.sessionDraftOwner;
+  if (typeof updateSendBtn === 'function') updateSendBtn();
+}
+
+function _composerSessionNavigationPending() {
+  return !!(_composerNavigationOwnerSid && _composerNavigationOwnerSid !== (S.session && S.session.session_id));
+}
 
 function _composerDraftFileSignature(file) {
   if (typeof file === 'string') return { value: file };
@@ -213,6 +300,7 @@ function _saveComposerDraft(sid, text, files) {
   clearTimeout(_draftSaveTimer);
   const normalizedText = String(text || '');
   const normalizedFiles = _composerDraftFilesForPersist(files);
+  _rememberComposerNavigationDraft(sid, normalizedText, files, true);
   if (_composerDraftHasPayload(normalizedText, normalizedFiles)) {
     _clearComposerDraftRestoreSuppression(sid);
     _composerDraftKnownPayloadSessions.add(sid);
@@ -256,6 +344,7 @@ function _saveComposerDraftNow(sid, text, files) {
   clearTimeout(_draftSaveTimer);
   const normalizedText = String(text || '');
   const normalizedFiles = _composerDraftFilesForPersist(files);
+  _rememberComposerNavigationDraft(sid, normalizedText, files, true);
   if (_composerDraftHasPayload(normalizedText, normalizedFiles)) {
     _clearComposerDraftRestoreSuppression(sid);
   }
@@ -291,6 +380,7 @@ function _restoreComposerDraft(draft, targetSid, opts={}) {
   const preserveActiveInput = !!(opts && opts.preserveActiveInput);
   const restoreSid = targetSid || (S.session && S.session.session_id);
   const hasServerDraftPayload = _composerDraftHasPayload(text, files);
+  const navigationDraft = restoreSid ? _composerNavigationDrafts.get(restoreSid) : null;
 
   if (restoreSid && hasServerDraftPayload && _isComposerDraftRestoreSuppressed(restoreSid, text, files)) return;
   if (restoreSid && !hasServerDraftPayload) _clearComposerDraftRestoreSuppression(restoreSid);
@@ -301,6 +391,10 @@ function _restoreComposerDraft(draft, targetSid, opts={}) {
   // local input with an older server draft. Cross-session switches still restore
   // normally so the previous session's composer contents do not leak forward.
   if (preserveActiveInput && current && current !== text) return;
+  // The destination composer becomes editable before its transcript finishes
+  // loading. Any local edit made in that window wins even when it is an empty
+  // edit (for example, deleting an old server draft).
+  if (navigationDraft && navigationDraft.dirty && _composerNavigationOwnerSid === restoreSid) return;
 
   // If there's no text and no files, clear the textarea (a previous session's
   // draft may still be sitting there from a cross-session switch).
@@ -310,6 +404,7 @@ function _restoreComposerDraft(draft, targetSid, opts={}) {
       if (typeof autoResize === 'function') autoResize();
       if (typeof updateSendBtn === 'function') updateSendBtn();
     }
+    if (restoreSid) _rememberComposerNavigationDraft(restoreSid, '', [], false);
     return;
   }
   // Only update if different to avoid cursor jumps on unrelated session switches.
@@ -318,6 +413,7 @@ function _restoreComposerDraft(draft, targetSid, opts={}) {
     if (typeof autoResize === 'function') autoResize();
     if (typeof updateSendBtn === 'function') updateSendBtn();
   }
+  if (restoreSid) _rememberComposerNavigationDraft(restoreSid, text, [], false);
   // Files restoration is skipped for now (requires S.pendingFiles plumbing).
 }
 
@@ -325,6 +421,7 @@ function _restoreComposerDraft(draft, targetSid, opts={}) {
 function _clearComposerDraft(sid, text, files) {
   if (!sid) return;
   clearTimeout(_draftSaveTimer);
+  _rememberComposerNavigationDraft(sid, '', [], false);
   _clearRememberedNewChatDraftSession(sid);
   if (arguments.length >= 2) _suppressComposerDraftRestoreAfterSubmit(sid, text, files);
   else _suppressComposerDraftRestoreAfterSubmit(sid);
@@ -1727,6 +1824,11 @@ async function loadSession(sid){
   const _loadGeneration = ++_loadSessionGeneration;
   const _isCurrentLoad = () => _loadingSessionId === sid && _loadSessionGeneration === _loadGeneration;
   _loadingSessionId = sid;
+  const _composerDepartureDraft = typeof _composerDraftOwnerSid === 'function'
+    && _composerDraftOwnerSid() !== sid
+    && typeof _beginComposerSessionNavigation === 'function'
+    ? _beginComposerSessionNavigation(sid)
+    : null;
   const _warmSwitchMetadata=typeof _allSessions!=='undefined'&&Array.isArray(_allSessions)
     ? _allSessions.find(item=>item&&String(item.session_id)===String(sid))
     : null;
@@ -1770,7 +1872,10 @@ async function loadSession(sid){
     _cacheActiveSessionMessages(currentSid);
     if(typeof window._clearPendingSelections==='function') window._clearPendingSelections();
     if(typeof _clearQueueCardDisplay==='function') _clearQueueCardDisplay(currentSid);
-    await _saveComposerDraftNow(currentSid, ($('msg') || {}).value || '', S.pendingFiles ? [...S.pendingFiles] : []);
+    const departureDraft = _composerDepartureDraft || (typeof _composerNavigationSnapshot === 'function'
+      ? _composerNavigationSnapshot(currentSid)
+      : { text: ($('msg') || {}).value || '', files: S.pendingFiles ? [...S.pendingFiles] : [] });
+    await _saveComposerDraftNow(currentSid, departureDraft.text, departureDraft.files);
     // The awaited draft save above yields the event loop. If another
     // loadSession() started for a different session while we were waiting
     // (rapid switch B→C), _loadingSessionId now points at that newer load —
@@ -1948,6 +2053,7 @@ async function loadSession(sid){
     // session_id.
     const _selfHealedCurrent = (e.status===404) && (currentSid===sid);
     if (_isCurrentLoad()) _loadingSessionId = null;
+    if (typeof _finishComposerSessionNavigation === 'function') _finishComposerSessionNavigation(sid, false);
     // The session stream was stopped unconditionally at the top of this load
     // (mirroring stopApprovalPolling). On the happy path it's restarted ~120
     // lines below, but this failure exit never reaches that point — leaving
@@ -1977,6 +2083,7 @@ async function loadSession(sid){
   if (!data) {
     _clearSameSessionForceReloadHint(sid);
     if (_isCurrentLoad()) _loadingSessionId = null;
+    if (typeof _finishComposerSessionNavigation === 'function') _finishComposerSessionNavigation(sid, false);
     // #2971: re-arm the still-displayed session's stream (defensive — harmless
     // if the 401 redirect is already tearing the page down). Idempotent.
     _rearmActiveSessionStream();
@@ -2391,7 +2498,14 @@ async function loadSession(sid){
   const _draft = S.session && S.session.composer_draft;
   if (_draft && (typeof _restoreComposerDraft === 'function')) {
     _restoreComposerDraft(_draft, sid, {preserveActiveInput:!!opts.preserveActiveInput || (currentSid===sid&&forceReload)});
+  } else if (typeof _composerNavigationOwnerSid !== 'undefined'
+    && typeof _composerNavigationDrafts !== 'undefined'
+    && _composerNavigationOwnerSid === sid
+    && !_composerNavigationDrafts.get(sid)?.dirty) {
+    _rememberComposerNavigationDraft(sid, '', [], false);
   }
+
+  if (typeof _finishComposerSessionNavigation === 'function') _finishComposerSessionNavigation(sid, true);
 
   // Clear the in-flight session marker now that this load has completed (#1060).
   if (_isCurrentLoad()) _loadingSessionId = null;

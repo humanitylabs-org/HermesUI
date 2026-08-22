@@ -1370,6 +1370,13 @@ async function send(){
     }
     return;
   }
+  // The textarea is intentionally usable as soon as a destination tab is
+  // selected, but sending stays fail-closed until that session owns S.session.
+  // This prevents a fast type-and-tap from landing in the thread being left.
+  if(typeof _composerSessionNavigationPending==='function'&&_composerSessionNavigationPending()){
+    if(typeof showToast==='function') showToast('This conversation is still loading. Your draft is saved here.',2200);
+    return;
+  }
   _sendInProgress = true;
   try{
   const options=arguments[0]||{};

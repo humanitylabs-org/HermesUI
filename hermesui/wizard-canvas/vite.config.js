@@ -12,10 +12,10 @@ export default defineConfig({
     target: 'es2022',
     rollupOptions: {
       output: {
-        entryFileNames: 'assets/app-v3.min.js',
+        entryFileNames: 'assets/app-v4.min.js',
         chunkFileNames: 'assets/chunk-[name]-[hash].min.js',
         assetFileNames: assetInfo => assetInfo.names?.some(name => name.endsWith('.css'))
-          ? 'assets/app-v3.css'
+          ? 'assets/app-v4.css'
           : 'assets/[name]-[hash][extname]',
       },
     },

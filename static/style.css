@@ -2437,7 +2437,7 @@
   .messages-shell.session-swipe-active{overflow:hidden;}
   @media (max-width:640px) and (pointer:coarse){.messages-shell{touch-action:pan-y;}}
   .messages{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0;position:relative;z-index:0;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior-y:contain;overflow-anchor:auto;}
-  .session-dashboard{width:100%;max-width:none;height:100%;min-height:0;margin:0;padding:0;box-sizing:border-box;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(110px,.65fr) minmax(88px,.55fr) minmax(88px,.65fr) minmax(0,2.2fr);gap:0;overflow:hidden;align-self:stretch;}
+  .session-dashboard{width:100%;max-width:none;height:100%;min-height:0;margin:0;padding:0;box-sizing:border-box;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(104px,.55fr) minmax(160px,1.15fr) minmax(88px,.55fr) minmax(0,1.8fr);gap:0;overflow:hidden;align-self:stretch;}
   html[data-session-view="dashboard"] .messages{overflow:hidden;}
   html[data-session-view="dashboard"] .session-dashboard:not([hidden]){display:grid;}
   html[data-session-view="dashboard"] #msgInner,
@@ -2459,11 +2459,13 @@
   .session-switch-skeleton-avatar{display:block;width:22px;height:22px;flex:0 0 22px;border-radius:50%;}
   .session-switch-skeleton-role-line{display:block;width:72px;height:9px;border-radius:999px;}
   .session-switch-skeleton-chat-copy{display:flex;flex-direction:column;gap:9px;width:min(680px,calc(100% - 30px));margin-left:30px;min-width:0;}
-  .session-switch-skeleton-high-signal{height:100%;min-height:0;display:grid;grid-template-rows:repeat(4,minmax(0,1fr));overflow:hidden;}
+  .session-switch-skeleton-high-signal{height:100%;min-height:0;display:grid;grid-template-rows:minmax(104px,.55fr) minmax(160px,1.15fr) minmax(88px,.55fr) minmax(0,1.8fr);overflow:hidden;}
   .session-switch-skeleton-pane{min-width:0;min-height:0;padding:14px 18px;display:flex;flex-direction:column;gap:10px;overflow:hidden;box-sizing:border-box;}
   .session-switch-skeleton-pane:first-child{padding-top:48px;}
   .session-switch-skeleton-pane:not(:last-child){border-bottom:1px solid var(--border);}
   .session-switch-skeleton-pane-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:1px;}
+  .session-switch-skeleton-steer{display:flex;align-items:center;width:min(420px,92%);min-height:34px;margin-top:2px;padding:8px 10px;border:1px solid var(--border);border-left:2px solid var(--accent-bg-strong);border-radius:8px;background:var(--surface-subtle,var(--hover-bg));}
+  .session-switch-skeleton-steer .session-switch-skeleton-line{height:9px;}
   .session-switch-skeleton-avatar,.session-switch-skeleton-role-line,.session-switch-skeleton-line{background:linear-gradient(90deg,color-mix(in srgb,var(--text) 8%,transparent) 0%,color-mix(in srgb,var(--text) 8%,transparent) 30%,color-mix(in srgb,var(--text) 20%,transparent) 50%,color-mix(in srgb,var(--text) 8%,transparent) 70%,color-mix(in srgb,var(--text) 8%,transparent) 100%);background-size:220% 100%;animation:skeletonSheen 1.25s ease-in-out infinite;}
   @media (prefers-reduced-motion:reduce){
     .session-switch-skeleton-avatar,.session-switch-skeleton-role-line,.session-switch-skeleton-line{animation:none;}
@@ -2504,6 +2506,12 @@
   .session-dashboard-copy img,.session-dashboard-copy video,.session-dashboard-copy svg{max-width:100%;height:auto;}
   .session-dashboard-copy--original{font-size:15px;line-height:1.65;max-height:none;padding-right:4px;}
   .session-dashboard-copy--verbatim{max-height:none;}
+  .session-dashboard-instruction-copy{padding-bottom:10px;}
+  .session-dashboard-steers{display:grid;gap:8px;padding:2px 0 4px;}
+  .session-dashboard-steer{min-width:0;padding:9px 11px;border:1px solid var(--border);border-left:2px solid var(--accent-bg-strong);border-radius:8px;background:var(--surface-subtle,var(--hover-bg));}
+  .session-dashboard-steer-label{margin-bottom:5px;color:var(--accent-text);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+  .session-dashboard-steer-copy{color:var(--text);font-size:.94em;line-height:1.5;}
+  .session-dashboard-steer-copy>:last-child{margin-bottom:0;}
   .session-dashboard-copy--verbatim blockquote{margin:8px 0;padding:8px 10px;border-left:2px solid var(--border2);border-radius:0 8px 8px 0;background:var(--surface-subtle,var(--hover-bg));color:var(--muted);font-style:italic;}
   .session-dashboard-copy--verbatim blockquote p{margin:0;}
   .session-dashboard-copy--result{max-height:none;}
@@ -3311,11 +3319,11 @@
     .session-switch-skeleton-chat-row{gap:7px;}
     .session-switch-skeleton-chat-copy{gap:7px;width:calc(100% - 28px);margin-left:28px;}
     .session-switch-skeleton-line{height:10px;}
-    .session-switch-skeleton-high-signal{height:100%;grid-template-rows:minmax(106px,.65fr) minmax(84px,.55fr) minmax(84px,.65fr) minmax(0,2.2fr);}
+    .session-switch-skeleton-high-signal{height:100%;grid-template-rows:minmax(96px,.5fr) minmax(132px,1.12fr) minmax(78px,.5fr) minmax(0,1.7fr);}
     .session-switch-skeleton-pane{padding:9px 12px;gap:7px;}
     .session-switch-skeleton-pane:first-child{padding-top:40px;}
     .session-switch-skeleton-pane-label{font-size:10px;margin-bottom:0;}
-    .session-dashboard{height:100%;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(106px,.65fr) minmax(84px,.55fr) minmax(84px,.65fr) minmax(0,2.2fr);overflow:hidden;}
+    .session-dashboard{height:100%;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(96px,.5fr) minmax(132px,1.12fr) minmax(78px,.5fr) minmax(0,1.7fr);overflow:hidden;}
     html[data-session-view="dashboard"] .messages{overflow:hidden;}
     .session-dashboard-section{min-height:0;padding:9px 12px;overflow:hidden;}
     .session-dashboard-section:first-child{padding-top:40px;}

@@ -7,6 +7,7 @@
   const byId=id=>document.getElementById(id);
   const state=()=>typeof S!=='undefined'&&S?S:{session:null,messages:[],busy:false};
   const acceptedRunSteers=new Map();
+  const latestSteerRunBySession=new Map();
   const messageEntryCache=new Map();
   const openingEvidenceCache=new Map();
   const openingEvidenceRequests=new Map();
@@ -193,11 +194,18 @@
     return compact(two,max);
   };
   const setText=(id,text)=>{const element=byId(id);if(element) element.textContent=text;};
+  const enhanceMarkdown=element=>{
+    if(!element) return;
+    if(typeof highlightCode==='function') highlightCode(element);
+    if(typeof addCopyButtons==='function') addCopyButtons(element);
+  };
+  const markdownHtml=text=>typeof renderMd==='function'?renderMd(String(text||'')):String(text||'');
   const setMarkdown=(id,text)=>{
     const element=byId(id);
     if(!element) return;
     if(typeof renderMd==='function') element.innerHTML=renderMd(String(text||''));
     else element.textContent=String(text||'');
+    enhanceMarkdown(element);
   };
   const latestMatchingEntry=(entries,predicate)=>{
     for(let index=entries.length-1;index>=0;index--) if(predicate(entries[index])) return entries[index];
@@ -255,18 +263,41 @@
     return sid&&streamId?`${sid}:${streamId}`:'';
   }
 
-  function acceptedSteersForActiveRun(){
-    if(!state().busy&&!state().activeStreamId) return [];
-    const key=activeRunKey();
-    return key&&acceptedRunSteers.has(key)?acceptedRunSteers.get(key):[];
+  function acceptedSteersForInstruction(baseText){
+    const current=state();
+    const session=current.session||{};
+    const sid=String(session.session_id||'').trim();
+    if(!sid) return [];
+    if(current.busy||current.activeStreamId){
+      const key=activeRunKey();
+      return key&&acceptedRunSteers.has(key)?acceptedRunSteers.get(key):[];
+    }
+    const latest=latestSteerRunBySession.get(sid);
+    if(!latest||latest.baseText!==baseText) return [];
+    return acceptedRunSteers.get(latest.key)||[];
   }
 
   function dashboardInstruction(entries){
-    const accepted=acceptedSteersForActiveRun();
-    if(accepted.length) return accepted[accepted.length-1];
     const runUsers=latestRunUserEntries(entries);
-    if(!runUsers.length) return 'No instruction is available yet.';
-    return cleanUserText(runUsers[runUsers.length-1].message);
+    const text=runUsers.length
+      ? cleanUserText(runUsers[runUsers.length-1].message)
+      : 'No instruction is available yet.';
+    return {text,steers:acceptedSteersForInstruction(text)};
+  }
+
+  function renderDashboardInstruction(entries){
+    const element=byId('sessionDashboardInstruction');
+    if(!element) return;
+    const instruction=dashboardInstruction(entries);
+    if(!instruction.steers.length){
+      setMarkdown('sessionDashboardInstruction',instruction.text);
+      return;
+    }
+    const cards=instruction.steers.map((steer,index)=>(
+      `<article class="session-dashboard-steer"><div class="session-dashboard-steer-label">Steer ${index+1}</div><div class="session-dashboard-steer-copy">${markdownHtml(steer)}</div></article>`
+    )).join('');
+    element.innerHTML=`<div class="session-dashboard-instruction-copy">${markdownHtml(instruction.text)}</div><div class="session-dashboard-steers" aria-label="Accepted steers">${cards}</div>`;
+    enhanceMarkdown(element);
   }
 
   function dashboardSessionSummary(projection){
@@ -574,7 +605,7 @@
 
     const completed=dashboardCompleted(entries);
     renderGrokSummary('goal');
-    setMarkdown('sessionDashboardInstruction',dashboardInstruction(entries));
+    renderDashboardInstruction(entries);
     setMarkdown('sessionDashboardCompleted',completed||'Not completed yet.');
     renderGrokSummary('status');
     const completedCard=byId('sessionDashboardCompletedCard');
@@ -653,7 +684,11 @@
     const steers=acceptedRunSteers.get(key)||[];
     steers.push(text);
     acceptedRunSteers.set(key,steers);
+    const runUsers=latestRunUserEntries(sessionMessages());
+    const baseText=runUsers.length?cleanUserText(runUsers[runUsers.length-1].message):'';
+    latestSteerRunBySession.set(sid,{key,baseText});
     while(acceptedRunSteers.size>20) acceptedRunSteers.delete(acceptedRunSteers.keys().next().value);
+    while(latestSteerRunBySession.size>20) latestSteerRunBySession.delete(latestSteerRunBySession.keys().next().value);
     scheduleSessionDashboardSync();
   };
   ['renderMessages','setBusy','syncTopbar'].forEach(wrapAfter);

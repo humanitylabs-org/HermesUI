@@ -69,6 +69,18 @@ def test_goal_and_status_are_stateless_manual_only_model_summaries():
     assert "renderGrokSummary('status')" in DASHBOARD
 
 
+def test_last_instruction_keeps_base_prompt_all_accepted_steers_and_copy_buttons():
+    assert "const latestSteerRunBySession=new Map()" in DASHBOARD
+    assert "renderDashboardInstruction(entries)" in DASHBOARD
+    assert 'class="session-dashboard-steer"' in DASHBOARD
+    assert 'aria-label="Accepted steers"' in DASHBOARD
+    assert "steers.push(text)" in DASHBOARD
+    assert "latestSteerRunBySession.set(sid,{key,baseText})" in DASHBOARD
+    assert "if(typeof highlightCode==='function') highlightCode(element)" in DASHBOARD
+    assert "if(typeof addCopyButtons==='function') addCopyButtons(element)" in DASHBOARD
+    assert "minmax(160px,1.15fr)" in CSS
+
+
 def test_goal_uses_bounded_opening_and_recent_evidence_without_full_history_fetch():
     assert "OPENING_EVIDENCE_LIMIT=30" in DASHBOARD
     assert "msg_before=${OPENING_EVIDENCE_LIMIT}&msg_limit=${OPENING_EVIDENCE_LIMIT}" in DASHBOARD

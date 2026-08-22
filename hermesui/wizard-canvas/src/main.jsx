@@ -21,9 +21,16 @@ function sceneData(scene) {
   if (!scene || typeof scene !== 'object' || Array.isArray(scene)) return null;
   return {
     elements: Array.isArray(scene.elements) ? scene.elements : [],
-    appState: scene.appState && typeof scene.appState === 'object' ? scene.appState : {},
+    appState: {
+      ...(scene.appState && typeof scene.appState === 'object' ? scene.appState : {}),
+      viewBackgroundColor: '#ffffff',
+    },
     files: scene.files && typeof scene.files === 'object' ? scene.files : {},
   };
+}
+
+function isSceneBlank(elements) {
+  return !Array.isArray(elements) || !elements.some(element => element && !element.isDeleted);
 }
 
 function WizardCanvas() {
@@ -38,6 +45,8 @@ function WizardCanvas() {
   const savingRef = useRef(false);
   const [problem, setProblem] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
+  const [sceneReady, setSceneReady] = useState(false);
+  const [sceneBlank, setSceneBlank] = useState(false);
   const showSaveStatus = useCallback(phase => {
     window.clearTimeout(savedTimerRef.current);
     savedTimerRef.current = null;
@@ -70,9 +79,12 @@ function WizardCanvas() {
       if (!response.ok) throw new Error(`Canvas load failed (${response.status})`);
       const payload = await response.json();
       revisionRef.current = Number.isInteger(payload.revision) ? payload.revision : 0;
+      const initialScene = sceneData(payload.scene);
+      setSceneBlank(isSceneBlank(initialScene?.elements));
+      setSceneReady(true);
       readyRef.current = true;
       setProblem(null);
-      return sceneData(payload.scene);
+      return initialScene;
     } catch (error) {
       console.error('[wizard-canvas] load failed', error);
       lockedRef.current = true;
@@ -136,6 +148,7 @@ function WizardCanvas() {
   }, [showSaveStatus, updateProblem]);
 
   const handleChange = useCallback((elements, appState, files) => {
+    if (readyRef.current) setSceneBlank(isSceneBlank(elements));
     if (!readyRef.current || lockedRef.current) return;
     let serialized;
     try {
@@ -225,6 +238,11 @@ function WizardCanvas() {
           <MainMenu.DefaultItems.ClearCanvas />
         </MainMenu>
       </Excalidraw>
+      {sceneReady && sceneBlank ? (
+        <div className="wizard-canvas-watermark" aria-hidden="true">
+          <img src="../wizard-hat-mark.svg" alt="" />
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -8229,7 +8229,8 @@ function updateSendBtn(){
     if(typeof _applyBusyComposerPlaceholder==='function') _applyBusyComposerPlaceholder();
     return;
   }
-  const action=getComposerPrimaryAction();
+  const navigationPending=typeof _composerSessionNavigationPending==='function'&&_composerSessionNavigationPending();
+  const action=navigationPending?'disabled':getComposerPrimaryAction();
   btn.dataset.action=action;
   btn.classList.toggle('stop',action==='stop');
   btn.classList.toggle('queue',action==='queue');
@@ -8239,7 +8240,8 @@ function updateSendBtn(){
   let _btnTitle;
   if(action==='disabled'){
     const _dmsg=$('msg');
-    if(_dmsg&&_dmsg.disabled) _btnTitle=_tt('composer_disabled_clarify','Respond to the clarification request');
+    if(navigationPending) _btnTitle='This conversation is still loading';
+    else if(_dmsg&&_dmsg.disabled) _btnTitle=_tt('composer_disabled_clarify','Respond to the clarification request');
     else _btnTitle=_tt('composer_disabled_empty','Type a message to send');
   }else if(action==='queue'&&typeof isCompressionUiRunning==='function'&&isCompressionUiRunning()){
     _btnTitle=_tt('composer_compression_will_queue','Type a message — it will queue and send after compression');

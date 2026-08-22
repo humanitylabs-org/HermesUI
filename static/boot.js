@@ -2247,7 +2247,9 @@ $('msg').addEventListener('input',()=>{
   updateSendBtn();
   scheduleComposerAutoResize();
   // Persist composer draft to server (debounced in _saveComposerDraft).
-  const sid = S && S.session && S.session.session_id;
+  const sid = typeof _composerDraftOwnerSid === 'function'
+    ? _composerDraftOwnerSid()
+    : (S && S.session && S.session.session_id);
   if (sid && typeof _saveComposerDraft === 'function') {
     _saveComposerDraft(sid, $('msg').value, S.pendingFiles ? [...S.pendingFiles] : []);
   }
