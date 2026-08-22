@@ -90,7 +90,13 @@ def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
     assert "dividerIndex" in JS
     assert ".tailnet-notifications-badge" in CSS
     assert ".tailnet-notification-response" in CSS
-    assert "notificationPreviewText" in JS
+    assert "notificationPreviewText" not in JS
+    assert "response.textContent=item.status==='error'?'Failed run · Open to read':'Open to read'" in JS
+    assert "if(open&&notificationIsUnread(item))" in JS
+    assert "notificationState.readItems[item.key]" in JS
+    assert "return (Number(notificationState.readItems[item.key])||0)<item.modified" in JS
+    assert "notificationState.readJobs[item.jobId]=" not in JS
+    assert "raw.version===1||raw.version===2" in JS
     assert "hydrateNotificationRich" in JS
     assert "renderMd(item.response)" in JS
     assert "postProcessRenderedMessages(body)" in JS
@@ -492,7 +498,7 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v5"'
+        '&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v6"'
         in INDEX
     )
     assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3"' in INDEX

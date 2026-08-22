@@ -2224,10 +2224,11 @@
   .tailnet-notification-role .msg-role-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .tailnet-notification.is-unread .tailnet-notification-role .msg-role-name{font-weight:800;}
   .tailnet-notification-meta{flex:0 0 auto;margin-left:auto;color:var(--muted);font-size:10px;font-weight:600;}
-  .tailnet-notification-toggle{appearance:none;display:block;width:calc(100% - 28px);margin-left:28px;padding:2px 4px;border:0;border-radius:6px;background:transparent;color:inherit;text-align:left;cursor:pointer;}
+  .tailnet-notification-toggle{appearance:none;display:flex;align-items:center;justify-content:space-between;gap:12px;width:calc(100% - 28px);min-height:42px;margin-left:28px;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:inherit;text-align:left;cursor:pointer;}
+  .tailnet-notification-toggle::after{content:"›";flex:0 0 auto;color:var(--muted);font:700 19px/1 Inter,system-ui,sans-serif;transform:rotate(0deg);transition:transform .15s ease;}
+  .tailnet-notification.is-open .tailnet-notification-toggle::after{transform:rotate(90deg);}
   .tailnet-notification-toggle:hover,.tailnet-notification-toggle:focus-visible{background:color-mix(in srgb,var(--hover-bg) 68%,transparent);outline:none;}
-  .tailnet-notification-response{display:-webkit-box;overflow:hidden;color:var(--muted);font-family:var(--font-conversation);font-size:13px;line-height:1.58;white-space:pre-wrap;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:3;}
-  .tailnet-notification-response[hidden]{display:none!important;}
+  .tailnet-notification-response{display:block;min-width:0;overflow:hidden;color:var(--muted);font-family:var(--font-conversation);font-size:12px;font-weight:700;line-height:1.35;white-space:nowrap;text-overflow:ellipsis;}
   .tailnet-notification-rich{margin:2px 4px 0 28px;padding:0;max-width:calc(100% - 32px);color:var(--text);}
   .tailnet-notification-rich[hidden]{display:none!important;}
   .tailnet-notification-rich>:first-child{margin-top:0;}

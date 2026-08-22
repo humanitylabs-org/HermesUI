@@ -361,26 +361,38 @@
   function readNotificationState(){
     try{
       const raw=JSON.parse(localStorage.getItem(NOTIFICATION_STATE_KEY)||'null');
-      if(raw&&raw.version===1&&Number.isFinite(Number(raw.readThrough))&&raw.readJobs&&typeof raw.readJobs==='object'){
+      if(raw&&(raw.version===1||raw.version===2)&&Number.isFinite(Number(raw.readThrough))&&raw.readJobs&&typeof raw.readJobs==='object'){
         const readJobs={};
         Object.entries(raw.readJobs).slice(-80).forEach(([id,value])=>{
           const timestamp=Number(value);
           if(id&&Number.isFinite(timestamp)&&timestamp>0)readJobs[id]=timestamp;
         });
-        return {version:1,readThrough:Number(raw.readThrough),readJobs};
+        const readItems={};
+        if(raw.readItems&&typeof raw.readItems==='object'){
+          Object.entries(raw.readItems).slice(-200).forEach(([key,value])=>{
+            const timestamp=Number(value);
+            if(key&&Number.isFinite(timestamp)&&timestamp>0)readItems[key]=timestamp;
+          });
+        }
+        return {version:2,readThrough:Number(raw.readThrough),readJobs,readItems};
       }
     }catch(_){}
-    const initial={version:1,readThrough:Date.now()/1000,readJobs:{}};
+    const initial={version:2,readThrough:Date.now()/1000,readJobs:{},readItems:{}};
     try{localStorage.setItem(NOTIFICATION_STATE_KEY,JSON.stringify(initial));}catch(_){}
     return initial;
   }
 
   function writeNotificationState(){
     try{
-      const entries=Object.entries(notificationState.readJobs)
+      const jobEntries=Object.entries(notificationState.readJobs)
         .sort(([,left],[,right])=>Number(right)-Number(left))
         .slice(0,80);
-      notificationState.readJobs=Object.fromEntries(entries);
+      const itemEntries=Object.entries(notificationState.readItems)
+        .sort(([,left],[,right])=>Number(right)-Number(left))
+        .slice(0,200);
+      notificationState.version=2;
+      notificationState.readJobs=Object.fromEntries(jobEntries);
+      notificationState.readItems=Object.fromEntries(itemEntries);
       localStorage.setItem(NOTIFICATION_STATE_KEY,JSON.stringify(notificationState));
     }catch(_){}
   }
@@ -389,7 +401,10 @@
     return Math.max(Number(notificationState.readThrough)||0,Number(notificationState.readJobs[jobId])||0);
   }
 
-  function notificationIsUnread(item){return item.modified>notificationReadCutoff(item.jobId);}
+  function notificationIsUnread(item){
+    if(item.modified<=notificationReadCutoff(item.jobId))return false;
+    return (Number(notificationState.readItems[item.key])||0)<item.modified;
+  }
 
   function notificationStatusText(unreadCount,totalCount){
     if(notificationFilter==='unread')return unreadCount?`${unreadCount} unread`:'All caught up';
@@ -509,18 +524,6 @@
     return new Date(timestamp*1000).toLocaleDateString(undefined,{month:'short',day:'numeric'});
   }
 
-  function notificationPreviewText(content){
-    return String(content||'')
-      .replace(/^\s*MEDIA:\S+\s*$/gim,'')
-      .replace(/!\[[^\]]*\]\([^)]*\)/g,'')
-      .replace(/\[([^\]]+)\]\([^)]*\)/g,'$1')
-      .replace(/^\s{0,3}#{1,6}\s+/gm,'')
-      .replace(/[*_~`]+/g,'')
-      .replace(/\n{2,}/g,'\n')
-      .trim()
-      .slice(0,480);
-  }
-
   function hydrateNotificationRich(body,item){
     if(!body||body.dataset.richReady==='1')return;
     body.dataset.richReady='1';
@@ -542,7 +545,7 @@
 
   function markNotificationRead(item){
     if(!item)return;
-    notificationState.readJobs[item.jobId]=Math.max(Number(notificationState.readJobs[item.jobId])||0,item.modified);
+    notificationState.readItems[item.key]=Math.max(Number(notificationState.readItems[item.key])||0,item.modified);
     writeNotificationState();
     const visibleItems=Array.from(notificationItems.values())
       .sort((left,right)=>right.modified-left.modified)
@@ -557,6 +560,7 @@
     const newest=Math.max(Date.now()/1000,...Array.from(notificationItems.values()).map(item=>item.modified));
     notificationState.readThrough=newest;
     notificationState.readJobs={};
+    notificationState.readItems={};
     writeNotificationState();
     renderCronNotifications();
   }
@@ -605,7 +609,7 @@
       button.setAttribute('aria-label',`Open notification from ${item.name}`);
       const response=document.createElement('span');
       response.className='tailnet-notification-response';
-      response.textContent=notificationPreviewText(item.response)||'Attachment';
+      response.textContent=item.status==='error'?'Failed run · Open to read':'Open to read';
       button.appendChild(response);
       const rich=document.createElement('div');
       rich.id=richId;
@@ -614,10 +618,11 @@
       button.addEventListener('click',()=>{
         const open=article.classList.toggle('is-open');
         button.setAttribute('aria-expanded',String(open));
-        response.hidden=open;
+        button.setAttribute('aria-label',`${open?'Close':'Open'} notification from ${item.name}`);
+        response.textContent=open?'Close notification':item.status==='error'?'Failed run · Open to read':'Open to read';
         rich.hidden=!open;
         if(open)hydrateNotificationRich(rich,item);
-        if(notificationIsUnread(item)){
+        if(open&&notificationIsUnread(item)){
           markNotificationRead(item);
           article.classList.remove('is-unread');
         }
