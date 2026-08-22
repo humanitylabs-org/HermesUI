@@ -76,12 +76,12 @@
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "c7dcaff010c3f08189c3e20f23bab301ce8f47b67dea20dd5468d895d3235e76",
+      "hermesui_sha256": "b3933a7f3e52752f9e190529d0467caa6d77e50beb1f1e0b81be3ae06bb1a5fe",
       "path": "static/session-swipe-navigation.js",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "095f17662d9d2b1c176b65b42c458b906a5fbf6a420d51eab5482a1e7605ced1",
+      "hermesui_sha256": "b7b64ee422f752b3d6fe5cbdabe2da48dc02a5b8ff04146838d6fd1677204985",
       "path": "static/sessions.js",
       "upstream_sha256": "82fcbe004f5df8de94cf89614cf2a7ba40a324deeec5edd054db7dd6c1505233"
     },

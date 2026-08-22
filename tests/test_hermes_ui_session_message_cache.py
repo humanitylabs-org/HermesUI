@@ -147,6 +147,15 @@ await _prefetchSessionMessages(_allSessions[0]);
 assert.strictEqual(apiCalls,1);
 assert.strictEqual(_sessionMessagePrefetchEligible(_allSessions[1]),false);
 assert.strictEqual(_sessionMessagePrefetchEligible(_allSessions[2]),false);
+
+const becomingActive={{session_id:'becoming-active',message_count:1,updated_at:11,profile:'default'}};
+_allSessions.unshift(becomingActive);
+const becomingActiveRequest=_prefetchSessionMessages(becomingActive);
+S.session=becomingActive;
+await becomingActiveRequest;
+assert.ok(_freshSessionMessageCacheEntry('becoming-active',{{message_count:1,profile:'default'}}));
+assert.strictEqual(_sessionMessagePrefetchEligible(becomingActive),false);
+assert.strictEqual(_sessionMessagePrefetchEligible(becomingActive,{{allowActive:true}}),true);
 console.log(JSON.stringify({{ok:true,apiCalls,cacheSize:_sessionMessageCache.size}}));
 """
     result = subprocess.run(
@@ -157,7 +166,7 @@ console.log(JSON.stringify({{ok:true,apiCalls,cacheSize:_sessionMessageCache.siz
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout.strip()) == {"ok": True, "apiCalls": 1, "cacheSize": 1}
+    assert json.loads(result.stdout.strip()) == {"ok": True, "apiCalls": 2, "cacheSize": 2}
 
 
 def test_force_refresh_bypasses_a_matching_warm_entry_behaviorally():

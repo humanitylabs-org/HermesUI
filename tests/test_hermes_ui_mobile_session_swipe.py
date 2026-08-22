@@ -23,7 +23,7 @@ def test_swipe_is_phone_and_coarse_pointer_only():
     assert "const PHONE_QUERY='(max-width: 640px)'" in SWIPE
     assert "const COARSE_QUERY='(pointer: coarse)'" in SWIPE
     assert "const enabled=()=>media(PHONE_QUERY)&&media(COARSE_QUERY)" in SWIPE
-    assert "if(!enabled()||switching||swipeAnimating||gesture||!currentSid()) return" in SWIPE
+    assert "if(!enabled()||swipeAnimating||gesture||!currentSid()) return" in SWIPE
     assert "@media (max-width:640px) and (pointer:coarse){.messages-shell{touch-action:pan-y;}}" in CSS
 
 
@@ -39,7 +39,7 @@ def test_swipe_uses_visible_sidebar_order_and_existing_session_switch_path():
     assert "_sessionVisibleSidebarIds" in SWIPE
     assert "const targetSid=ids[index+(direction<0?1:-1)]" in SWIPE
     assert "_allSessions.find" in SWIPE
-    assert "_openSidebarSession(target,{source})" in SWIPE
+    assert "_openSidebarSession(target,{source,suppressSessionContentLoading:true})" in SWIPE
     assert "async function openTarget(target,source='mobile-session-swipe')" in SWIPE
     assert "left advances to the next older row" in SWIPE
     assert "right returns to the previous newer row" in SWIPE
@@ -72,11 +72,30 @@ def test_swipe_and_tab_click_share_one_loading_experience():
     assert "preview.setAttribute('aria-hidden','true')" in SWIPE
     assert "void switchTarget(sessionForSid(sid),'mobile-session-tab')" in SWIPE
     assert "await switchTarget(target,'mobile-session-swipe')" in SWIPE
-    assert "setContentLoading(true)" in SWIPE
-    assert "setContentLoading(false)" in SWIPE
+    assert "const loadingToken=beginNavigationLoading()" in SWIPE
+    assert "endNavigationLoading(loadingToken)" in SWIPE
     assert "contentLoadingDepth=Math.max(0,contentLoadingDepth+(on?1:-1))" in SWIPE
     assert "messages.classList.toggle('session-switch-loading',visible)" in SWIPE
     assert "const reducedMotion=()=>media('(prefers-reduced-motion: reduce)')" in SWIPE
+
+
+def test_mobile_navigation_remains_available_while_a_prior_tab_is_loading():
+    assert "let switching=false" not in SWIPE
+    assert "||switching" not in SWIPE
+    assert "navigationSid=targetSid" in SWIPE
+    assert "const generation=++navigationGeneration" in SWIPE
+    assert "if(generation!==navigationGeneration) return" in SWIPE
+    assert "const currentSid=()=>navigationSid||actualSid()" in SWIPE
+    assert "if(token!==activeNavigationLoadingToken) return" in SWIPE
+
+
+def test_mobile_tab_switch_reprioritizes_the_bounded_warm_cache():
+    assert "_prioritizeMobileSessionWarmCache(visibleSessionIds(),targetSid)" in SWIPE
+    assert "function _prioritizeMobileSessionWarmCache(visibleIds,selectedSid)" in SESSIONS
+    assert "priority.length<_SESSION_MESSAGE_CACHE_MAX" in SESSIONS
+    assert "_sessionMessagePrefetchQueue=_sessionMessagePrefetchTargets().map" in SESSIONS
+    assert "_pumpSessionMessagePrefetchQueue();" in SESSIONS
+    assert "const _SESSION_MESSAGE_PREFETCH_CONCURRENCY = 2" in SESSIONS
 
 
 def test_mobile_tabs_are_a_coupled_pager_and_share_switch_loading():
@@ -188,8 +207,8 @@ def test_tab_header_and_chat_use_the_same_swipe_progress():
 def test_desktop_sidebar_and_keyboard_session_switches_use_the_same_skeleton():
     assert "setContentLoading," in SWIPE
     assert "const setSessionContentLoading=window.__sessionSwipeNavigation&&window.__sessionSwipeNavigation.setContentLoading" in SESSIONS
-    assert "if(typeof setSessionContentLoading==='function') setSessionContentLoading(true)" in SESSIONS
-    assert "if(typeof setSessionContentLoading==='function') setSessionContentLoading(false)" in SESSIONS
+    assert "if(manageSessionContentLoading&&typeof setSessionContentLoading==='function') setSessionContentLoading(true)" in SESSIONS
+    assert "if(manageSessionContentLoading&&typeof setSessionContentLoading==='function') setSessionContentLoading(false)" in SESSIONS
     assert "_openSidebarSession(session,{source:'keyboard-session-navigation'})" in SESSIONS
 
 

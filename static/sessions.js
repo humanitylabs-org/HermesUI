@@ -2522,8 +2522,9 @@ async function _openSidebarSession(session, loadOpts={}){
   }
   const wasMobileSessionPage=document.documentElement.dataset.mobileSessionView==='sessions';
   let openedTarget=false;
+  const manageSessionContentLoading=!loadOpts.suppressSessionContentLoading;
   const setSessionContentLoading=window.__sessionSwipeNavigation&&window.__sessionSwipeNavigation.setContentLoading;
-  if(typeof setSessionContentLoading==='function') setSessionContentLoading(true);
+  if(manageSessionContentLoading&&typeof setSessionContentLoading==='function') setSessionContentLoading(true);
   // A deliberate selection leaves the Sessions page immediately. The content
   // area can then show the same mode-specific loading layout used by tabs and
   // desktop switches instead of holding the list until the request finishes.
@@ -2547,7 +2548,7 @@ async function _openSidebarSession(session, loadOpts={}){
     renderSessionListFromCache();
   }finally{
     if(wasMobileSessionPage&&!openedTarget&&typeof openMobileSessionPage==='function') openMobileSessionPage();
-    if(typeof setSessionContentLoading==='function') setSessionContentLoading(false);
+    if(manageSessionContentLoading&&typeof setSessionContentLoading==='function') setSessionContentLoading(false);
   }
 }
 
@@ -3076,6 +3077,7 @@ let _sessionMessagePrefetchSchedule = 0;
 let _sessionMessagePrefetchGeneration = 0;
 let _sessionMessagePrefetchQueue = [];
 let _sessionMessagePrefetchActive = 0;
+let _mobileSessionMessagePrefetchPriorityIds = [];
 
 function _sessionMessageCacheCount(session){
   const value=Number(session&&session.message_count);
@@ -3208,10 +3210,10 @@ function _cacheActiveSessionMessages(sid){
   });
 }
 
-function _sessionMessagePrefetchEligible(session){
+function _sessionMessagePrefetchEligible(session,opts={}){
   if(!session||!session.session_id||session.archived||_sessionMessageCacheBusy(session)) return false;
   if(typeof _isSessionEffectivelyStreaming==='function'&&_isSessionEffectivelyStreaming(session)) return false;
-  if(S.session&&S.session.session_id===session.session_id) return false;
+  if(!opts.allowActive&&S.session&&S.session.session_id===session.session_id) return false;
   if(typeof _isExternalSession==='function'&&_isExternalSession(session)) return false;
   const profile=String(session.profile||'').trim();
   if(profile&&typeof _profileMatchesActiveProfile==='function'&&!_profileMatchesActiveProfile(profile,S.activeProfile||'default')) return false;
@@ -3248,7 +3250,11 @@ async function _prefetchSessionMessages(session){
       const current=Array.isArray(_allSessions)
         ? _allSessions.find(item=>item&&String(item.session_id)===sid)
         : null;
-      if(!current||!_sessionMessagePrefetchEligible(current)) return;
+      // The selected tab can become active while this request is in flight. Its
+      // stable response is still useful to the waiting loadSession call and for
+      // an immediate return after another swipe; only reject genuinely busy or
+      // stale authority, not the fact that selection advanced.
+      if(!current||!_sessionMessagePrefetchEligible(current,{allowActive:true})) return;
       if(requestProfile!==_sessionMessageCacheProfile(current)) return;
       if(!_profileMatchesActiveProfile(requestProfile,S.activeProfile||'default')) return;
       if(requestCount!==_sessionMessageCacheCount(current)) return;
@@ -3272,6 +3278,11 @@ function _sessionMessagePrefetchTargets(){
   const activeSid=S.session&&S.session.session_id;
   const activeIndex=ordered.findIndex(item=>item&&item.session_id===activeSid);
   const candidates=[];
+  const bySid=new Map(ordered.filter(Boolean).map(session=>[String(session.session_id||''),session]));
+  for(const sid of _mobileSessionMessagePrefetchPriorityIds){
+    const session=bySid.get(String(sid||''));
+    if(session) candidates.push(session);
+  }
   if(activeIndex>=0){
     if(ordered[activeIndex-1]) candidates.push(ordered[activeIndex-1]);
     if(ordered[activeIndex+1]) candidates.push(ordered[activeIndex+1]);
@@ -3284,6 +3295,32 @@ function _sessionMessagePrefetchTargets(){
     seen.add(sid);
     return true;
   }).slice(0,_SESSION_MESSAGE_CACHE_MAX);
+}
+
+function _prioritizeMobileSessionWarmCache(visibleIds,selectedSid){
+  if(!_sessionMessagePrefetchExecutionAllowed()) return;
+  const ids=[...new Set((Array.isArray(visibleIds)?visibleIds:[]).filter(Boolean).map(String))];
+  const selected=String(selectedSid||'');
+  const selectedIndex=ids.indexOf(selected);
+  const priority=[];
+  if(selected) priority.push(selected);
+  // Warm outward from the tab the user just selected, alternating in the same
+  // left/right order the pager exposes. The cache remains capped at five rows
+  // and the existing global queue remains capped at two network requests.
+  for(let distance=1;distance<ids.length&&priority.length<_SESSION_MESSAGE_CACHE_MAX;distance++){
+    if(selectedIndex>=0&&ids[selectedIndex+distance]) priority.push(ids[selectedIndex+distance]);
+    if(selectedIndex>=0&&ids[selectedIndex-distance]&&priority.length<_SESSION_MESSAGE_CACHE_MAX){
+      priority.push(ids[selectedIndex-distance]);
+    }
+  }
+  for(const sid of ids){
+    if(priority.length>=_SESSION_MESSAGE_CACHE_MAX) break;
+    if(!priority.includes(sid)) priority.push(sid);
+  }
+  _mobileSessionMessagePrefetchPriorityIds=priority;
+  const generation=_sessionMessagePrefetchGeneration;
+  _sessionMessagePrefetchQueue=_sessionMessagePrefetchTargets().map(session=>({session,generation}));
+  _pumpSessionMessagePrefetchQueue();
 }
 
 function _sessionMessagePrefetchExecutionAllowed(){

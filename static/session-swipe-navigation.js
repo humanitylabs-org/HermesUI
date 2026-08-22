@@ -20,7 +20,11 @@
   const media=query=>typeof window.matchMedia==='function'&&window.matchMedia(query).matches;
   const enabled=()=>media(PHONE_QUERY)&&media(COARSE_QUERY);
   const reducedMotion=()=>media('(prefers-reduced-motion: reduce)');
-  const currentSid=()=>String(state().session&&state().session.session_id||'');
+  const actualSid=()=>String(state().session&&state().session.session_id||'');
+  // The selected tab advances immediately, before its request settles. This is
+  // deliberately separate from S.session: loadSession owns authoritative pane
+  // state and rejects stale responses, while the pager must remain swipeable.
+  const currentSid=()=>navigationSid||actualSid();
   const unique=values=>[...new Set((values||[]).filter(Boolean).map(String))];
 
   function visibleSessionIds(){
@@ -100,8 +104,11 @@
   }
 
   let gesture=null;
-  let switching=false;
+  let navigationSid='';
+  let navigationGeneration=0;
   let contentLoadingDepth=0;
+  let navigationLoadingToken=0;
+  let activeNavigationLoadingToken=0;
   let pane=null;
   let surface=null;
   let contentSurface=null;
@@ -112,7 +119,6 @@
   let tabSyncFrame=null;
   let tabCenterFrame=null;
   let tabsObserver=null;
-  let pendingTabSync=false;
   let tabSignature='';
   let lastActiveSid=null;
   let suppressTabClickUntil=0;
@@ -214,7 +220,6 @@
   }
 
   function scheduleTabSync(){
-    if(switching){pendingTabSync=true;return;}
     if(tabSyncFrame!==null) return;
     tabSyncFrame=window.requestAnimationFrame(()=>syncTabs(false));
   }
@@ -381,9 +386,8 @@
     return Promise.all([contentAnimation,tabAnimation]).then(()=>undefined);
   }
 
-  function setContentLoading(on){
-    contentLoadingDepth=Math.max(0,contentLoadingDepth+(on?1:-1));
-    const visible=contentLoadingDepth>0;
+  function renderContentLoading(){
+    const visible=contentLoadingDepth>0||activeNavigationLoadingToken>0;
     const messages=byId('messages');
     const skeleton=ensureContentSkeleton();
     if(messages){
@@ -393,32 +397,61 @@
     if(skeleton) skeleton.hidden=!visible;
   }
 
+  function setContentLoading(on){
+    contentLoadingDepth=Math.max(0,contentLoadingDepth+(on?1:-1));
+    renderContentLoading();
+  }
+
+  function beginNavigationLoading(){
+    const token=++navigationLoadingToken;
+    activeNavigationLoadingToken=token;
+    renderContentLoading();
+    return token;
+  }
+
+  function endNavigationLoading(token){
+    // A superseded request must never hide the latest request's skeleton.
+    if(token!==activeNavigationLoadingToken) return;
+    activeNavigationLoadingToken=0;
+    renderContentLoading();
+  }
+
 
   async function openTarget(target,source='mobile-session-swipe'){
-    if(typeof _openSidebarSession==='function') return _openSidebarSession(target,{source});
+    if(typeof _openSidebarSession==='function'){
+      return _openSidebarSession(target,{source,suppressSessionContentLoading:true});
+    }
     if(typeof loadSession==='function') return loadSession(target.session_id,{source});
     throw new Error('Session navigation is unavailable');
   }
 
   async function switchTarget(target,source){
-    if(switching||!target) return;
-    switching=true;
-    pendingTabSync=false;
-    setContentLoading(true);
+    const targetSid=String(target&&target.session_id||'');
+    if(!targetSid) return;
+    const generation=++navigationGeneration;
+    navigationSid=targetSid;
+    const loadingToken=beginNavigationLoading();
+    syncTabs(true);
+    if(typeof _prioritizeMobileSessionWarmCache==='function'){
+      _prioritizeMobileSessionWarmCache(visibleSessionIds(),targetSid);
+    }
     try{
       await openTarget(target,source);
+      if(generation!==navigationGeneration) return;
+      navigationSid='';
       syncTabs(true);
     }catch(error){
+      if(generation!==navigationGeneration) return;
+      navigationSid='';
+      syncTabs(true);
       if(typeof showToast==='function') showToast('Could not open that session: '+(error&&error.message||error));
     }finally{
-      switching=false;
-      setContentLoading(false);
-      if(pendingTabSync){pendingTabSync=false;scheduleTabSync();}
+      endNavigationLoading(loadingToken);
     }
   }
 
   async function openTabDirection(direction){
-    if(switching||!media(PHONE_QUERY)) return;
+    if(!media(PHONE_QUERY)) return;
     const target=adjacentSession(direction);
     if(!target) return;
     await switchTarget(target,'mobile-session-tab');
@@ -438,7 +471,7 @@
   }
 
   function start(event){
-    if(!enabled()||switching||swipeAnimating||gesture||!currentSid()) return;
+    if(!enabled()||swipeAnimating||gesture||!currentSid()) return;
     if(event.pointerType&&event.pointerType!=='touch'&&event.pointerType!=='pen') return;
     if(event.button!==undefined&&event.button!==0) return;
     if(event.clientX<=EDGE_GUARD||event.clientX>=window.innerWidth-EDGE_GUARD) return;
@@ -465,7 +498,7 @@
   }
 
   function move(event){
-    if(!gesture||event.pointerId!==gesture.pointerId||switching) return;
+    if(!gesture||event.pointerId!==gesture.pointerId) return;
     const dx=event.clientX-gesture.startX;
     const dy=event.clientY-gesture.startY;
     const absX=Math.abs(dx);
@@ -506,15 +539,8 @@
     const width=swipeWidth();
     const targetTabLeft=tabScrollForSession(target);
     await animateSwipeTo(active.direction<0?-width:width,0,targetTabLeft);
-    // Hand the fully-arrived preview to the real loading surface before its
-    // duplicate is removed, so even a slow request has no blank frame.
-    setContentLoading(true);
     resetSwipeVisual();
-    try{
-      await switchTarget(target,'mobile-session-swipe');
-    }finally{
-      setContentLoading(false);
-    }
+    await switchTarget(target,'mobile-session-swipe');
   }
 
   function cancel(){
@@ -529,7 +555,7 @@
       return;
     }
     const tab=event.target&&event.target.closest&&event.target.closest('.mobile-session-tab');
-    if(!tab||!tabList||!tabList.contains(tab)||switching||swipeAnimating) return;
+    if(!tab||!tabList||!tabList.contains(tab)||swipeAnimating) return;
     const sid=String(tab.dataset.sid||'');
     if(!sid||sid===currentSid()){
       centerActiveTab(reducedMotion()?'auto':'smooth');
