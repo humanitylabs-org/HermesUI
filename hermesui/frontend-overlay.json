@@ -46,7 +46,7 @@
       "upstream_sha256": "b883cc5f4e2fa5ee01cc87e1ed1546ba9ab47079632ce692a77cfa65178bb6d6"
     },
     {
-      "hermesui_sha256": "0ff76aa4771e93deae02d97d330e8ff360b3bc25b25b9d8b8bb163c72c7ec14b",
+      "hermesui_sha256": "c704fb12b3de5a97682f0f0ea3760bd510d584b5b3dac78dac9eef337e33f8a6",
       "path": "static/index.html",
       "upstream_sha256": "4850e0f609c56ef5619dcb023f95398224b053fcca6b1125d4f8a2923f9b2a3c"
     },
@@ -101,7 +101,7 @@
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },
     {
-      "hermesui_sha256": "32c4e01dba8c52cea4d7aa4b4be7de7a97abb7088f55c8a8f561bbd96543ea1f",
+      "hermesui_sha256": "ef494a37f02cca2705cf0d71080d5d3c245ddf551bf3f1124e25c039c22452bc",
       "path": "static/sw.js",
       "upstream_sha256": "cfdc35b1dd3f20f9ef8e885008dd76c3bcd2fe3deb61c1708f2e6d88514e2ff8"
     },
