@@ -587,9 +587,9 @@
       const article=document.createElement('article');
       article.className=`tailnet-notification${unread?' is-unread':''}${item.status==='error'?' is-error':''}`;
       article.dataset.role='assistant';
-      const role=document.createElement('div');
+      const role=document.createElement('span');
       role.className='msg-role assistant tailnet-notification-role';
-      const icon=document.createElement('div');
+      const icon=document.createElement('span');
       icon.className='role-icon assistant';
       icon.textContent='W';
       icon.setAttribute('aria-hidden','true');
@@ -610,7 +610,7 @@
       const response=document.createElement('span');
       response.className='tailnet-notification-response';
       response.textContent=item.status==='error'?'Failed run · Open to read':'Open to read';
-      button.appendChild(response);
+      button.append(role,response);
       const rich=document.createElement('div');
       rich.id=richId;
       rich.className='tailnet-notification-rich msg-body';
@@ -628,7 +628,7 @@
         }
         if(!open&&notificationFilter==='unread'&&!notificationIsUnread(item))renderCronNotifications();
       });
-      article.append(role,button,rich);
+      article.append(button,rich);
       notificationsList.appendChild(article);
     });
   }

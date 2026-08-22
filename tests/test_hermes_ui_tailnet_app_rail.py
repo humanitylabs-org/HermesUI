@@ -104,6 +104,18 @@ def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
     assert 'className=\'tailnet-notification-rich msg-body\'' in JS
 
 
+def test_cron_notification_rows_are_compact_full_row_disclosures():
+    assert "const role=document.createElement('span')" in JS
+    assert "const icon=document.createElement('span')" in JS
+    assert "button.append(role,response)" in JS
+    assert "article.append(button,rich)" in JS
+    assert ".tailnet-notification{position:relative;padding:0" in CSS
+    assert "grid-template-columns:minmax(0,1fr) auto" in CSS
+    assert "min-height:56px" in CSS
+    assert ".tailnet-notifications-filter,.tailnet-notifications-read-all{min-height:44px;}" in CSS
+    assert ".tailnet-notification-toggle{min-height:64px" in CSS
+
+
 def test_cron_notifications_reuse_existing_frontend_apis_only():
     assert "fetchCronNotificationJobs" in JS
     assert "fetchCronNotificationOutputs" in JS

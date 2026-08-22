@@ -11,10 +11,13 @@
   const messageEntryCache=new Map();
   const openingEvidenceCache=new Map();
   const openingEvidenceRequests=new Map();
+  const promptEvidenceCache=new Map();
+  const promptEvidenceRequests=new Map();
   const grokSummaryCache=new Map();
   const grokSummaryRequests=new Map();
   const grokSummaryErrors=new Map();
   const OPENING_EVIDENCE_LIMIT=30;
+  const PROMPT_EVIDENCE_LIMIT=30;
   const GROK_SUMMARY_ENDPOINT='/apps/api/high-signal-summary';
   const SUMMARY_MODEL_TASK='high_signal_summary';
   let summaryModelConfig={provider:'',model:'',label:'AI model'};
@@ -286,18 +289,24 @@
     return acceptedRunSteers.get(latest.key)||[];
   }
 
-  function dashboardInstruction(entries){
+  function dashboardInstruction(entries,resultAnchor=''){
     const runUsers=latestRunUserEntries(entries);
-    const text=runUsers.length
-      ? cleanUserText(runUsers[runUsers.length-1].message)
-      : 'No instruction is available yet.';
+    let text=runUsers.length?cleanUserText(runUsers[runUsers.length-1].message):'';
+    if(!text&&resultAnchor){
+      const evidence=promptEvidenceCache.get(sessionKey());
+      if(evidence&&evidence.anchor===resultAnchor){
+        if(evidence.text) text=evidence.text;
+        else if(evidence.pending) text='Loading the last prompt…';
+      }
+    }
+    if(!text) text='No prompt is available yet.';
     return {text,steers:acceptedSteersForInstruction(text)};
   }
 
-  function renderDashboardInstruction(entries){
+  function renderDashboardInstruction(entries,resultAnchor=''){
     const element=byId('sessionDashboardInstruction');
     if(!element) return;
-    const instruction=dashboardInstruction(entries);
+    const instruction=dashboardInstruction(entries,resultAnchor);
     if(!instruction.steers.length){
       setMarkdown('sessionDashboardInstruction',instruction.text);
       return;
@@ -351,6 +360,48 @@
     return request;
   }
 
+  async function hydrateDashboardPromptEvidence(resultAnchor){
+    const key=sessionKey();
+    if(!key||!resultAnchor||typeof api!=='function') return;
+    const cached=promptEvidenceCache.get(key);
+    if(cached&&cached.anchor===resultAnchor) return;
+    if(promptEvidenceRequests.has(key)) return promptEvidenceRequests.get(key);
+    let before=typeof _oldestIdx!=='undefined'?Number(_oldestIdx):0;
+    if(!Number.isFinite(before)||before<=0){
+      promptEvidenceCache.set(key,{anchor:resultAnchor,pending:false,text:'',error:'missing'});
+      return;
+    }
+    promptEvidenceCache.set(key,{anchor:resultAnchor,pending:true,text:'',error:''});
+    if(key===sessionKey()) scheduleSessionDashboardSync();
+    const request=(async()=>{
+      let text='';
+      let error='missing';
+      try{
+        while(before>0&&!text){
+          const data=await api(`/api/session?session_id=${encodeURIComponent(key)}&messages=1&resolve_model=0&msg_before=${before}&msg_limit=${PROMPT_EVIDENCE_LIMIT}`,{timeoutMs:120000});
+          const session=data&&data.session?data.session:data;
+          const messages=session&&Array.isArray(session.messages)?session.messages:[];
+          const projection=rebuildProjection(messages);
+          const user=latestUserEntry(projection.entries);
+          text=user?cleanUserText(user.message):'';
+          if(text){error='';break;}
+          const nextBefore=Number(session&&session._messages_offset);
+          if(!Number.isFinite(nextBefore)||nextBefore<=0||nextBefore>=before) break;
+          before=nextBefore;
+        }
+      }catch(fetchError){
+        error=String(fetchError&&fetchError.message||fetchError||'unavailable');
+      }finally{
+        promptEvidenceCache.set(key,{anchor:resultAnchor,pending:false,text,error:text?'':error});
+        while(promptEvidenceCache.size>20) promptEvidenceCache.delete(promptEvidenceCache.keys().next().value);
+        promptEvidenceRequests.delete(key);
+        if(key===sessionKey()) scheduleSessionDashboardSync();
+      }
+    })();
+    promptEvidenceRequests.set(key,request);
+    return request;
+  }
+
   function refreshDashboardSummary(){
     void refreshGrokSummary('goal');
   }
@@ -393,13 +444,13 @@
     return null;
   }
 
-  function dashboardCompleted(entries){
+  function completedAssistantEntry(entries){
     const current=state();
-    if(current.busy||current.activeStreamId) return '';
+    if(current.busy||current.activeStreamId) return undefined;
     const user=latestUserEntry(entries);
     const assistant=latestAssistantEntry(entries);
-    if(!assistant||user&&assistant.index<user.index) return '';
-    return compact(rawText(assistant.message),12000);
+    if(!assistant||user&&assistant.index<user.index) return undefined;
+    return assistant;
   }
 
   const sessionKey=()=>{
@@ -893,9 +944,13 @@
     dashboard.hidden=!hasSession;
     if(!hasSession) return;
 
-    const completed=dashboardCompleted(entries);
+    const completedEntry=completedAssistantEntry(entries);
+    const completed=completedEntry?compact(rawText(completedEntry.message),12000):'';
+    const resultAnchor=completedEntry?messageSignature(completedEntry.message):'';
+    const promptMissing=!!completed&&!latestRunUserEntries(entries).length;
+    if(promptMissing) void hydrateDashboardPromptEvidence(resultAnchor);
     renderGrokSummary('goal');
-    renderDashboardInstruction(entries);
+    renderDashboardInstruction(entries,resultAnchor);
     setMarkdown('sessionDashboardCompleted',completed||'Not completed yet.');
     renderGrokSummary('status');
     const completedCard=byId('sessionDashboardCompletedCard');

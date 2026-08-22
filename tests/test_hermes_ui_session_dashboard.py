@@ -41,7 +41,7 @@ def test_high_signal_keeps_one_unboxed_goal_and_exactly_three_cards():
     assert 'id="sessionDashboardCompleted"' in block
     assert 'id="sessionDashboardSummaryRefresh"' in block
     assert 'id="sessionDashboardRefresh"' in block
-    assert block.index('>Goal<') < block.index('>Last instruction<') < block.index('>Status<') < block.index('>Result<')
+    assert block.index('>Goal<') < block.index('>Last prompt<') < block.index('>Status<') < block.index('>Result<')
     assert 'session-dashboard-heading-actions' in block
     assert block.index('>Goal<') < block.index('aria-label="Refresh goal"')
     assert block.index('>Status<') < block.index('aria-label="Refresh status"')
@@ -100,9 +100,9 @@ def test_goal_and_status_share_one_visible_global_model_selector():
     assert "renderGrokSummary('status')" in DASHBOARD
 
 
-def test_last_instruction_keeps_base_prompt_all_accepted_steers_and_copy_buttons():
+def test_last_prompt_keeps_base_prompt_all_accepted_steers_and_copy_buttons():
     assert "const latestSteerRunBySession=new Map()" in DASHBOARD
-    assert "renderDashboardInstruction(entries)" in DASHBOARD
+    assert "renderDashboardInstruction(entries,resultAnchor)" in DASHBOARD
     assert 'class="session-dashboard-steer"' in DASHBOARD
     assert 'aria-label="Accepted steers"' in DASHBOARD
     assert "steers.push(text)" in DASHBOARD
@@ -228,3 +228,35 @@ const initial=reads;for(let i=0;i<20;i++)syncSessionDashboard();const repeated=r
     assert payload["initial"] >= 10000
     assert payload["repeated"] <= 500
     assert payload["classic"] == 0
+
+
+def test_result_with_assistant_only_tail_automatically_pages_until_last_prompt():
+    node = shutil.which("node")
+    assert node is not None
+    harness = f"""
+const fs=require('fs');const vm=require('vm');const elements=new Map();
+function element(id){{if(!elements.has(id))elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},disabled:false,attrs:{{}},listeners:{{}},addEventListener(name,fn){{this.listeners[name]=fn;}},setAttribute(name,value){{this.attrs[name]=String(value);}},removeAttribute(name){{delete this.attrs[name];}}}});return elements.get(id);}}
+global.window=global;global.document={{readyState:'complete',documentElement:{{dataset:{{sessionView:'dashboard'}}}},getElementById:element,addEventListener(){{}}}};
+global.location={{href:'https://device.example/hermesUI/session/session-1'}};global.history={{state:null,replaceState(){{}}}};global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
+global.S={{session:{{session_id:'session-1'}},messages:[{{role:'assistant',content:'The requested dashboard is now live.',id:'result-1',finish_reason:'stop'}}],busy:false,activeStreamId:null}};
+global.msgContent=m=>String(m&&m.content||'');global.renderMd=s=>String(s||'');global._stripWorkspaceDisplayPrefix=s=>String(s||'').replace(/^\\s*\\[Workspace[^\\]]*\\]\\s*/i,'').trim();global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');global._messageIsRenderable=m=>!!(m&&m.role!=='tool'&&m.content);global._isContextCompactionMessage=()=>false;global._isPreservedCompressionTaskListMessage=()=>false;global._isRecoveryControlMessage=()=>false;global.INFLIGHT={{}};global.requestAnimationFrame=cb=>{{cb();return 1;}};global.queueMicrotask=cb=>cb();global._messagesTruncated=true;global._oldestIdx=61;
+const historyRequests=[];global.api=async url=>{{
+  historyRequests.push(url);
+  if(url.includes('msg_before=61')) return {{session:{{messages:[{{role:'assistant',content:'Earlier assistant continuation.',id:'a-older'}}],_messages_truncated:true,_messages_offset:31}}}};
+  if(url.includes('msg_before=31')) return {{session:{{messages:[{{role:'user',content:'[Workspace::v1: /tmp]\\nMake the High Signal dashboard reliable.',id:'u-prompt'}}],_messages_truncated:false,_messages_offset:0}}}};
+  throw new Error(`Unexpected URL: ${{url}}`);
+}};
+let summaryRequests=0;global.fetch=async()=>{{summaryRequests++;throw new Error('Summary refresh must remain manual');}};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
+setTimeout(()=>{{syncSessionDashboard();process.stdout.write(JSON.stringify({{prompt:element('sessionDashboardInstruction').innerHTML,result:element('sessionDashboardCompleted').innerHTML,goal:element('sessionDashboardOriginalRequest').innerHTML,status:element('sessionDashboardStatus').innerHTML,historyRequests,summaryRequests}}));}},40);
+"""
+    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
+    payload = json.loads(result.stdout)
+    assert payload["prompt"] == "Make the High Signal dashboard reliable."
+    assert payload["result"] == "The requested dashboard is now live."
+    assert payload["goal"] == "Select Refresh to generate the goal summary."
+    assert payload["status"] == "Select Refresh to generate the current status."
+    assert payload["summaryRequests"] == 0
+    assert len(payload["historyRequests"]) == 2
+    assert "msg_before=61&msg_limit=30" in payload["historyRequests"][0]
+    assert "msg_before=31&msg_limit=30" in payload["historyRequests"][1]

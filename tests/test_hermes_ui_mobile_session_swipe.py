@@ -160,7 +160,7 @@ def test_session_switch_loading_matches_classic_or_high_signal_layout():
     assert INDEX.count('class="session-switch-skeleton-chat-row') == 4
     assert 'class="session-switch-skeleton-high-signal"' in INDEX
     assert INDEX.count('<article class="session-switch-skeleton-pane') == 4
-    for label in ("Goal", "Status", "Last instruction", "Result"):
+    for label in ("Goal", "Status", "Last prompt", "Result"):
         assert f'<span class="session-switch-skeleton-pane-label">{label}</span>' in INDEX
     assert 'html[data-session-view="classic"] .session-switch-skeleton-high-signal' in CSS
     assert 'html[data-session-view="dashboard"] .session-switch-skeleton-classic' in CSS
