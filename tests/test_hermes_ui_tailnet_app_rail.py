@@ -62,6 +62,41 @@ def test_hermes_ui_is_the_first_and_current_rail_item():
     assert ".tailnet-app-icon{width:20px;height:20px" in CSS
 
 
+def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
+    rail = _rail_markup()
+    home = rail.index('id="tailnetAppHome"')
+    bell = rail.index('id="tailnetNotificationsButton"')
+    private = rail.index('id="tailnetPrivateAppsLabel"')
+    assert home < bell < private
+    assert 'data-tailnet-app-id="cron-notifications"' in rail
+    assert 'id="tailnetNotificationsBadge" hidden' in rail
+    assert 'id="tailnetNotifications" aria-labelledby="tailnetNotificationsTitle" hidden' in INDEX
+    assert 'id="tailnetNotificationsReadAll"' in INDEX
+    assert "const NOTIFICATION_STATE_KEY='hermesui.cron-notifications.v1'" in JS
+    assert "api('/api/crons')" in JS
+    assert "/api/crons/output?job_id=" in JS
+    assert "NOTIFICATION_LIST_LIMIT=40" in JS
+    assert "notificationItems.values()).sort" not in JS  # sorting stays explicit and readable
+    assert ".sort((left,right)=>right.modified-left.modified)" in JS
+    assert "markNotificationRead(item)" in JS
+    assert "markAllNotificationsRead" in JS
+    assert "hermesui:cron-completions" in JS
+    assert "Status:\\*\\*\\s*silent" in JS
+    assert "dividerIndex" in JS
+    assert ".tailnet-notifications-badge" in CSS
+    assert ".tailnet-notification-response" in CSS
+
+
+def test_cron_notifications_reuse_existing_frontend_apis_only():
+    assert "fetchCronNotificationJobs" in JS
+    assert "fetchCronNotificationOutputs" in JS
+    assert "mapWithConcurrency(selected,4" in JS
+    assert "/apps/api/notifications" not in JS
+    assert "indexedDB" not in JS
+    assert "CacheStorage" not in JS
+    assert "id!==NOTIFICATIONS_ID" in MANAGER
+
+
 def test_app_selector_has_three_ordered_groups_and_add_controls():
     rail = _rail_markup()
     private = rail.index('id="tailnetPrivateAppsLabel"')
@@ -446,8 +481,8 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1"'
+        '&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v3"'
         in INDEX
     )
-    assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__"' in INDEX
+    assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3"' in INDEX
     assert "new URL(PRIVATE_APPS_PATH,location.origin)" in MANAGER

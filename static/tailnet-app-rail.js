@@ -10,6 +10,10 @@
   const FRAME_INLINE_DECISION_TTL_MS=6*60*60*1000;
   const FRAME_BROWSER_DECISION_TTL_MS=5*60*1000;
   const BROWSER_FALLBACK_DELAY_MS=3000;
+  const NOTIFICATIONS_ID='cron-notifications';
+  const NOTIFICATION_STATE_KEY='hermesui.cron-notifications.v1';
+  const NOTIFICATION_OUTPUT_LIMIT=4;
+  const NOTIFICATION_LIST_LIMIT=40;
   const URL_SCHEME_RE=/^[a-z][a-z0-9+.-]*:/i;
   const GROUPS={
     company:{label:'work app',plural:'work apps',icon:'company'},
@@ -32,6 +36,12 @@
   const frame=document.getElementById('tailnetAppFrame');
   const wizardHome=document.getElementById('tailnetWizardHome');
   const managerPanel=document.getElementById('tailnetAppManager');
+  const notificationsPanel=document.getElementById('tailnetNotifications');
+  const notificationsButton=document.getElementById('tailnetNotificationsButton');
+  const notificationsBadge=document.getElementById('tailnetNotificationsBadge');
+  const notificationsStatus=document.getElementById('tailnetNotificationsStatus');
+  const notificationsList=document.getElementById('tailnetNotificationsList');
+  const notificationsReadAll=document.getElementById('tailnetNotificationsReadAll');
   const home=document.getElementById('tailnetAppHome');
   const links=document.getElementById('tailnetAppLinks');
   const companyLinks=document.getElementById('tailnetCompanyAppLinks');
@@ -62,6 +72,9 @@
   let bookmarkRevision=0;
   let bookmarkServerAvailable=false;
   let bookmarkSyncPromise=Promise.resolve();
+  let notificationState=readNotificationState();
+  let notificationItems=new Map();
+  let notificationsLoading=false;
 
 
   function normalizeBookmarkUrl(raw){
@@ -343,6 +356,256 @@
     }
   }
 
+  function readNotificationState(){
+    try{
+      const raw=JSON.parse(localStorage.getItem(NOTIFICATION_STATE_KEY)||'null');
+      if(raw&&raw.version===1&&Number.isFinite(Number(raw.readThrough))&&raw.readJobs&&typeof raw.readJobs==='object'){
+        const readJobs={};
+        Object.entries(raw.readJobs).slice(-80).forEach(([id,value])=>{
+          const timestamp=Number(value);
+          if(id&&Number.isFinite(timestamp)&&timestamp>0)readJobs[id]=timestamp;
+        });
+        return {version:1,readThrough:Number(raw.readThrough),readJobs};
+      }
+    }catch(_){}
+    const initial={version:1,readThrough:Date.now()/1000,readJobs:{}};
+    try{localStorage.setItem(NOTIFICATION_STATE_KEY,JSON.stringify(initial));}catch(_){}
+    return initial;
+  }
+
+  function writeNotificationState(){
+    try{
+      const entries=Object.entries(notificationState.readJobs)
+        .sort(([,left],[,right])=>Number(right)-Number(left))
+        .slice(0,80);
+      notificationState.readJobs=Object.fromEntries(entries);
+      localStorage.setItem(NOTIFICATION_STATE_KEY,JSON.stringify(notificationState));
+    }catch(_){}
+  }
+
+  function notificationReadCutoff(jobId){
+    return Math.max(Number(notificationState.readThrough)||0,Number(notificationState.readJobs[jobId])||0);
+  }
+
+  function notificationIsUnread(item){return item.modified>notificationReadCutoff(item.jobId);}
+
+  function setNotificationsBadge(count){
+    if(!notificationsBadge||!notificationsButton)return;
+    const unread=Math.max(0,Number(count)||0);
+    notificationsBadge.textContent=unread>9?'9+':String(unread);
+    notificationsBadge.hidden=unread===0;
+    notificationsButton.classList.toggle('has-unread',unread>0);
+    notificationsButton.setAttribute('aria-label',unread>0?`Notifications, ${unread} unread`:'Notifications');
+  }
+
+  function parseCronFilenameTimestamp(filename,fallback=0,index=0){
+    const match=String(filename||'').match(/^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})/);
+    if(match){
+      const parts=match.slice(1).map(Number);
+      return Date.UTC(parts[0],parts[1]-1,parts[2],parts[3],parts[4],parts[5])/1000;
+    }
+    return Math.max(0,Number(fallback)||0)-index;
+  }
+
+  function cronResponseText(content){
+    const source=String(content||'').replace(/\r\n?/g,'\n').trim();
+    if(!source||/^\*\*Status:\*\*\s*silent\b/im.test(source))return '';
+    const lines=source.split('\n');
+    const responseIndex=lines.findIndex(line=>/^#{1,2}\s+Response\b/i.test(line.trim()));
+    const dividerIndex=lines.findIndex(line=>/^---$/.test(line.trim()));
+    const body=(responseIndex>=0
+      ?lines.slice(responseIndex+1)
+      :dividerIndex>=0
+        ?lines.slice(dividerIndex+1)
+        :lines).join('\n').trim();
+    return body.slice(0,8000);
+  }
+
+  function cronJobsFromPayload(payload){
+    return Array.isArray(payload&&payload.jobs)
+      ?payload.jobs.filter(job=>job&&job.id&&!job.read_only)
+      :[];
+  }
+
+  async function fetchCronNotificationJobs(){
+    const payload=await api('/api/crons');
+    return cronJobsFromPayload(payload);
+  }
+
+  async function fetchCronNotificationOutputs(job){
+    const payload=await api(`/api/crons/output?job_id=${encodeURIComponent(job.id)}&limit=${NOTIFICATION_OUTPUT_LIMIT}`);
+    const outputs=Array.isArray(payload&&payload.outputs)?payload.outputs:[];
+    const fallback=Date.parse(job.last_run_at||'')/1000;
+    const items=outputs.map((output,index)=>{
+      const filename=String(output.filename||'');
+      const modified=parseCronFilenameTimestamp(filename,fallback,index);
+      return {
+        key:`${job.id}:${filename||modified}`,
+        jobId:String(job.id),
+        name:String(job.name||job.id),
+        filename,
+        modified,
+        status:index===0?String(job.last_status||'ok'):'ok',
+        response:cronResponseText(output.content)
+      };
+    }).filter(item=>item.response);
+    if(!items.length&&job.last_status==='error'&&job.last_error){
+      const modified=Number.isFinite(fallback)?fallback:Date.now()/1000;
+      items.push({
+        key:`${job.id}:error:${modified}`,
+        jobId:String(job.id),
+        name:String(job.name||job.id),
+        filename:'',
+        modified,
+        status:'error',
+        response:`Run failed\n${String(job.last_error).slice(0,8000)}`
+      });
+    }
+    return items;
+  }
+
+  async function mapWithConcurrency(items,limit,mapper){
+    const results=new Array(items.length);
+    let cursor=0;
+    async function worker(){
+      while(cursor<items.length){
+        const index=cursor++;
+        try{results[index]=await mapper(items[index],index);}catch(_){results[index]=[];}
+      }
+    }
+    await Promise.all(Array.from({length:Math.min(limit,items.length)},()=>worker()));
+    return results;
+  }
+
+  function relativeNotificationTime(timestamp){
+    if(!Number.isFinite(timestamp)||timestamp<=0)return '';
+    const seconds=Math.max(0,Math.round(Date.now()/1000-timestamp));
+    if(seconds<60)return 'Just now';
+    if(seconds<3600)return `${Math.floor(seconds/60)}m ago`;
+    if(seconds<86400)return `${Math.floor(seconds/3600)}h ago`;
+    if(seconds<604800)return `${Math.floor(seconds/86400)}d ago`;
+    return new Date(timestamp*1000).toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  }
+
+  function markNotificationRead(item){
+    if(!item)return;
+    notificationState.readJobs[item.jobId]=Math.max(Number(notificationState.readJobs[item.jobId])||0,item.modified);
+    writeNotificationState();
+    const unreadCount=Array.from(notificationItems.values()).filter(notificationIsUnread).length;
+    setNotificationsBadge(unreadCount);
+    if(notificationsStatus)notificationsStatus.textContent=unreadCount?`${unreadCount} unread`:'All caught up';
+    if(notificationsReadAll)notificationsReadAll.disabled=unreadCount===0;
+  }
+
+  function markAllNotificationsRead(){
+    const newest=Math.max(Date.now()/1000,...Array.from(notificationItems.values()).map(item=>item.modified));
+    notificationState.readThrough=newest;
+    notificationState.readJobs={};
+    writeNotificationState();
+    renderCronNotifications();
+  }
+
+  function renderCronNotifications(){
+    if(!notificationsList||!notificationsStatus)return;
+    const items=Array.from(notificationItems.values())
+      .sort((left,right)=>right.modified-left.modified)
+      .slice(0,NOTIFICATION_LIST_LIMIT);
+    const unreadCount=items.filter(notificationIsUnread).length;
+    setNotificationsBadge(unreadCount);
+    if(notificationsReadAll)notificationsReadAll.disabled=unreadCount===0;
+    notificationsList.replaceChildren();
+    if(!items.length){
+      notificationsStatus.textContent=notificationsLoading?'Loading…':'No scheduled-job responses yet.';
+      return;
+    }
+    notificationsStatus.textContent=unreadCount?`${unreadCount} unread`:'All caught up';
+    items.forEach(item=>{
+      const unread=notificationIsUnread(item);
+      const article=document.createElement('article');
+      article.className=`tailnet-notification${unread?' is-unread':''}${item.status==='error'?' is-error':''}`;
+      const button=document.createElement('button');
+      button.type='button';
+      button.className='tailnet-notification-toggle';
+      button.setAttribute('aria-expanded','false');
+      const top=document.createElement('span');
+      top.className='tailnet-notification-top';
+      const name=document.createElement('strong');
+      name.textContent=item.name;
+      const meta=document.createElement('span');
+      meta.className='tailnet-notification-meta';
+      meta.textContent=relativeNotificationTime(item.modified);
+      top.append(name,meta);
+      const response=document.createElement('span');
+      response.className='tailnet-notification-response';
+      response.textContent=item.response;
+      button.append(top,response);
+      button.addEventListener('click',()=>{
+        const open=article.classList.toggle('is-open');
+        button.setAttribute('aria-expanded',String(open));
+        if(notificationIsUnread(item)){
+          markNotificationRead(item);
+          article.classList.remove('is-unread');
+        }
+      });
+      article.appendChild(button);
+      notificationsList.appendChild(article);
+    });
+  }
+
+  async function refreshCronNotificationBadge(){
+    try{
+      const jobs=await fetchCronNotificationJobs();
+      const unread=jobs.reduce((count,job)=>{
+        const modified=Date.parse(job.last_run_at||'')/1000;
+        return count+(Number.isFinite(modified)&&modified>notificationReadCutoff(String(job.id))?1:0);
+      },0);
+      if(!notificationItems.size)setNotificationsBadge(unread);
+    }catch(_){}
+  }
+
+  async function loadCronNotifications({jobIds=null}={}){
+    if(notificationsLoading)return;
+    notificationsLoading=true;
+    if(notificationsStatus&&!notificationItems.size)notificationsStatus.textContent='Loading…';
+    try{
+      const jobs=await fetchCronNotificationJobs();
+      const ids=jobIds?new Set(jobIds.map(String)):null;
+      const selected=ids?jobs.filter(job=>ids.has(String(job.id))):jobs;
+      if(!ids)notificationItems.clear();
+      const batches=await mapWithConcurrency(selected,4,fetchCronNotificationOutputs);
+      selected.forEach(job=>{
+        const prefix=`${job.id}:`;
+        Array.from(notificationItems.keys()).forEach(key=>{if(key.startsWith(prefix))notificationItems.delete(key);});
+      });
+      batches.flat().forEach(item=>notificationItems.set(item.key,item));
+    }catch(_){
+      if(notificationsStatus)notificationsStatus.textContent='Notifications are unavailable right now.';
+    }finally{
+      notificationsLoading=false;
+      renderCronNotifications();
+    }
+  }
+
+  function activateNotifications(){
+    if(!workspace||!notificationsPanel)return;
+    cancelBrowserFallback();
+    hideTooltip();
+    closeBookmarkMenu();
+    activeId=NOTIFICATIONS_ID;
+    activeBookmarkNavigation=null;
+    if(frame)frame.hidden=true;
+    if(wizardHome)wizardHome.hidden=true;
+    if(managerPanel)managerPanel.hidden=true;
+    notificationsPanel.hidden=false;
+    workspace.hidden=false;
+    workspace.setAttribute('aria-label','Notifications');
+    root.setAttribute('data-tailnet-view','external');
+    markSelected(NOTIFICATIONS_ID);
+    closeSessionsOverlay();
+    document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:NOTIFICATIONS_ID,label:'Notifications'}}));
+    void loadCronNotifications();
+  }
+
   function closeSessionsOverlay(){
     if(typeof window.closeMobileSidebar==='function')window.closeMobileSidebar();
   }
@@ -381,6 +644,7 @@
     root.setAttribute('data-tailnet-view',showWizardHome?'wizard-home':'hermes');
     if(frame)frame.hidden=true;
     if(managerPanel)managerPanel.hidden=true;
+    if(notificationsPanel)notificationsPanel.hidden=true;
     if(wizardHome)wizardHome.hidden=!showWizardHome;
     if(workspace){
       workspace.hidden=!showWizardHome;
@@ -430,6 +694,7 @@
     }
     workspace.setAttribute('aria-label',app.label);
     if(wizardHome)wizardHome.hidden=true;
+    if(notificationsPanel)notificationsPanel.hidden=true;
     if(frame)frame.hidden=false;
     workspace.hidden=false;
     root.setAttribute('data-tailnet-view','external');
@@ -505,6 +770,7 @@
     if(!alreadyShowing||reopen)frame.src=app.browserHref;
     workspace.setAttribute('aria-label',`${app.label} will open in browser`);
     if(wizardHome)wizardHome.hidden=true;
+    if(notificationsPanel)notificationsPanel.hidden=true;
     if(frame)frame.hidden=false;
     workspace.hidden=false;
     root.setAttribute('data-tailnet-view','external');
@@ -894,13 +1160,15 @@
   }
 
   async function loadApps(){
-    if(!links||!home||!workspace||!frame||!companyLinks||!publicLinks||!privateAdd||!companyAdd||!publicAdd)return;
+    if(!links||!home||!workspace||!frame||!companyLinks||!publicLinks||!privateAdd||!companyAdd||!publicAdd||!notificationsButton||!notificationsPanel)return;
     root.setAttribute('data-tailnet-view','hermes');
     bindOverlayInteractions();
     home.addEventListener('click',event=>{
       event.preventDefault();
       activateHermes({openMobileMenu:true});
     });
+    notificationsButton.addEventListener('click',activateNotifications);
+    if(notificationsReadAll)notificationsReadAll.addEventListener('click',markAllNotificationsRead);
     appsById.set(privateMarketplace.id,privateMarketplace);
     privateAdd.addEventListener('click',()=>activateApp(privateMarketplace));
     companyAdd.addEventListener('click',()=>void addSavedApp('company'));
@@ -910,6 +1178,13 @@
       if(!id||id==='hermes-ui')return;
       activeId=id;
       if(wizardHome)wizardHome.hidden=true;
+      if(notificationsPanel&&id!==NOTIFICATIONS_ID)notificationsPanel.hidden=true;
+    });
+    document.addEventListener('hermesui:cron-completions',event=>{
+      const completions=event&&event.detail&&Array.isArray(event.detail.completions)?event.detail.completions:[];
+      const jobIds=Array.from(new Set(completions.map(item=>String(item&&item.job_id||'')).filter(Boolean)));
+      void refreshCronNotificationBadge();
+      if(activeId===NOTIFICATIONS_ID&&jobIds.length)void loadCronNotifications({jobIds});
     });
     savedGroups=readSavedGroups();
     renderSavedGroup('company');
@@ -920,6 +1195,7 @@
     try{remembered=sessionStorage.getItem(STORAGE_KEY)||'';}catch(_){}
     if(remembered&&appsById.has(remembered))activateApp(appsById.get(remembered));
     else activateHermes({remember:false});
+    void refreshCronNotificationBadge();
     const desktopHomeMedia=window.matchMedia('(min-width:901px)');
     const syncHomeAcrossBreakpoint=()=>{if(!activeId)activateHermes({remember:false});};
     if(typeof desktopHomeMedia.addEventListener==='function')desktopHomeMedia.addEventListener('change',syncHomeAcrossBreakpoint);

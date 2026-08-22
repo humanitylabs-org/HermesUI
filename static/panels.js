@@ -13109,6 +13109,9 @@ function startCronPolling(){
         }
         // _cronUnreadCount is derived from _cronNewJobIds.size in updateCronBadge.
         updateCronBadge();
+        document.dispatchEvent(new CustomEvent('hermesui:cron-completions',{
+          detail:{completions:data.completions}
+        }));
       }
     }catch(e){}
   },30000);

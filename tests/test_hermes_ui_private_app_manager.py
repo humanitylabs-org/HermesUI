@@ -60,7 +60,7 @@ def test_private_rail_has_no_preseeded_app_inventory():
     assert "static/tailnet-apps.json" not in RAIL
     assert "fetch(new URL(CONFIG_PATH" not in RAIL
     assert "privateCount:0" in RAIL
-    assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__"' in INDEX
+    assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3"' in INDEX
 
 
 def test_approved_routes_keep_stable_detector_identity():
@@ -73,9 +73,8 @@ def test_approved_routes_keep_stable_detector_identity():
 
 
 def test_service_worker_delivers_both_private_app_scripts_without_caching_apis():
-    assert "'./static/tailnet-app-rail.js' + VQ + '&overlay=aiwizards-v2'" in SW
-    assert "'./static/tailnet-app-manager.js' + VQ" in SW
-    assert "wizard-os-private-marketplace-aiwizards-v2" in SW
+    assert "'./static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v3'" in SW
+    assert "'./static/tailnet-app-manager.js' + VQ + '&cron-notifications=v3'" in SW
     assert "url.pathname.includes('/api/')" in SW
     assert "return; // let browser handle normally" in SW
 

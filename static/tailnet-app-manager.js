@@ -2,6 +2,7 @@
   'use strict';
 
   const MANAGER_ID='private-app-manager';
+  const NOTIFICATIONS_ID='cron-notifications';
   const STATUS_PATH='/apps/api/status';
   const PRIVATE_APPS_PATH='/apps/api/private-apps';
   const STORAGE_KEY='hermesui.tailnet-app';
@@ -378,7 +379,7 @@
     const id=event&&event.detail&&event.detail.id;
     if(id===MANAGER_ID)return;
     panel.hidden=true;
-    if(id&&id!=='hermes-ui')frame.hidden=false;
+    if(id&&id!=='hermes-ui'&&id!==NOTIFICATIONS_ID)frame.hidden=false;
   });
   let initialPrivateSyncStarted=false;
   function syncInitialPrivateApps(){
