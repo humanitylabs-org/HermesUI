@@ -37,6 +37,7 @@
   (async function(){
     'use strict';
     const BOOKMARK_STORAGE_KEY='hermesui.app-selector.bookmarks.v1';
+    const BOOKMARK_API_PATH='/apps/api/bookmarks';
     const FRAME_CHECK_PATH='/frame-check/';
     const GROUPS=new Set(['company','public']);
     const status=document.getElementById('status');
@@ -60,17 +61,39 @@
       return {label,href:url.href};
     }
 
-    function readBookmark(token){
+    function bookmarkTokenParts(token){
       const split=token.indexOf(':');
       if(split<1)return null;
       const group=token.slice(0,split);
       const id=token.slice(split+1);
       if(!GROUPS.has(group)||!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id))return null;
+      return {group,id};
+    }
+
+    function bookmarkFromGroups(groups,group,id){
+      const entries=groups&&Array.isArray(groups[group])?groups[group]:[];
+      return cleanDestination(entries.find(item=>item&&item.id===id));
+    }
+
+    async function readBookmark(token){
+      const parts=bookmarkTokenParts(token);
+      if(!parts)return null;
+      try{
+        const response=await fetch(new URL(BOOKMARK_API_PATH,location.origin).href,{
+          cache:'no-store',
+          credentials:'same-origin'
+        });
+        if(response.ok){
+          const payload=await response.json();
+          if(payload&&payload.ok===true&&payload.version===1&&payload.initialized===true){
+            return bookmarkFromGroups(payload.bookmarks,parts.group,parts.id);
+          }
+        }
+      }catch(_){}
       try{
         const payload=JSON.parse(localStorage.getItem(BOOKMARK_STORAGE_KEY)||'null');
         if(!payload||payload.version!==1)return null;
-        const entries=Array.isArray(payload[group])?payload[group]:[];
-        return cleanDestination(entries.find(item=>item&&item.id===id));
+        return bookmarkFromGroups(payload,parts.group,parts.id);
       }catch(_){return null;}
     }
 
@@ -169,8 +192,8 @@
     const bookmarkToken=params.get('bookmark')||'';
     let app=null;
     try{
-      if(browserToken)app=readBookmark(browserToken);
-      else if(bookmarkToken)app=readBookmark(bookmarkToken);
+      if(browserToken)app=await readBookmark(browserToken);
+      else if(bookmarkToken)app=await readBookmark(bookmarkToken);
       else app=await readPrivateApp(params.get('app')||'');
       if(!app)throw new Error('unknown app');
     }catch(_){

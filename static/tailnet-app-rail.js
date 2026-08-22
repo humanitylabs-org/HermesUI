@@ -4,6 +4,7 @@
   const MAX_BOOKMARKS_PER_GROUP=20;
   const STORAGE_KEY='hermesui.tailnet-app';
   const BOOKMARK_STORAGE_KEY='hermesui.app-selector.bookmarks.v1';
+  const BOOKMARK_API_PATH='/apps/api/bookmarks';
   const FRAME_DECISION_STORAGE_KEY='hermesui.app-selector.frame-decisions.v1';
   const FRAME_CHECK_PATH='/frame-check/';
   const FRAME_INLINE_DECISION_TTL_MS=6*60*60*1000;
@@ -58,6 +59,9 @@
   let frameDecisions=readFrameDecisions();
   let browserFallbackTimer=null;
   let browserFallbackSequence=0;
+  let bookmarkRevision=0;
+  let bookmarkServerAvailable=false;
+  let bookmarkSyncPromise=Promise.resolve();
 
 
   function normalizeBookmarkUrl(raw){
@@ -180,30 +184,163 @@
 
   function emptySavedGroups(){return {company:[],public:[]};}
 
-  function readSavedGroups(){
+  function cleanSavedGroupsPayload(payload){
     const result=emptySavedGroups();
-    try{
-      const payload=JSON.parse(localStorage.getItem(BOOKMARK_STORAGE_KEY)||'null');
-      if(!payload||payload.version!==1)return result;
-      Object.keys(GROUPS).forEach(group=>{
-        const seen=new Set();
-        const entries=Array.isArray(payload[group])?payload[group]:[];
-        entries.slice(0,MAX_BOOKMARKS_PER_GROUP).forEach(raw=>{
-          const app=cleanBookmark(raw,group);
-          if(!app||seen.has(app.id)||result[group].some(item=>item.href===app.href))return;
-          seen.add(app.id);
-          result[group].push(app);
-        });
+    if(!payload||payload.version!==1)return result;
+    Object.keys(GROUPS).forEach(group=>{
+      const seen=new Set();
+      const entries=Array.isArray(payload[group])?payload[group]:[];
+      entries.slice(0,MAX_BOOKMARKS_PER_GROUP).forEach(raw=>{
+        const app=cleanBookmark(raw,group);
+        if(!app||seen.has(app.id)||result[group].some(item=>item.href===app.href))return;
+        seen.add(app.id);
+        result[group].push(app);
       });
-    }catch(_){}
+    });
     return result;
   }
 
-  function writeSavedGroups(){
+  function readSavedGroups(){
     try{
-      localStorage.setItem(BOOKMARK_STORAGE_KEY,JSON.stringify({version:1,company:savedGroups.company,public:savedGroups.public}));
+      return cleanSavedGroupsPayload(JSON.parse(localStorage.getItem(BOOKMARK_STORAGE_KEY)||'null'));
+    }catch(_){return emptySavedGroups();}
+  }
+
+  function serializedSavedGroups(groups=savedGroups){
+    const serialize=app=>({id:app.id,label:app.label,href:app.href});
+    return {
+      company:groups.company.map(serialize),
+      public:groups.public.map(serialize)
+    };
+  }
+
+  function writeSavedGroups(groups=savedGroups){
+    try{
+      const serialized=serializedSavedGroups(groups);
+      localStorage.setItem(BOOKMARK_STORAGE_KEY,JSON.stringify({version:1,...serialized}));
       return true;
     }catch(_){return false;}
+  }
+
+  function cloneSavedGroups(groups=savedGroups){
+    const serialized=serializedSavedGroups(groups);
+    return cleanSavedGroupsPayload({version:1,...serialized});
+  }
+
+  function savedBookmarkCount(groups=savedGroups){
+    return groups.company.length+groups.public.length;
+  }
+
+  function installSavedGroups(groups,{cache=true}={}){
+    const oldIds=[...savedGroups.company,...savedGroups.public].map(app=>app.id);
+    const activeWasBookmark=oldIds.includes(activeId);
+    oldIds.forEach(id=>appsById.delete(id));
+    savedGroups=cloneSavedGroups(groups);
+    if(cache)writeSavedGroups();
+    renderSavedGroup('company');
+    renderSavedGroup('public');
+    if(activeWasBookmark&&!bookmarkFor('company',activeId)&&!bookmarkFor('public',activeId))activateHermes();
+  }
+
+  function parseBookmarkRecord(payload){
+    if(
+      !payload||payload.ok!==true||payload.version!==1||
+      !Number.isSafeInteger(payload.revision)||payload.revision<0||
+      typeof payload.initialized!=='boolean'||
+      !payload.bookmarks||typeof payload.bookmarks!=='object'
+    )throw new Error('invalid bookmark sync response');
+    if(payload.initialized!==(payload.revision>0))throw new Error('inconsistent bookmark sync response');
+    return {
+      revision:payload.revision,
+      initialized:payload.initialized,
+      groups:cleanSavedGroupsPayload({version:1,...payload.bookmarks})
+    };
+  }
+
+  async function fetchBookmarkRecord(){
+    const response=await fetch(new URL(BOOKMARK_API_PATH,location.origin).href,{
+      cache:'no-store',
+      credentials:'same-origin'
+    });
+    if(!response.ok)throw new Error(`bookmark sync failed (${response.status})`);
+    return parseBookmarkRecord(await response.json());
+  }
+
+  async function putBookmarkRecord(groups=savedGroups){
+    const response=await fetch(new URL(BOOKMARK_API_PATH,location.origin).href,{
+      method:'PUT',
+      cache:'no-store',
+      credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({baseRevision:bookmarkRevision,bookmarks:serializedSavedGroups(groups)})
+    });
+    if(!response.ok){
+      const error=new Error(`bookmark sync failed (${response.status})`);
+      error.status=response.status;
+      throw error;
+    }
+    return parseBookmarkRecord(await response.json());
+  }
+
+  async function hydrateSavedGroups(){
+    try{
+      let record=await fetchBookmarkRecord();
+      bookmarkServerAvailable=true;
+      bookmarkRevision=record.revision;
+      if(!record.initialized&&savedBookmarkCount(savedGroups)>0){
+        try{
+          record=await putBookmarkRecord(savedGroups);
+        }catch(error){
+          if(error&&error.status===409)record=await fetchBookmarkRecord();
+          else throw error;
+        }
+      }
+      bookmarkRevision=record.revision;
+      if(record.initialized)installSavedGroups(record.groups);
+      return true;
+    }catch(_){
+      bookmarkServerAvailable=false;
+      return false;
+    }
+  }
+
+  async function ensureBookmarkSync(){
+    await bookmarkSyncPromise;
+    if(bookmarkServerAvailable)return true;
+    bookmarkSyncPromise=hydrateSavedGroups();
+    await bookmarkSyncPromise;
+    if(bookmarkServerAvailable)return true;
+    notify('Bookmark sync is unavailable. Try again when this Tailnet server is reachable.');
+    return false;
+  }
+
+  async function commitSavedGroups(previous){
+    writeSavedGroups();
+    try{
+      const record=await putBookmarkRecord(savedGroups);
+      bookmarkRevision=record.revision;
+      bookmarkServerAvailable=true;
+      installSavedGroups(record.groups);
+      return true;
+    }catch(error){
+      if(error&&error.status===409){
+        try{
+          const current=await fetchBookmarkRecord();
+          bookmarkRevision=current.revision;
+          bookmarkServerAvailable=true;
+          installSavedGroups(current.groups);
+        }catch(_){
+          bookmarkServerAvailable=false;
+          installSavedGroups(previous);
+        }
+        notify('Bookmarks changed on another device. Please try again.');
+      }else{
+        bookmarkServerAvailable=false;
+        installSavedGroups(previous);
+        notify('That change could not be synced. Please try again.');
+      }
+      return false;
+    }
   }
 
   function closeSessionsOverlay(){
@@ -503,6 +640,7 @@
     const current=menuBookmark;
     closeBookmarkMenu();
     if(!current)return;
+    if(!await ensureBookmarkSync())return;
     const app=bookmarkFor(current.group,current.id);
     if(!app)return;
     const rawLabel=await promptValue({
@@ -521,15 +659,9 @@
     }
     const index=savedGroups[current.group].findIndex(item=>item.id===current.id);
     if(index<0)return;
-    const previous=savedGroups[current.group][index];
+    const previous=cloneSavedGroups();
     savedGroups[current.group][index]=replacement;
-    if(!writeSavedGroups()){
-      savedGroups[current.group][index]=previous;
-      notify('Browser storage is unavailable, so the app was not renamed.');
-      return;
-    }
-    appsById.set(replacement.id,replacement);
-    renderSavedGroup(current.group);
+    if(!await commitSavedGroups(previous))return;
     if(activeId===replacement.id){
       frame.title=replacement.label;
       workspace.setAttribute('aria-label',replacement.label);
@@ -538,22 +670,17 @@
     document.dispatchEvent(new CustomEvent('hermesui:app-bookmarks-changed',{detail:{group:current.group,count:savedGroups[current.group].length}}));
   }
 
-  function deleteBookmark(){
+  async function deleteBookmark(){
     const current=menuBookmark;
     closeBookmarkMenu();
     if(!current)return;
+    if(!await ensureBookmarkSync())return;
     const app=bookmarkFor(current.group,current.id);
     if(!app)return;
-    const previous=savedGroups[current.group].slice();
+    const previous=cloneSavedGroups();
     savedGroups[current.group]=savedGroups[current.group].filter(item=>item.id!==current.id);
-    if(!writeSavedGroups()){
-      savedGroups[current.group]=previous;
-      notify('Browser storage is unavailable, so the app was not deleted.');
-      return;
-    }
-    appsById.delete(current.id);
+    if(!await commitSavedGroups(previous))return;
     if(activeId===current.id)activateHermes();
-    renderSavedGroup(current.group);
     notify(`${app.label} deleted.`);
     document.dispatchEvent(new CustomEvent('hermesui:app-bookmarks-changed',{detail:{group:current.group,count:savedGroups[current.group].length}}));
   }
@@ -575,7 +702,7 @@
     remove.setAttribute('role','menuitem');
     remove.className='danger';
     remove.textContent='Delete';
-    remove.addEventListener('click',deleteBookmark);
+    remove.addEventListener('click',()=>void deleteBookmark());
     bookmarkMenu.append(rename,remove);
     document.body.appendChild(bookmarkMenu);
     return bookmarkMenu;
@@ -723,6 +850,7 @@
     }
     button.disabled=true;
     try{
+      if(!await ensureBookmarkSync())return;
       const rawHref=await promptValue({
         title:`Add ${definition.label}`,
         message:'Enter the website address. HTTPS is required.',
@@ -754,13 +882,9 @@
         notify('Enter a name between 1 and 48 characters.');
         return;
       }
+      const previous=cloneSavedGroups();
       savedGroups[group].push(app);
-      if(!writeSavedGroups()){
-        savedGroups[group].pop();
-        notify('Browser storage is unavailable, so the app was not added.');
-        return;
-      }
-      renderSavedGroup(group);
+      if(!await commitSavedGroups(previous))return;
       notify(`${app.label} added to ${definition.plural}.`);
       void refreshFrameDecision(app,{force:true});
       document.dispatchEvent(new CustomEvent('hermesui:app-bookmarks-changed',{detail:{group,count:savedGroups[group].length}}));
@@ -790,7 +914,8 @@
     savedGroups=readSavedGroups();
     renderSavedGroup('company');
     renderSavedGroup('public');
-    void refreshSavedFrameDecisions();
+    bookmarkSyncPromise=hydrateSavedGroups();
+    void bookmarkSyncPromise.then(()=>refreshSavedFrameDecisions());
     let remembered='';
     try{remembered=sessionStorage.getItem(STORAGE_KEY)||'';}catch(_){}
     if(remembered&&appsById.has(remembered))activateApp(appsById.get(remembered));

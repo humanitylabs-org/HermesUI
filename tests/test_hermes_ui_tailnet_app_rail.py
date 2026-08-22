@@ -84,10 +84,19 @@ def test_app_selector_has_three_ordered_groups_and_add_controls():
     assert rail.index('id="tailnetPublicAppLinks"') < rail.index('id="tailnetPublicAdd"')
 
 
-def test_work_and_web_entries_are_browser_local_panel_buttons():
+def test_work_and_web_entries_are_server_synced_with_a_local_warm_cache():
     assert "const BOOKMARK_STORAGE_KEY='hermesui.app-selector.bookmarks.v1'" in JS
+    assert "const BOOKMARK_API_PATH='/apps/api/bookmarks'" in JS
     assert "localStorage.getItem(BOOKMARK_STORAGE_KEY)" in JS
     assert "localStorage.setItem(BOOKMARK_STORAGE_KEY" in JS
+    assert "method:'PUT'" in JS
+    assert "credentials:'same-origin'" in JS
+    assert "baseRevision:bookmarkRevision" in JS
+    assert "bookmarkSyncPromise=hydrateSavedGroups()" in JS
+    assert "if(!record.initialized&&savedBookmarkCount(savedGroups)>0)" in JS
+    assert "if(error&&error.status===409)record=await fetchBookmarkRecord()" in JS
+    assert "if(record.initialized)installSavedGroups(record.groups)" in JS
+    assert "if(!await ensureBookmarkSync())return" in JS
     assert "showPromptDialog" in JS
     assert "addSavedApp('company')" in JS
     assert "addSavedApp('public')" in JS
@@ -209,10 +218,14 @@ def test_private_plus_is_the_ai_wizards_panel_app_library():
 
 def test_same_origin_frame_bridge_resolves_only_valid_saved_work_and_web_entries():
     assert "const GROUPS=new Set(['company','public'])" in FRAME_BRIDGE
+    assert "const BOOKMARK_API_PATH='/apps/api/bookmarks'" in FRAME_BRIDGE
+    assert "credentials:'same-origin'" in FRAME_BRIDGE
+    assert "payload&&payload.ok===true&&payload.version===1&&payload.initialized===true" in FRAME_BRIDGE
     assert "localStorage.getItem(BOOKMARK_STORAGE_KEY)" in FRAME_BRIDGE
     assert "payload.version!==1" in FRAME_BRIDGE
     assert "url.protocol!=='https:'||url.username||url.password" in FRAME_BRIDGE
     assert "return cleanDestination(entries.find(item=>item&&item.id===id))" in FRAME_BRIDGE
+    assert "if(browserToken)app=await readBookmark(browserToken)" in FRAME_BRIDGE
     assert "frame.src=app.href" in FRAME_BRIDGE
     assert "target=\"_blank\"" in FRAME_BRIDGE
     assert "rel=\"noopener noreferrer\"" in FRAME_BRIDGE
@@ -281,8 +294,8 @@ def test_work_web_links_do_not_preopen_a_browser_before_inline_decision():
     assert "activateApp(app,{bookmarkGeneration:generation})" in activation
     assert "decision&&decision.mode==='browser'" in activation
     assert "activateBrowserFallback(app,{reopen:true})" in activation
-    assert "bookmark-fallback=v5" in INDEX
-    assert "bookmark-fallback=v5" in (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
+    assert "bookmark-fallback=v5&bookmark-sync=v1" in INDEX
+    assert "bookmark-fallback=v5&bookmark-sync=v1" in (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
 
 
 def test_browser_fallback_countdown_is_delayed_cancellable_and_accessible():
@@ -433,7 +446,7 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v3&bookmark-fallback=v5"'
+        '&overlay=wizard-canvas-v3&bookmark-fallback=v5&bookmark-sync=v1"'
         in INDEX
     )
     assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__"' in INDEX
