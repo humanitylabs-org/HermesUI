@@ -13,14 +13,17 @@ body { background: #fff; }
   position: absolute;
   inset: 50% auto auto 50%;
   z-index: 3;
-  width: clamp(108px, 19vw, 190px);
+  display: grid;
+  place-items: center;
+  width: min(82%, 760px);
+  height: 70%;
   transform: translate(-50%, -50%);
   pointer-events: none;
   user-select: none;
   opacity: .075;
   filter: grayscale(.1);
 }
-.wizard-canvas-watermark img { display: block; width: 100%; height: auto; }
+.wizard-canvas-watermark img { display: block; width: auto; height: 100%; max-width: 100%; object-fit: contain; }
 
 /* This is one private server canvas, not an Excalidraw cloud client. */
 .excalidraw label[title="Library"],

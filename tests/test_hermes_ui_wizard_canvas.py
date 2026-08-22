@@ -6,13 +6,14 @@ CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 RAIL = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
 SW = (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
 SOURCE = (ROOT / "hermesui" / "wizard-canvas" / "src" / "main.jsx").read_text(encoding="utf-8")
+SOURCE_CSS = (ROOT / "hermesui" / "wizard-canvas" / "src" / "style.css").read_text(encoding="utf-8")
 BUILD = ROOT / "static" / "wizard-canvas"
 
 
 def test_wizard_icon_opens_one_embedded_desktop_canvas():
     assert 'id="tailnetWizardHome" aria-label="Wizard Canvas"' in INDEX
     assert 'id="wizardCanvasFrame" title="Wizard Canvas"' in INDEX
-    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v4' in INDEX
+    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v5' in INDEX
     assert "showWizardHome=isWizardHomeDesktop()" in RAIL
     assert "wizardHome.hidden=!showWizardHome" in RAIL
     assert "if(wizardHome)wizardHome.hidden=true" in RAIL
@@ -21,7 +22,7 @@ def test_wizard_icon_opens_one_embedded_desktop_canvas():
 
 def test_canvas_is_self_hosted_and_cloud_actions_are_disabled():
     assert (BUILD / "index.html").is_file()
-    assert (BUILD / "assets" / "app-v4.min.js").is_file()
+    assert (BUILD / "assets" / "app-v5.min.js").is_file()
     assert (BUILD / "EXCALIDRAW_LICENSE.txt").is_file()
     assert (BUILD / "fonts").is_dir()
     assert "@excalidraw/excalidraw" in SOURCE
@@ -39,6 +40,9 @@ def test_canvas_has_a_transient_save_status_and_blank_only_watermark():
     assert "!elements.some(element => element && !element.isDeleted)" in SOURCE
     assert 'src="../wizard-hat-mark.svg"' in SOURCE
     assert "viewBackgroundColor: '#ffffff'" in SOURCE
+    assert ".wizard-canvas-watermark" in SOURCE_CSS
+    assert "height: 70%;" in SOURCE_CSS
+    assert "place-items: center;" in SOURCE_CSS
     assert "Saving…" in SOURCE
     assert "'Saved'" in SOURCE
     assert "SAVED_VISIBLE_MS = 2600" in SOURCE
@@ -53,4 +57,4 @@ def test_canvas_uses_only_the_server_autosave_endpoint():
     assert "baseRevision" in SOURCE
     assert "method: 'PUT'" in SOURCE
     assert "Changed in another tab" in SOURCE
-    assert "wizard-canvas-v4" in SW
+    assert "wizard-canvas-v5" in SW
