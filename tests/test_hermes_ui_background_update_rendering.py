@@ -72,6 +72,7 @@ const heightStart = src.indexOf('const MESSAGE_RENDER_WINDOW_DEFAULT');
 const heightEnd = src.indexOf('const MESSAGE_VIRTUAL_MEASUREMENT_MAX_RERENDERS', heightStart);
 if(heightStart !== -1 && heightEnd !== -1) eval(src.slice(heightStart, heightEnd));
 eval(extractFunc('_isBackgroundUpdateTriggerMessage'));
+eval(extractFunc('_assistantContinuesUserDirectedTurn'));
 eval(extractFunc('_stripWorkspaceDisplayPrefix'));
 eval(extractFunc('_stripAttachedFilesMarkerForDisplay'));
 eval(extractFunc('_messageIsRenderable'));
@@ -121,6 +122,21 @@ const markerWakeupContent = [
   '[Attached files: result.txt]',
 ].join(String.fromCharCode(10));
 
+_visWithIdxCache = null;
+_visWithIdxCacheLen = 0;
+_visWithIdxCacheSrc = null;
+S.messages = [
+  {role:'assistant',content:'Deploying now.',tool_calls:[{function:{name:'terminal'}}],finish_reason:'tool_calls'},
+  {role:'user',content:'[ASYNC DELEGATION BATCH COMPLETE — review-1]',_source:'process_wakeup'},
+  {role:'assistant',content:'Live now and verified.',finish_reason:'stop'},
+  {role:'user',content:'[IMPORTANT: Background process proc_9 completed (exit_code=0).]',_source:'process_wakeup'},
+  {role:'assistant',content:'Independent review completed.',finish_reason:'stop'},
+];
+const interleaved = _getVisibleMessagesWithIdx().map(entry=>({
+  text:String(entry.m.content||''),
+  backgroundUpdate:!!entry.backgroundUpdate,
+}));
+
 process.stdout.write(JSON.stringify({
   visible: visible.map(e => ({rawIdx: e.rawIdx, role: e.m.role, source: e.m._source || '', backgroundUpdate: !!e.backgroundUpdate, text: String(e.m.content).slice(0, 32)})),
   turns,
@@ -128,6 +144,7 @@ process.stdout.write(JSON.stringify({
   virtualHeight,
   attachmentOnlyRenderable: _messageIsRenderable(attachmentOnlyWakeup),
   strippedWakeupDisplay: _stripAttachedFilesMarkerForDisplay(_stripWorkspaceDisplayPrefix(markerWakeupContent)),
+  interleaved,
 }));
 """
 
@@ -160,6 +177,15 @@ def test_background_update_has_a_compact_virtual_height_role():
     assert result["virtualRole"] == "process_wakeup"
     assert isinstance(result["virtualHeight"], int)
     assert 1 <= result["virtualHeight"] <= 120
+
+
+def test_interleaved_wakeup_does_not_capture_the_real_user_run_result():
+    result = _run_driver()
+    assert result["interleaved"] == [
+        {"text": "Deploying now.", "backgroundUpdate": False},
+        {"text": "Live now and verified.", "backgroundUpdate": False},
+        {"text": "Independent review completed.", "backgroundUpdate": True},
+    ]
 
 
 def test_attachment_only_process_wakeup_is_hidden_and_display_helpers_still_work():

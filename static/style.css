@@ -2301,13 +2301,8 @@
   .chat-settings-footer{flex-shrink:0;padding:8px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px;}
   .chat-settings-toggle{min-width:0;flex:1 1 auto;display:flex;align-items:center;gap:9px;padding:9px 10px;border:0;border-radius:8px;background:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;}
   .chat-settings-toggle:hover,.chat-settings-toggle.active{background:var(--hover-bg);color:var(--text);}
-  .session-view-toggle{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:7px 8px;border:0;border-radius:8px;background:none;color:var(--muted);font:inherit;font-size:11px;font-weight:650;cursor:pointer;white-space:nowrap;}
-  .session-view-toggle:hover,.session-view-toggle:focus-visible{background:var(--hover-bg);color:var(--text);outline:none;}
-  .session-view-toggle-track{position:relative;display:inline-flex;width:26px;height:16px;padding:2px;box-sizing:border-box;border-radius:999px;background:var(--border2);transition:background-color .15s ease;}
-  .session-view-toggle-knob{width:12px;height:12px;border-radius:50%;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.25);transform:translateX(0);transition:transform .15s ease;}
-  .session-view-toggle[aria-pressed="true"]{color:var(--accent-text);}
-  .session-view-toggle[aria-pressed="true"] .session-view-toggle-track{background:var(--accent-bg-strong);}
-  .session-view-toggle[aria-pressed="true"] .session-view-toggle-knob{transform:translateX(10px);}
+  .session-view-toggle{flex:0 1 auto;max-width:178px;min-height:36px;padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface-subtle);color:var(--muted);font:inherit;font-size:11px;font-weight:650;line-height:1.2;text-align:center;cursor:pointer;white-space:normal;}
+  .session-view-toggle:hover,.session-view-toggle:focus-visible{border-color:var(--accent-bg-strong);background:var(--hover-bg);color:var(--text);outline:none;}
   .settings-field:has(#themePickerGrid),.settings-field:has(#skinPickerGrid){display:none;}
   /* Sidebar navigation tabs */
   .sidebar-nav{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;padding:6px 8px 0;gap:2px;}

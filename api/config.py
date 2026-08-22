@@ -4710,6 +4710,7 @@ AUXILIARY_TASK_CATALOG: tuple[dict[str, str], ...] = (
     {"key": "approval", "label": "Approval", "description": "smart command approval"},
     {"key": "mcp", "label": "MCP", "description": "MCP tool reasoning"},
     {"key": "title_generation", "label": "Title generation", "description": "session titles"},
+    {"key": "high_signal_summary", "label": "High Signal summaries", "description": "on-demand Goal and Status summaries"},
     {"key": "skills_hub", "label": "Skills hub", "description": "skills search/install"},
     {"key": "curator", "label": "Curator", "description": "skill-usage review pass"},
     {"key": "kanban_decomposer", "label": "Kanban decomposer", "description": "task decomposition"},

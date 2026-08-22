@@ -630,24 +630,45 @@ function _messageIsRenderable(m){
 function _isBackgroundUpdateTriggerMessage(m){
   if(!m||m.role!=='user') return false;
   if(m._source==='process_wakeup'||m._source==='async_delegation') return true;
-  return /^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE(?:\s*(?:—|-)\s*[^\]]*)?\]/i.test(String(msgContent(m)||''));
+  const text=String(msgContent(m)||'');
+  return /^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE(?:\s*(?:—|-)\s*[^\]]*)?\]/i.test(text)
+    || /^\s*\[IMPORTANT:\s*Background process\b/i.test(text)
+    || /^\s*\[BACKGROUND WAKEUP\b/i.test(text);
+}
+function _assistantContinuesUserDirectedTurn(m){
+  if(!m||m.role!=='assistant') return false;
+  if(Array.isArray(m.tool_calls)&&m.tool_calls.length) return true;
+  if(Array.isArray(m._partial_tool_calls)&&m._partial_tool_calls.length) return true;
+  if(Array.isArray(m.content)&&m.content.some(part=>part&&part.type==='tool_use')) return true;
+  return String(m.finish_reason||'').toLowerCase()==='tool_calls';
 }
 function _getVisibleMessagesWithIdx(){
   if(!_visWithIdxCache || _visWithIdxCacheLen !== S.messages.length || _visWithIdxCacheSrc !== S.messages){
     const rebuilt=[];
     let rawIdx=0;
     let backgroundUpdateActive=false;
+    let userDirectedRunOpen=false;
     for(const m of (S.messages||[])){
       if(m&&m.role==='user'){
-        backgroundUpdateActive=_isBackgroundUpdateTriggerMessage(m);
-        if(backgroundUpdateActive){rawIdx++;continue;}
+        if(_isBackgroundUpdateTriggerMessage(m)){
+          backgroundUpdateActive=!userDirectedRunOpen;
+          rawIdx++;
+          continue;
+        }
+        backgroundUpdateActive=false;
+        userDirectedRunOpen=true;
       }
       if(backgroundUpdateActive){
         if(m&&m.role==='assistant'&&_messageIsRenderable(m)&&!!(msgContent(m)||m.attachments?.length||m._statusCard)){
           rebuilt.push({m,rawIdx,backgroundUpdate:true});
         }
+        if(m&&m.role==='assistant'&&!_assistantContinuesUserDirectedTurn(m)) backgroundUpdateActive=false;
         rawIdx++;
         continue;
+      }
+      if(m&&m.role==='assistant'){
+        if(_assistantContinuesUserDirectedTurn(m)) userDirectedRunOpen=true;
+        else if(_messageIsRenderable(m)) userDirectedRunOpen=false;
       }
       if(_messageIsRenderable(m)) rebuilt.push({m,rawIdx,backgroundUpdate:false});
       rawIdx++;

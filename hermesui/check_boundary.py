@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce Hermes UI's frontend-only fork boundary."""
+"""Enforce Hermes UI's frontend-first fork boundary and explicit narrow extensions."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ ANCHOR = ROOT / "UPSTREAM.json"
 OVERLAY = ROOT / "hermesui" / "frontend-overlay.json"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
-# Product metadata and deployment code are downstream-owned but do not participate
-# in the WebUI backend/runtime. All upstream-owned application changes must stay in
-# static/ and must be recorded in frontend-overlay.json.
+# Product metadata and deployment code are downstream-owned. Upstream application
+# bytes must stay in static/ unless a nonstatic file is listed below with its exact
+# post-extension digest and a narrowly documented UI contract.
 DOWNSTREAM_EXACT = {
     ".gitignore",
     ".github/workflows/hermesui.yml",
@@ -32,6 +32,10 @@ DOWNSTREAM_EXACT = {
     "qa/update-smoke.sh",
 }
 PINNED_NONSTATIC_SHA256 = {
+    # One catalog row exposes the downstream High Signal summarizer in the
+    # existing provider-agnostic Auxiliary Models settings UI. The LLM call
+    # itself remains in the Tailnet-only controller and never mutates a session.
+    "api/config.py": "1dccfd1400f3f53be0c6ca09cb18f631ce8ca23ea991f5ca12b64091e0d03379",
     # Inherited workflows change only downstream branch reachability and the
     # exact test launchers needed for Hermes UI's replacement frontend contracts.
     ".github/workflows/browser-smoke.yml": "637468a8018ea807e5f8c17128e503faad05ecfcd4bf7e39f62a5f7182560cc6",
@@ -142,7 +146,7 @@ def main() -> int:
             raise RuntimeError(f"frontend overlay path mismatch; missing={missing}, extra={extra}")
 
         print(
-            f"Hermes UI boundary passed: upstream backend {commit} is untouched; "
+            f"Hermes UI boundary passed: upstream backend {commit} is unchanged except explicit pinned extensions; "
             f"{len(changed_static)} frontend overlay files and "
             f"{len(changed) - len(changed_static)} downstream support files are isolated."
         )

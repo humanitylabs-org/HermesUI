@@ -1,334 +1,77 @@
+"""Focused contracts for HermesUI High Signal mode."""
+
+from __future__ import annotations
+
 import json
-from pathlib import Path
 import shutil
 import subprocess
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
-CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 DASHBOARD = (ROOT / "static" / "session-dashboard.js").read_text(encoding="utf-8")
-COMMANDS = (ROOT / "static" / "commands.js").read_text(encoding="utf-8")
+CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
+API_CONFIG = (ROOT / "api" / "config.py").read_text(encoding="utf-8")
 
 
-def test_high_signal_mode_is_frontend_only_and_keeps_classic_escape_hatch():
-    assert "static/session-dashboard.js" in INDEX
-    assert 'id="sessionViewToggle"' in INDEX
-    assert "window.toggleSessionView=function()" in DASHBOARD
-    assert "window.history.replaceState" in DASHBOARD
-    assert "location.reload" not in DASHBOARD
-    assert 'data-session-view="dashboard"' in CSS
-    assert 'data-session-view="classic"' in CSS
-    assert "fetch(" not in DASHBOARD
-    assert "await api(`/api/session?" in DASHBOARD
-
-
-def test_fresh_install_defaults_to_classic_and_preserves_saved_high_signal_choice():
-    assert "localStorage.getItem('hermes-session-view')" in INDEX
-    assert "v=v==='dashboard'?'dashboard':'classic'" in INDEX
-    assert "document.documentElement.dataset.sessionView='classic'" in INDEX
-    assert "localStorage.setItem('hermes-session-view',v)" in INDEX
-    assert "q==='high-signal'" in INDEX
-
-
-def test_visible_mode_name_is_high_signal_not_dashboard():
-    assert '<span class="session-view-toggle-label">High Signal</span>' in INDEX
-    assert "Dashboard view" not in INDEX
-    assert 'aria-label="High Signal Mode"' in INDEX
-    assert "url.searchParams.set('session_view',next==='dashboard'?'high-signal':'classic')" in DASHBOARD
-
-
-def test_view_toggle_is_only_relocated_beside_settings():
+def test_contextual_view_action_sits_beside_settings_and_never_reloads():
     footer = INDEX[INDEX.index('<div class="chat-settings-footer">'):INDEX.index('<div class="resize-handle"')]
     assert footer.index('id="chatSettingsToggle"') < footer.index('id="sessionViewToggle"')
-    assert 'class="session-view-switcher"' not in INDEX
-    assert ".session-view-toggle{" in CSS
+    assert "Switch to High Signal mode" in footer
+    assert "session-view-toggle-track" not in footer
+    assert "Switch to Classic view" in DASHBOARD
+    assert "Switch to High Signal mode" in DASHBOARD
+    assert "window.history.replaceState" in DASHBOARD
+    assert "location.reload" not in DASHBOARD
 
 
-def test_high_signal_mode_has_exactly_four_vertically_stacked_full_space_sections():
-    for element_id in (
-        "sessionDashboardOriginalRequest",
-        "sessionDashboardSummaryRefresh",
-        "sessionDashboardSummaryUpdated",
-        "sessionDashboardInstruction",
-        "sessionDashboardStatus",
-        "sessionDashboardTurn",
-        "sessionDashboardCompleted",
-        "sessionDashboardRefresh",
-    ):
-        assert f'id="{element_id}"' in INDEX
-    for label in ("Goal", "Status", "Last instruction", "Result"):
-        assert f'<div class="session-dashboard-label">{label}</div>' in INDEX
-    for stale_label in ("Original request", "Current status", "Completed result"):
-        assert f'<div class="session-dashboard-label">{stale_label}</div>' not in INDEX
-    assert ">Refresh goal</button>" in INDEX
-    assert INDEX.count('<article class="session-dashboard-section') == 4
-    assert 'session-dashboard-section--original' in INDEX
-    assert 'session-dashboard-section--instruction' in INDEX
-    assert 'session-dashboard-section--status' in INDEX
-    assert 'session-dashboard-section--completed' in INDEX
-    assert '<header class="session-dashboard-original">' not in INDEX
-    assert '<article class="session-dashboard-card' not in INDEX
-    assert "sessionDashboardSteersCard" not in INDEX
-    assert INDEX.index('id="sessionDashboardOriginalRequest"') < INDEX.index('id="sessionDashboardStatus"')
-    assert INDEX.index('id="sessionDashboardStatus"') < INDEX.index('id="sessionDashboardInstruction"')
-    assert INDEX.index('id="sessionDashboardInstruction"') < INDEX.index('id="sessionDashboardCompleted"')
-    assert ".session-dashboard{width:100%;max-width:none;height:100%" in CSS
-    dashboard_rule_start = CSS.index(".session-dashboard{")
-    dashboard_rule = CSS[dashboard_rule_start:CSS.index("}", dashboard_rule_start)]
-    assert "grid-template-columns:minmax(0,1fr)" in dashboard_rule
-    assert "grid-template-rows:repeat(4,minmax(0,1fr))" in dashboard_rule
-    assert "grid-template-columns:repeat(2,minmax(0,1fr))" not in dashboard_rule
-    assert "grid-template-rows:repeat(2,minmax(0,1fr))" not in dashboard_rule
-    assert ".session-dashboard-section{min-width:0;min-height:0" in CSS
-    assert "display:flex;flex-direction:column" in CSS
-    assert "overflow:hidden" in CSS[CSS.index(".session-dashboard-section{"):CSS.index("}", CSS.index(".session-dashboard-section{"))]
-    assert "border-radius:0" in CSS
-    assert "box-shadow:none" in CSS
-    assert ".session-dashboard-section:not(:last-child){border-bottom:1px solid var(--border);}" in CSS
-    assert ".session-dashboard-section:nth-child(odd){border-right" not in CSS
-    assert ".session-dashboard-copy{min-width:0;max-width:100%;flex:1 1 auto;min-height:0" in CSS
-    assert "overflow-y:auto" in CSS[CSS.index(".session-dashboard-copy{"):CSS.index("}", CSS.index(".session-dashboard-copy{"))]
-    assert ".session-dashboard{height:auto;min-height:100%" not in CSS
-    assert 'html[data-session-view="dashboard"] .messages{overflow-y:auto' not in CSS
-    assert ".session-dashboard-section{min-height:190px" not in CSS
+def test_high_signal_keeps_one_unboxed_goal_and_exactly_three_cards():
+    start = INDEX.index('<section class="session-dashboard"')
+    end = INDEX.index('<div class="messages-inner"', start)
+    block = INDEX[start:end]
+    assert block.count('<article class="session-dashboard-section session-dashboard-section--') == 4
+    assert 'session-dashboard-section--original' in block
+    assert 'session-dashboard-section--status' in block
+    assert 'session-dashboard-section--instruction' in block
+    assert 'session-dashboard-section--completed' in block
+    assert 'id="sessionDashboardOriginalRequest"' in block
+    assert 'id="sessionDashboardInstruction"' in block
+    assert 'id="sessionDashboardStatus"' in block
+    assert 'id="sessionDashboardCompleted"' in block
+    assert 'id="sessionDashboardSummaryRefresh"' in block
+    assert 'id="sessionDashboardRefresh"' in block
+    assert 'data-session-view="dashboard"' in CSS
+    assert 'data-session-view="classic"' in CSS
 
 
-def test_session_summary_hydrates_original_request_with_a_bounded_head_slice():
-    assert "function dashboardSessionSummary(projection)" in DASHBOARD
-    assert "typeof _messagesTruncated!=='undefined'" in DASHBOARD
-    assert "typeof _oldestIdx!=='undefined'" in DASHBOARD
-    assert "Loading the original request…" in DASHBOARD
+def test_goal_and_status_are_stateless_on_demand_model_summaries():
+    assert "GROK_SUMMARY_ENDPOINT='/apps/api/high-signal-summary'" in DASHBOARD
+    assert "method:'POST'" in DASHBOARD
+    assert "credentials:'same-origin'" in DASHBOARD
+    assert "Select Refresh goal" in DASHBOARD
+    assert "Select Refresh status" in DASHBOARD
+    assert "grokSummaryCache=new Map()" in DASHBOARD
+    assert "localStorage.setItem('hermes-session-view'" in DASHBOARD
+    assert "localStorage.setItem('grok" not in DASHBOARD.lower()
+    assert "setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(projection))" not in DASHBOARD
+    assert "renderGrokSummary('goal')" in DASHBOARD
+    assert "renderGrokSummary('status')" in DASHBOARD
+
+
+def test_goal_uses_bounded_opening_and_recent_evidence_without_full_history_fetch():
     assert "OPENING_EVIDENCE_LIMIT=30" in DASHBOARD
     assert "msg_before=${OPENING_EVIDENCE_LIMIT}&msg_limit=${OPENING_EVIDENCE_LIMIT}" in DASHBOARD
+    assert "all.length>48?[...all.slice(0,12),...all.slice(-36)]:all" in DASHBOARD
+    assert "lines:lines.slice(-80)" in DASHBOARD
     assert "openingEvidenceCache" in DASHBOARD
-    assert "const firstUser=projection.firstUser" in DASHBOARD
-    assert "return firstText||'No goal is available yet.'" in DASHBOARD
-    assert "setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(projection))" in DASHBOARD
-    assert "function refreshDashboardSummary()" in DASHBOARD
-    assert "summaryRefresh.addEventListener('click',refreshDashboardSummary)" in DASHBOARD
-    assert "hydrateDashboardOpeningEvidence({force:true})" in DASHBOARD
-    assert "compression_anchor_summary" not in DASHBOARD
-    assert ".session-dashboard-section--original{" in CSS
-    assert ".session-dashboard-copy--original{" in CSS
 
 
-def test_truncated_tail_is_never_labeled_as_the_original_request():
-    node = shutil.which("node")
-    assert node is not None, "node is required for the dashboard provenance regression"
-    harness = f"""
-const fs=require('fs');
-const vm=require('vm');
-const elements=new Map();
-function element(id){{
-  if(!elements.has(id)) elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},addEventListener(){{}}}});
-  return elements.get(id);
-}}
-global.window=global;
-global.document={{
-  readyState:'complete',
-  documentElement:{{dataset:{{sessionView:'dashboard'}}}},
-  getElementById:element,
-  addEventListener(){{}}
-}};
-global.S={{session:{{session_id:'long',message_count:80}},messages:Array.from({{length:30}},(_,i)=>({{
-  role:i%2?'assistant':'user',content:`TAIL user ${{i}}`,id:`m-${{i+50}}`
-}})),busy:false,activeStreamId:null}};
-global.msgContent=m=>String(m&&m.content||'');
-global.renderMd=s=>String(s||'');
-global._stripWorkspaceDisplayPrefix=s=>String(s||'');
-global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');
-global._messageIsRenderable=()=>true;
-global._isContextCompactionMessage=()=>false;
-global._isPreservedCompressionTaskListMessage=()=>false;
-global._isRecoveryControlMessage=()=>false;
-global.INFLIGHT={{}};
-global.requestAnimationFrame=cb=>{{cb();return 1;}};
-global.queueMicrotask=cb=>cb();
-let _messagesTruncated=true;
-let _oldestIdx=50;
-vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
-syncSessionDashboard();
-process.stdout.write(JSON.stringify({{
-  original:element('sessionDashboardOriginalRequest').innerHTML,
-  tailWasMisrepresented:element('sessionDashboardOriginalRequest').innerHTML.includes('TAIL user'),
-}}));
-"""
-    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
-    payload = json.loads(result.stdout)
-    assert payload == {
-        "original": "Loading the original request…",
-        "tailWasMisrepresented": False,
-    }
+def test_high_signal_summary_has_a_normal_auxiliary_provider_slot():
+    assert '{"key": "high_signal_summary", "label": "High Signal summaries"' in API_CONFIG
+    assert '"description": "on-demand Goal and Status summaries"' in API_CONFIG
 
 
-def test_dashboard_reads_existing_session_state_without_mutating_messages():
-    assert "current.messages" in DASHBOARD
-    assert "INFLIGHT" in DASHBOARD
-    assert "S.messages.push" not in DASHBOARD
-    assert "S.messages=" not in DASHBOARD.replace(" ", "")
-    assert "element.innerHTML=renderMd" in DASHBOARD
-    assert "S.messages.push" not in DASHBOARD
-
-
-def test_last_instruction_uses_the_latest_run_message_or_accepted_active_steer():
-    assert "function latestRunUserEntries(entries)" in DASHBOARD
-    assert "const accepted=acceptedSteersForActiveRun()" in DASHBOARD
-    assert "accepted[accepted.length-1]" in DASHBOARD
-    assert "runUsers[runUsers.length-1]" in DASHBOARD
-    assert "sessionDashboardSteers" not in DASHBOARD
-    assert "Steers added while working" not in INDEX
-    assert "function acceptedSteersForActiveRun()" in DASHBOARD
-    assert "window.recordSessionDashboardSteer=function(detail)" in DASHBOARD
-    assert "window.recordSessionDashboardSteer({sessionId:ownerSid,streamId:ownerStreamId,text:steerDisplayText})" in COMMANDS
-    assert "if(!state().busy&&!state().activeStreamId) return []" in DASHBOARD
-
-
-def test_dashboard_updates_on_existing_render_and_busy_boundaries():
-    assert "['renderMessages','setBusy','syncTopbar'].forEach(wrapAfter)" in DASHBOARD
-    assert "scheduleSessionDashboardSync" in DASHBOARD
-    assert "requestAnimationFrame" in DASHBOARD
-    assert "window.syncSessionDashboard=syncSessionDashboard" in DASHBOARD
-    assert "sessionDashboardRefresh" in DASHBOARD
-
-
-def test_dashboard_projection_is_incremental_and_classic_view_skips_history_work():
-    node = shutil.which("node")
-    assert node is not None, "node is required for the dashboard performance regression"
-    harness = f"""
-const fs=require('fs');
-const vm=require('vm');
-const elements=new Map();
-function element(id){{
-  if(!elements.has(id)) elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},addEventListener(){{}}}});
-  return elements.get(id);
-}}
-let reads=0;
-global.window=global;
-global.document={{
-  readyState:'complete',
-  documentElement:{{dataset:{{sessionView:'dashboard'}}}},
-  getElementById:element,
-  addEventListener(){{}}
-}};
-global.S={{session:{{session_id:'long'}},messages:Array.from({{length:10000}},(_,i)=>({{
-  role:i%2?'assistant':'user',content:`message ${{i}}`,id:`m-${{i}}`
-}})),busy:false,activeStreamId:null}};
-global.msgContent=m=>{{reads++;return String(m&&m.content||'');}};
-global.renderMd=s=>String(s||'');
-global._stripWorkspaceDisplayPrefix=s=>String(s||'');
-global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');
-global._messageIsRenderable=()=>true;
-global._isContextCompactionMessage=()=>false;
-global._isPreservedCompressionTaskListMessage=()=>false;
-global._isRecoveryControlMessage=()=>false;
-global.INFLIGHT={{}};
-global.requestAnimationFrame=cb=>{{cb();return 1;}};
-global.queueMicrotask=cb=>cb();
-vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
-const afterInitial=reads;
-for(let i=0;i<20;i++) syncSessionDashboard();
-const repeated=reads-afterInitial;
-S.messages=[...S.messages];
-syncSessionDashboard();
-const copied=reads-afterInitial-repeated;
-S.messages.push({{role:'user',content:'new instruction',id:'m-10000'}});
-syncSessionDashboard();
-const appended=reads-afterInitial-repeated-copied;
-document.documentElement.dataset.sessionView='classic';
-const beforeClassic=reads;
-for(let i=0;i<20;i++) syncSessionDashboard();
-process.stdout.write(JSON.stringify({{
-  initial:afterInitial,
-  repeated,
-  copied,
-  appended,
-  classic:reads-beforeClassic,
-  hidden:element('sessionDashboard').hidden
-}}));
-"""
-    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
-    payload = json.loads(result.stdout)
-    assert payload["initial"] >= 10000
-    assert payload["repeated"] <= 400
-    assert payload["copied"] <= 20
-    assert payload["appended"] <= 24
-    assert payload["classic"] == 0
-    assert payload["hidden"] is True
-
-
-def test_status_is_available_immediately_and_manual_refresh_remains():
-    assert "refresh.addEventListener('click',refreshDashboardStatus)" in DASHBOARD
-    assert "setInterval(" not in DASHBOARD
-    assert "dashboardStatus(sessionMessages())" in DASHBOARD
-    assert "Current frontend state" in DASHBOARD
-    assert "statusSnapshots" in DASHBOARD
-
-
-def test_active_status_shows_assistant_messages_since_latest_instruction():
-    assert "function assistantUpdatesSinceLatestInstruction(entries)" in DASHBOARD
-    assert "entry.index>user.index" in DASHBOARD
-    assert "entry.message.role==='assistant'" in DASHBOARD
-    assert ".join('\\n\\n')" in DASHBOARD
-    assert "if(updates) return updates" in DASHBOARD
-    assert "setMarkdown('sessionDashboardStatus'" in DASHBOARD
-    assert "The latest run has finished. Its completed result is available below." in DASHBOARD
-
-
-def test_dashboard_filters_internal_system_messages():
-    assert "message._source==='process_wakeup'" in DASHBOARD
-    assert "ASYNC DELEGATION(?: BATCH)? COMPLETE" in DASHBOARD
-    assert "intermediary:true" in DASHBOARD
-    assert "!entry.intermediary" in DASHBOARD
-    assert "_isContextCompactionMessage" in DASHBOARD
-    assert "_isPreservedCompressionTaskListMessage" in DASHBOARD
-    assert "systemLikeText" not in DASHBOARD
-    assert "body.charAt(0)==='['" not in DASHBOARD
-
-
-def test_legitimate_bracket_prefixed_user_text_remains_dashboard_content():
-    node = shutil.which("node")
-    assert node is not None, "node is required for the dashboard behavior test"
-    harness = f"""
-const fs=require('fs');
-const vm=require('vm');
-const elements=new Map();
-function element(id){{
-  if(!elements.has(id)) elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},addEventListener(){{}}}});
-  return elements.get(id);
-}}
-global.window=global;
-global.document={{readyState:'complete',getElementById:element,addEventListener(){{}}}};
-global.S={{session:{{session_id:'s1'}},messages:[
-  {{role:'user',content:'[x] legitimate bracket-prefixed request'}},
-  {{role:'assistant',content:'done'}},
-],busy:false,activeStreamId:null}};
-global.msgContent=m=>String(m&&m.content||'');
-global.renderMd=s=>String(s||'');
-global._stripWorkspaceDisplayPrefix=s=>String(s||'');
-global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');
-global._messageIsRenderable=()=>true;
-global._isContextCompactionMessage=()=>false;
-global._isPreservedCompressionTaskListMessage=()=>false;
-global._isRecoveryControlMessage=()=>false;
-global.INFLIGHT={{}};
-global.requestAnimationFrame=cb=>{{cb();return 1;}};
-global.queueMicrotask=cb=>cb();
-vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
-syncSessionDashboard();
-process.stdout.write(JSON.stringify({{
-  original:element('sessionDashboardOriginalRequest').innerHTML,
-  instruction:element('sessionDashboardInstruction').innerHTML,
-}}));
-"""
-    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
-    payload = json.loads(result.stdout)
-    assert payload == {
-        "original": "[x] legitimate bracket-prefixed request",
-        "instruction": "[x] legitimate bracket-prefixed request",
-    }
-
-
-def test_background_followup_updates_status_without_replacing_result_or_instruction():
+def test_refresh_calls_return_model_sentences_and_background_rows_feed_no_box():
     node = shutil.which("node")
     assert node is not None
     harness = f"""
@@ -336,80 +79,90 @@ const fs=require('fs');
 const vm=require('vm');
 const elements=new Map();
 function element(id){{
-  if(!elements.has(id)) elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},addEventListener(){{}}}});
+  if(!elements.has(id)) elements.set(id,{{
+    id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},disabled:false,attrs:{{}},listeners:{{}},
+    addEventListener(name,fn){{this.listeners[name]=fn;}},
+    setAttribute(name,value){{this.attrs[name]=String(value);}},
+    removeAttribute(name){{delete this.attrs[name];}},
+  }});
   return elements.get(id);
 }}
 global.window=global;
-global.document={{
-  readyState:'complete',
-  documentElement:{{dataset:{{sessionView:'dashboard'}}}},
-  getElementById:element,
-  addEventListener(){{}}
-}};
-global.S={{session:{{session_id:'s-background'}},messages:[
-  {{role:'user',content:'Implement the approved change.'}},
-  {{role:'assistant',content:'Implementation complete and verified.'}},
-  {{role:'user',content:'[ASYNC DELEGATION BATCH COMPLETE — review-1]\\nReview finished.',_source:'process_wakeup'}},
-  {{role:'assistant',content:'Review found one optional follow-up.'}},
+global.document={{readyState:'complete',documentElement:{{dataset:{{sessionView:'dashboard'}}}},getElementById:element,addEventListener(){{}}}};
+global.location={{href:'https://device.example/hermesUI/session/session-1'}};
+global.history={{state:null,replaceState(){{}}}};
+global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
+global.S={{session:{{session_id:'session-1'}},messages:[
+  {{role:'user',content:'Build and ship the live dashboard.',id:'u1'}},
+  {{role:'assistant',content:'I am deploying it now.',id:'a1',tool_calls:[{{function:{{name:'terminal'}}}}],finish_reason:'tool_calls'}},
+  {{role:'user',content:'[ASYNC DELEGATION BATCH COMPLETE — review-1] Review finished.',_source:'process_wakeup',id:'b1'}},
+  {{role:'assistant',content:'The dashboard is live and verified.',id:'a2',finish_reason:'stop'}},
+  {{role:'user',content:'[IMPORTANT: Background process proc_1 completed (exit_code=0).]',_source:'process_wakeup',id:'b2'}},
+  {{role:'assistant',content:'Independent review completed with no blockers.',id:'b3',finish_reason:'stop'}},
 ],busy:false,activeStreamId:null}};
 global.msgContent=m=>String(m&&m.content||'');
 global.renderMd=s=>String(s||'');
 global._stripWorkspaceDisplayPrefix=s=>String(s||'');
 global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');
-global._messageIsRenderable=()=>true;
+global._messageIsRenderable=m=>!!(m&&m.role!=='tool'&&(m.content||(m.tool_calls||[]).length));
 global._isContextCompactionMessage=()=>false;
 global._isPreservedCompressionTaskListMessage=()=>false;
 global._isRecoveryControlMessage=()=>false;
 global.INFLIGHT={{}};
 global.requestAnimationFrame=cb=>{{cb();return 1;}};
 global.queueMicrotask=cb=>cb();
+global._messagesTruncated=false;
+global._oldestIdx=0;
+const requests=[];
+global.fetch=async(_url,opts)=>{{
+  const body=JSON.parse(opts.body); requests.push(body);
+  return {{ok:true,status:200,json:async()=>({{
+    ok:true,kind:body.kind,summary:body.kind==='goal'?'The session goal is to ship the live dashboard.':'The dashboard has been shipped and the agent is waiting.',provider:'xai-oauth',model:'grok-4.20'
+  }})}};
+}};
 vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
-syncSessionDashboard();
-process.stdout.write(JSON.stringify({{
-  instruction:element('sessionDashboardInstruction').innerHTML,
-  status:element('sessionDashboardStatus').innerHTML,
-  result:element('sessionDashboardCompleted').innerHTML,
-}}));
+(async()=>{{
+  element('sessionDashboardSummaryRefresh').listeners.click();
+  element('sessionDashboardRefresh').listeners.click();
+  await new Promise(resolve=>setTimeout(resolve,25));
+  syncSessionDashboard();
+  process.stdout.write(JSON.stringify({{
+    goal:element('sessionDashboardOriginalRequest').innerHTML,
+    status:element('sessionDashboardStatus').innerHTML,
+    instruction:element('sessionDashboardInstruction').innerHTML,
+    result:element('sessionDashboardCompleted').innerHTML,
+    requests,
+  }}));
+}})().catch(error=>{{console.error(error);process.exit(1);}});
 """
     result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
     payload = json.loads(result.stdout)
-    assert payload == {
-        "instruction": "Implement the approved change.",
-        "status": "Review found one optional follow-up.",
-        "result": "Implementation complete and verified.",
-    }
+    assert payload["goal"] == "The session goal is to ship the live dashboard."
+    assert payload["status"] == "The dashboard has been shipped and the agent is waiting."
+    assert payload["instruction"] == "Build and ship the live dashboard."
+    assert payload["result"] == "The dashboard is live and verified."
+    assert {request["kind"] for request in payload["requests"]} == {"goal", "status"}
+    combined = json.dumps(payload["requests"])
+    assert "Independent review" not in combined
+    assert "ASYNC DELEGATION" not in combined
+    assert "Background process" not in combined
 
 
-def test_dashboard_uses_existing_markdown_renderer():
-    assert "typeof renderMd==='function'" in DASHBOARD
-    assert ".session-dashboard-copy p" in CSS
-
-
-def test_dashboard_long_markdown_is_contained_without_page_width_overflow():
-    assert "grid-template-columns:minmax(0,1fr)" in CSS
-    assert ".session-dashboard-section{min-width:0;min-height:0" in CSS
-    assert ".session-dashboard-copy{min-width:0;max-width:100%" in CSS
-    assert ".session-dashboard-copy pre{display:block;width:100%;min-width:0;max-width:100%;overflow-x:auto" in CSS
-    assert ".session-dashboard-copy pre{background:var(--code-bg)" in CSS
-    assert ".session-dashboard-copy pre code{background:none" in CSS
-    assert ".session-dashboard-copy .pre-header+pre" in CSS
-    assert ".session-dashboard-copy a,.session-dashboard-copy code:not(pre code)" in CSS
-    assert ".session-dashboard-copy .markdown-table-wrap{overflow-x:auto;}" in CSS
-    assert ".session-dashboard-copy--result{max-height:none;}" in CSS
-    assert ".session-dashboard-copy--original{font-size:15px;line-height:1.65;max-height:none" in CSS
-    assert "overflow:visible" not in CSS[CSS.index(".session-dashboard-copy--original{"):CSS.index("}", CSS.index(".session-dashboard-copy--original{"))]
-
-
-def test_turn_badge_uses_only_explicit_existing_runtime_values():
-    assert "function dashboardTurnProgress()" in DASHBOARD
-    assert "current_turn" in DASHBOARD
-    assert "max_turns" in DASHBOARD
-    assert "Turn ${snapshot.turnProgress.turn} of ${snapshot.turnProgress.max}" in DASHBOARD
-    assert "messages.filter" not in DASHBOARD
-    assert ".session-dashboard-turn[hidden]{display:none;}" in CSS
-
-
-def test_dashboard_never_hides_the_composer():
-    dashboard_css = CSS[CSS.index(".messages-shell{"): CSS.index("@media (hover:hover)", CSS.index(".messages-shell{"))]
-    assert "#composerWrap" not in dashboard_css
-    assert "#msgInner" in dashboard_css
+def test_dashboard_projection_remains_incremental_for_long_sessions():
+    node = shutil.which("node")
+    assert node is not None
+    harness = f"""
+const fs=require('fs');const vm=require('vm');const elements=new Map();
+function element(id){{if(!elements.has(id))elements.set(id,{{hidden:false,textContent:'',innerHTML:'',dataset:{{}},addEventListener(){{}},setAttribute(){{}},removeAttribute(){{}}}});return elements.get(id);}}
+let reads=0;global.window=global;global.document={{readyState:'complete',documentElement:{{dataset:{{sessionView:'dashboard'}}}},getElementById:element,addEventListener(){{}}}};
+global.location={{href:'https://device.example/hermesUI/'}};global.history={{state:null,replaceState(){{}}}};global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
+global.S={{session:{{session_id:'long'}},messages:Array.from({{length:10000}},(_,i)=>({{role:i%2?'assistant':'user',content:`message ${{i}}`,id:`m-${{i}}`}})),busy:false,activeStreamId:null}};
+global.msgContent=m=>{{reads++;return String(m&&m.content||'');}};global.renderMd=s=>String(s||'');global._stripWorkspaceDisplayPrefix=s=>String(s||'');global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');global._messageIsRenderable=()=>true;global._isContextCompactionMessage=()=>false;global._isPreservedCompressionTaskListMessage=()=>false;global._isRecoveryControlMessage=()=>false;global.INFLIGHT={{}};global.requestAnimationFrame=cb=>{{cb();return 1;}};global.queueMicrotask=cb=>cb();global._messagesTruncated=false;global._oldestIdx=0;
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
+const initial=reads;for(let i=0;i<20;i++)syncSessionDashboard();const repeated=reads-initial;document.documentElement.dataset.sessionView='classic';const beforeClassic=reads;for(let i=0;i<20;i++)syncSessionDashboard();process.stdout.write(JSON.stringify({{initial,repeated,classic:reads-beforeClassic}}));
+"""
+    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
+    payload = json.loads(result.stdout)
+    assert payload["initial"] >= 10000
+    assert payload["repeated"] <= 500
+    assert payload["classic"] == 0

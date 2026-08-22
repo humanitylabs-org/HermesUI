@@ -10,7 +10,11 @@
   const messageEntryCache=new Map();
   const openingEvidenceCache=new Map();
   const openingEvidenceRequests=new Map();
+  const grokSummaryCache=new Map();
+  const grokSummaryRequests=new Map();
+  const grokSummaryErrors=new Map();
   const OPENING_EVIDENCE_LIMIT=30;
+  const GROK_SUMMARY_ENDPOINT='/apps/api/high-signal-summary';
   const rawText=message=>{
     if(!message) return '';
     if(typeof msgContent==='function') return msgContent(message);
@@ -36,7 +40,17 @@
   function isBackgroundUpdateTrigger(message){
     if(!message||message.role!=='user') return false;
     if(message._source==='process_wakeup'||message._source==='async_delegation') return true;
-    return /^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE(?:\s*(?:—|-)\s*[^\]]*)?\]/i.test(rawText(message));
+    const text=rawText(message);
+    return /^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE(?:\s*(?:—|-)\s*[^\]]*)?\]/i.test(text)
+      || /^\s*\[IMPORTANT:\s*Background process\b/i.test(text)
+      || /^\s*\[BACKGROUND WAKEUP\b/i.test(text);
+  }
+  function assistantContinuesUserDirectedTurn(message){
+    if(!message||message.role!=='assistant') return false;
+    if(Array.isArray(message.tool_calls)&&message.tool_calls.length) return true;
+    if(Array.isArray(message._partial_tool_calls)&&message._partial_tool_calls.length) return true;
+    if(Array.isArray(message.content)&&message.content.some(part=>part&&part.type==='tool_use')) return true;
+    return String(message.finish_reason||'').toLowerCase()==='tool_calls';
   }
   const isRenderable=message=>{
     if(!message||!['user','assistant'].includes(message.role)) return false;
@@ -56,12 +70,20 @@
   };
   const appendMessageEntry=(cached,message,index)=>{
     if(message&&message.role==='user'){
-      cached.backgroundUpdateActive=isBackgroundUpdateTrigger(message);
-      if(cached.backgroundUpdateActive) return;
+      if(isBackgroundUpdateTrigger(message)){
+        cached.backgroundUpdateActive=!cached.userDirectedRunOpen;
+        return;
+      }
+      cached.backgroundUpdateActive=false;
+      cached.userDirectedRunOpen=true;
     }
-    if(cached.backgroundUpdateActive&&message&&message.role==='assistant'){
-      if(isRenderable(message)) cached.entries.push({message,index,intermediary:true});
+    if(cached.backgroundUpdateActive){
+      if(message&&message.role==='assistant'&&!assistantContinuesUserDirectedTurn(message)) cached.backgroundUpdateActive=false;
       return;
+    }
+    if(message&&message.role==='assistant'){
+      if(assistantContinuesUserDirectedTurn(message)) cached.userDirectedRunOpen=true;
+      else if(isRenderable(message)) cached.userDirectedRunOpen=false;
     }
     if(!isRenderable(message)) return;
     const entry={message,index};
@@ -69,7 +91,7 @@
     if(!cached.firstUser&&message.role==='user'&&cleanUserText(message)) cached.firstUser=entry;
   };
   const rebuildProjection=(messages)=>{
-    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:'',backgroundUpdateActive:false};
+    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:'',backgroundUpdateActive:false,userDirectedRunOpen:false};
     for(let index=0;index<messages.length;index++) appendMessageEntry(cached,messages[index],index);
     cached.length=messages.length;
     cached.firstSignature=messages.length?messageSignature(messages[0]):'';
@@ -130,8 +152,13 @@
     return undefined;
   };
   const latestUserEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='user'&&!entry.intermediary&&cleanUserText(entry.message));
-  const latestAssistantEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='assistant'&&!entry.intermediary&&rawText(entry.message)&&!entry.message._live);
-  const latestStatusAssistantEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='assistant'&&rawText(entry.message)&&!entry.message._live);
+  const latestAssistantEntry=entries=>latestMatchingEntry(entries,entry=>(
+    entry.message.role==='assistant'
+    && !entry.intermediary
+    && rawText(entry.message)
+    && !entry.message._live
+    && !assistantContinuesUserDirectedTurn(entry.message)
+  ));
 
   function latestRunUserEntries(entries){
     const current=state();
@@ -145,7 +172,12 @@
       for(let index=entries.length-1;index>=0;index--){
         const entry=entries[index];
         if(entry.index>=latestAssistant.index) continue;
-        if(entry.message.role==='assistant'&&rawText(entry.message)&&!entry.message._live){
+        if(
+          entry.message.role==='assistant'
+          && rawText(entry.message)
+          && !entry.message._live
+          && !assistantContinuesUserDirectedTurn(entry.message)
+        ){
           boundary=entry.index;
           break;
         }
@@ -215,9 +247,9 @@
         const messages=session&&Array.isArray(session.messages)?session.messages:[];
         const projection=rebuildProjection(messages);
         const firstText=projection.firstUser?cleanUserText(projection.firstUser.message):'';
-        openingEvidenceCache.set(key,{pending:false,text:firstText,error:firstText?'':'missing'});
+        openingEvidenceCache.set(key,{pending:false,text:firstText,messages,error:firstText?'':'missing'});
       }catch(error){
-        openingEvidenceCache.set(key,{pending:false,text:'',error:String(error&&error.message||error||'unavailable')});
+        openingEvidenceCache.set(key,{pending:false,text:'',messages:[],error:String(error&&error.message||error||'unavailable')});
       }finally{
         openingEvidenceRequests.delete(key);
         if(key===sessionKey()) scheduleSessionDashboardSync();
@@ -228,10 +260,7 @@
   }
 
   function refreshDashboardSummary(){
-    openingEvidenceCache.delete(sessionKey());
-    setMarkdown('sessionDashboardOriginalRequest','Loading the original request…');
-    setText('sessionDashboardSummaryUpdated','Loading');
-    void hydrateDashboardOpeningEvidence({force:true});
+    void refreshGrokSummary('goal');
   }
 
   function activeStep(){
@@ -272,39 +301,6 @@
     return null;
   }
 
-  function assistantUpdatesSinceLatestInstruction(entries){
-    const user=latestUserEntry(entries);
-    if(!user) return '';
-    return entries
-      .filter(entry=>entry.index>user.index&&entry.message.role==='assistant'&&rawText(entry.message))
-      .map(entry=>rawText(entry.message))
-      .join('\n\n');
-  }
-
-  function dashboardStatus(entries){
-    const current=state();
-    if(!current.session) return 'No session is selected. Start or open a session to see its status.';
-    if(current.busy||current.activeStreamId){
-      const updates=assistantUpdatesSinceLatestInstruction(entries);
-      if(updates) return updates;
-      const step=activeStep();
-      return step
-        ? `Hermes is working on your latest instruction. Current step: ${step}`
-        : 'Hermes is working on your latest instruction. The current run is active; refresh this card for the latest frontend state.';
-    }
-    const user=latestUserEntry(entries);
-    const statusAssistant=latestStatusAssistantEntry(entries);
-    if(user&&statusAssistant&&statusAssistant.intermediary&&statusAssistant.index>user.index){
-      return brief(rawText(statusAssistant.message),900);
-    }
-    const assistant=latestAssistantEntry(entries);
-    if(user&&assistant&&assistant.index>user.index){
-      return 'The latest run has finished. Its completed result is available below.';
-    }
-    if(user) return 'Your latest instruction is recorded. Hermes has not produced a completed result for it yet.';
-    return 'This session has no instructions yet. Send a message to begin.';
-  }
-
   function dashboardCompleted(entries){
     const current=state();
     if(current.busy||current.activeStreamId) return '';
@@ -314,32 +310,216 @@
     return compact(rawText(assistant.message),12000);
   }
 
-  const statusSnapshots=new Map();
   const sessionKey=()=>{
     const current=state();
     return current.session&&String(current.session.session_id||current.session.id||'');
   };
 
-  function showStatusSnapshot(){
-    const snapshot=statusSnapshots.get(sessionKey());
-    setMarkdown('sessionDashboardStatus',snapshot?snapshot.text:dashboardStatus(sessionMessages()));
-    setText('sessionDashboardUpdated',snapshot?`Updated ${snapshot.updated}`:'Current frontend state');
-    const turnBadge=byId('sessionDashboardTurn');
-    if(turnBadge){
-      turnBadge.hidden=!(snapshot&&snapshot.turnProgress);
-      turnBadge.textContent=snapshot&&snapshot.turnProgress?`Turn ${snapshot.turnProgress.turn} of ${snapshot.turnProgress.max}`:'';
+  function evidenceToolNames(message){
+    const names=[];
+    if(message&&Array.isArray(message.tool_calls)){
+      for(const call of message.tool_calls){
+        const name=call&&(
+          call.name
+          || call.function&&call.function.name
+          || call.tool_name
+        );
+        if(name) names.push(String(name));
+      }
     }
+    const direct=message&&(message.name||message.tool_name||message._tool_name);
+    if(direct) names.push(String(direct));
+    return [...new Set(names)].slice(0,8);
+  }
+
+  function backgroundFreeMessages(messages){
+    const filtered=[];
+    let backgroundActive=false;
+    let userDirectedRunOpen=false;
+    for(const message of Array.isArray(messages)?messages:[]){
+      if(!message||!message.role) continue;
+      if(message.role==='user'){
+        if(isBackgroundUpdateTrigger(message)){
+          backgroundActive=!userDirectedRunOpen;
+          continue;
+        }
+        backgroundActive=false;
+        userDirectedRunOpen=true;
+      }
+      if(backgroundActive){
+        if(message.role==='assistant'&&!assistantContinuesUserDirectedTurn(message)) backgroundActive=false;
+        continue;
+      }
+      if(isSystemLike(message)) continue;
+      if(message.role==='assistant'){
+        if(assistantContinuesUserDirectedTurn(message)) userDirectedRunOpen=true;
+        else if(isRenderable(message)) userDirectedRunOpen=false;
+      }
+      if(['user','assistant','tool'].includes(message.role)) filtered.push(message);
+    }
+    return filtered;
+  }
+
+  function evidenceLine(message,kind){
+    if(!message) return '';
+    const tools=evidenceToolNames(message);
+    if(message.role==='tool') return tools.length?`TOOL COMPLETED: ${tools.join(', ')}`:'TOOL COMPLETED';
+    if(message.role==='user'){
+      const text=compact(cleanUserText(message),kind==='goal'?1400:1000);
+      return text?`USER: ${text}`:'';
+    }
+    if(message.role==='assistant'){
+      const text=compact(rawText(message),kind==='goal'?1600:1800);
+      const activity=tools.length?`ACTIVE TOOL CALLS: ${tools.join(', ')}`:'';
+      if(text&&activity) return `ASSISTANT: ${text}\n${activity}`;
+      if(text) return `ASSISTANT: ${text}`;
+      return activity;
+    }
+    return '';
+  }
+
+  function uniqueMessages(messages){
+    const seen=new Set();
+    const unique=[];
+    for(const message of messages){
+      const signature=messageSignature(message);
+      if(!signature||seen.has(signature)) continue;
+      seen.add(signature);
+      unique.push(message);
+    }
+    return unique;
+  }
+
+  function evidenceFingerprint(lines){
+    let hash=2166136261;
+    const value=lines.join('\n');
+    for(let index=0;index<value.length;index++){
+      hash^=value.charCodeAt(index);
+      hash=Math.imul(hash,16777619);
+    }
+    return `${lines.length}:${(hash>>>0).toString(16)}`;
+  }
+
+  function grokEvidence(kind){
+    const current=state();
+    const recent=Array.isArray(current.messages)?current.messages:[];
+    let candidates=[];
+    if(kind==='goal'){
+      const opening=openingEvidenceCache.get(sessionKey());
+      const openingMessages=opening&&Array.isArray(opening.messages)?opening.messages:[];
+      const all=backgroundFreeMessages(uniqueMessages([...openingMessages,...recent]))
+        .filter(message=>message.role==='user'||message.role==='assistant');
+      candidates=all.length>48?[...all.slice(0,12),...all.slice(-36)]:all;
+    }else{
+      candidates=backgroundFreeMessages(recent).slice(-64);
+    }
+    const lines=candidates.map(message=>evidenceLine(message,kind)).filter(Boolean);
+    if(kind==='status'){
+      const currentStep=activeStep();
+      if(currentStep) lines.push(`ACTIVE TASK: ${currentStep}`);
+      lines.push((current.busy||current.activeStreamId)?'RUNTIME: The user-directed run is active.':'RUNTIME: No user-directed run is currently active.');
+    }
+    return {lines:lines.slice(-80),fingerprint:evidenceFingerprint(lines.slice(-80))};
+  }
+
+  function grokCacheKey(kind,sid=sessionKey()){
+    return `${sid}:${kind}`;
+  }
+
+  function renderGrokSummary(kind){
+    const sid=sessionKey();
+    const key=grokCacheKey(kind,sid);
+    const record=grokSummaryCache.get(key);
+    const request=grokSummaryRequests.get(key);
+    const error=grokSummaryErrors.get(key);
+    const targetId=kind==='goal'?'sessionDashboardOriginalRequest':'sessionDashboardStatus';
+    const metaId=kind==='goal'?'sessionDashboardSummaryUpdated':'sessionDashboardUpdated';
+    const emptyText=kind==='goal'
+      ? 'Select Refresh goal to generate a one-sentence summary.'
+      : 'Select Refresh status to evaluate what is happening in this session now.';
+    const label=record&&(
+      String(record.provider||'').includes('xai')
+      || String(record.model||'').toLowerCase().includes('grok')
+    )?'Grok':'AI';
+    setMarkdown(targetId,record&&record.text?record.text:emptyText);
+    if(request) setText(metaId,'AI • Evaluating…');
+    else if(error) setText(metaId,`AI • ${error}`);
+    else if(record){
+      const currentFingerprint=grokEvidence(kind).fingerprint;
+      setText(metaId,record.fingerprint===currentFingerprint?`${label} • Updated ${record.updated}`:`${label} • Refresh for latest`);
+    }else setText(metaId,'AI • Not generated');
+  }
+
+  function setSummaryButtonBusy(kind,busy){
+    const button=byId(kind==='goal'?'sessionDashboardSummaryRefresh':'sessionDashboardRefresh');
+    if(!button) return;
+    button.disabled=!!busy;
+    button.setAttribute('aria-busy',busy?'true':'false');
+    button.textContent=busy?'Evaluating…':kind==='goal'?'Refresh goal':'Refresh status';
+  }
+
+  async function refreshGrokSummary(kind){
+    const sid=sessionKey();
+    if(!sid||!['goal','status'].includes(kind)) return;
+    const key=grokCacheKey(kind,sid);
+    if(grokSummaryRequests.has(key)) return grokSummaryRequests.get(key);
+    if(kind==='goal'){
+      const openingOffset=typeof _oldestIdx!=='undefined'?Number(_oldestIdx):0;
+      const openingMissing=(typeof _messagesTruncated!=='undefined'&&!!_messagesTruncated)||(Number.isFinite(openingOffset)&&openingOffset>0);
+      const cached=openingEvidenceCache.get(sid);
+      if(openingMissing&&(!cached||cached.error)) await hydrateDashboardOpeningEvidence({force:!!cached});
+    }
+    const evidence=grokEvidence(kind);
+    if(!evidence.lines.length){
+      grokSummaryErrors.set(key,'No usable session evidence');
+      renderGrokSummary(kind);
+      return;
+    }
+    grokSummaryErrors.delete(key);
+    setSummaryButtonBusy(kind,true);
+    const request=(async()=>{
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),65000);
+      try{
+        const response=await fetch(GROK_SUMMARY_ENDPOINT,{
+          method:'POST',
+          credentials:'same-origin',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({kind,sessionId:sid,evidence:evidence.lines}),
+          signal:controller.signal
+        });
+        let payload={};
+        try{payload=await response.json();}catch(_){ }
+        if(!response.ok||!payload||payload.ok!==true||!payload.summary){
+          throw new Error(payload&&payload.error||`Summary failed (${response.status})`);
+        }
+        grokSummaryCache.set(key,{
+          text:String(payload.summary).trim(),
+          fingerprint:evidence.fingerprint,
+          updated:new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}),
+          provider:String(payload.provider||'auto'),
+          model:String(payload.model||'')
+        });
+        while(grokSummaryCache.size>40) grokSummaryCache.delete(grokSummaryCache.keys().next().value);
+      }catch(error){
+        const message=error&&error.name==='AbortError'?'Timed out':compact(error&&error.message||error||'Unavailable',120);
+        grokSummaryErrors.set(key,message);
+      }finally{
+        clearTimeout(timer);
+        grokSummaryRequests.delete(key);
+        if(sid===sessionKey()){
+          setSummaryButtonBusy(kind,false);
+          renderGrokSummary(kind);
+        }
+      }
+    })();
+    grokSummaryRequests.set(key,request);
+    renderGrokSummary(kind);
+    return request;
   }
 
   function refreshDashboardStatus(){
-    const key=sessionKey();
-    if(!key) return;
-    statusSnapshots.set(key,{
-      text:dashboardStatus(sessionMessages()),
-      updated:new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'}),
-      turnProgress:dashboardTurnProgress()
-    });
-    showStatusSnapshot();
+    void refreshGrokSummary('status');
   }
 
   function syncSessionDashboard(){
@@ -359,16 +539,12 @@
     if(!hasSession) return;
 
     const completed=dashboardCompleted(entries);
-    setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(projection));
     const openingOffset=typeof _oldestIdx!=='undefined'?Number(_oldestIdx):0;
     const openingIsMissing=(typeof _messagesTruncated!=='undefined'&&!!_messagesTruncated)||(Number.isFinite(openingOffset)&&openingOffset>0);
-    const openingEvidence=openingEvidenceCache.get(sessionKey());
-    setText('sessionDashboardSummaryUpdated',openingIsMissing
-      ? openingEvidence&&openingEvidence.text?'Loaded from session start':openingEvidence&&openingEvidence.error?'Unavailable':'Loading'
-      : 'From session start');
+    renderGrokSummary('goal');
     setMarkdown('sessionDashboardInstruction',dashboardInstruction(entries));
     setMarkdown('sessionDashboardCompleted',completed||'Not completed yet.');
-    showStatusSnapshot();
+    renderGrokSummary('status');
     const completedCard=byId('sessionDashboardCompletedCard');
     if(completedCard) completedCard.dataset.empty=completed?'0':'1';
     if(openingIsMissing&&!openingEvidenceCache.has(sessionKey())) void hydrateDashboardOpeningEvidence();
@@ -379,8 +555,12 @@
     if(!toggle||typeof toggle.setAttribute!=='function') return;
     const root=document.documentElement;
     const dashboard=!!(root&&root.dataset&&root.dataset.sessionView==='dashboard');
-    toggle.setAttribute('aria-pressed',dashboard?'true':'false');
-    const label=dashboard?'Disable High Signal mode':'Enable High Signal mode';
+    if(typeof toggle.removeAttribute==='function'){
+      toggle.removeAttribute('aria-pressed');
+      toggle.removeAttribute('aria-checked');
+    }
+    const label=dashboard?'Switch to Classic view':'Switch to High Signal mode';
+    toggle.textContent=label;
     toggle.setAttribute('aria-label',label);
     toggle.title=label;
   }
