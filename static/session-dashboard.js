@@ -16,6 +16,15 @@
   const grokSummaryErrors=new Map();
   const OPENING_EVIDENCE_LIMIT=30;
   const GROK_SUMMARY_ENDPOINT='/apps/api/high-signal-summary';
+  const SUMMARY_MODEL_TASK='high_signal_summary';
+  let summaryModelConfig={provider:'',model:'',label:'AI model'};
+  let summaryModelGroups=[];
+  let summaryModelLoadPromise=null;
+  let summaryModelLoaded=false;
+  let summaryModelSaving=false;
+  let summaryModelDropdown=null;
+  let summaryModelAnchor=null;
+  let summaryModelError='';
   const structuredContentText=value=>{
     if(Array.isArray(value)){
       let recognized=false;
@@ -490,28 +499,281 @@
     return `${sid}:${kind}`;
   }
 
+  function summaryModelControls(){
+    if(typeof document.querySelectorAll!=='function') return [];
+    return Array.from(document.querySelectorAll('[data-high-signal-model]'));
+  }
+
+  function summaryModelToken(model){
+    return String(model||'').trim().replace(/^@[^:]+:/,'');
+  }
+
+  function prettySummaryModelLabel(model){
+    const value=summaryModelToken(model);
+    if(!value) return 'Auto';
+    return value.split('-').map(part=>{
+      if(/^gpt$/i.test(part)) return 'GPT';
+      if(/^ai$/i.test(part)) return 'AI';
+      if(/^sol$/i.test(part)) return 'SOL';
+      if(/^pro$/i.test(part)) return 'PRO';
+      if(/^\d+(?:\.\d+)*$/.test(part)) return part;
+      return part.charAt(0).toUpperCase()+part.slice(1);
+    }).join(' ');
+  }
+
+  function summaryModelMatches(provider,model,candidateProvider,candidateModel){
+    return String(provider||'auto')===String(candidateProvider||'auto')
+      && summaryModelToken(model)===summaryModelToken(candidateModel);
+  }
+
+  function summaryModelCatalogLabel(provider,model){
+    for(const group of summaryModelGroups){
+      if(String(group.providerId)!==String(provider)) continue;
+      const found=group.models.find(item=>summaryModelMatches(provider,model,group.providerId,item.id));
+      if(found) return String(found.label||prettySummaryModelLabel(model));
+    }
+    return String(provider||'auto')==='auto'&&!model?'Auto':prettySummaryModelLabel(model);
+  }
+
+  function syncSummaryModelControls(){
+    const label=summaryModelSaving?'Saving…':String(summaryModelConfig.label||summaryModelCatalogLabel(summaryModelConfig.provider,summaryModelConfig.model));
+    const blocked=summaryModelSaving||grokSummaryRequests.size>0;
+    summaryModelControls().forEach(button=>{
+      const target=button.querySelector&&button.querySelector('[data-high-signal-model-label]');
+      if(target) target.textContent=label;
+      button.disabled=blocked;
+      button.title=summaryModelError||`${label} · Goal and Status model`;
+      button.setAttribute('aria-expanded',String(button===summaryModelAnchor&&!!summaryModelDropdown&&summaryModelDropdown.classList.contains('open')));
+    });
+  }
+
+  function summaryModelIsTextCapable(item){
+    const value=`${item&&item.id||''} ${item&&item.label||''}`.toLowerCase();
+    return !/(?:image|video|embedding|whisper|speech|audio|tts)/.test(value);
+  }
+
+  function normalizeSummaryModelGroups(payload){
+    return (Array.isArray(payload&&payload.groups)?payload.groups:[]).map(group=>({
+      providerId:String(group.provider_id||group.provider||''),
+      provider:String(group.provider||group.provider_id||''),
+      models:[...(group.models||[]),...(group.extra_models||[])]
+        .filter(summaryModelIsTextCapable)
+        .map(model=>({id:String(model.id||''),label:String(model.label||prettySummaryModelLabel(model.id))}))
+        .filter(model=>model.id)
+    })).filter(group=>group.providerId&&group.models.length);
+  }
+
+  function ensureConfiguredSummaryModelVisible(){
+    const provider=String(summaryModelConfig.provider||'auto');
+    const model=String(summaryModelConfig.model||'');
+    if(provider==='auto'&&!model) return;
+    let group=summaryModelGroups.find(item=>item.providerId===provider);
+    if(!group){
+      group={providerId:provider,provider,models:[]};
+      summaryModelGroups.push(group);
+    }
+    if(!group.models.some(item=>summaryModelMatches(provider,model,provider,item.id))){
+      group.models.unshift({id:model,label:prettySummaryModelLabel(model)});
+    }
+  }
+
+  async function loadSummaryModelConfig({force=false}={}){
+    if(summaryModelLoaded&&!force) return summaryModelConfig;
+    if(summaryModelLoadPromise&&!force) return summaryModelLoadPromise;
+    summaryModelLoadPromise=(async()=>{
+      try{
+        if(typeof api!=='function') throw new Error('Model selector unavailable');
+        const [auxiliary,catalog]=await Promise.all([
+          api('/api/model/auxiliary'),
+          api('/api/models')
+        ]);
+        summaryModelGroups=normalizeSummaryModelGroups(catalog);
+        const task=(Array.isArray(auxiliary&&auxiliary.tasks)?auxiliary.tasks:[]).find(item=>item&&item.task===SUMMARY_MODEL_TASK)||{};
+        summaryModelConfig={provider:String(task.provider||'auto'),model:String(task.model||''),label:''};
+        ensureConfiguredSummaryModelVisible();
+        summaryModelConfig.label=summaryModelCatalogLabel(summaryModelConfig.provider,summaryModelConfig.model);
+        summaryModelLoaded=true;
+        summaryModelError='';
+      }catch(error){
+        summaryModelLoaded=false;
+        summaryModelError=compact(error&&error.message||'Model selector unavailable',100);
+      }finally{
+        syncSummaryModelControls();
+      }
+      return summaryModelConfig;
+    })();
+    try{return await summaryModelLoadPromise;}
+    finally{summaryModelLoadPromise=null;}
+  }
+
+  function closeSummaryModelDropdown(){
+    if(summaryModelDropdown) summaryModelDropdown.classList.remove('open');
+    summaryModelControls().forEach(button=>button.setAttribute('aria-expanded','false'));
+    summaryModelAnchor=null;
+  }
+
+  function positionSummaryModelDropdown(anchor){
+    if(!summaryModelDropdown||!anchor||typeof anchor.getBoundingClientRect!=='function') return;
+    const margin=8;
+    const rect=anchor.getBoundingClientRect();
+    const width=Math.min(320,Math.max(240,window.innerWidth-margin*2));
+    const maxHeight=Math.min(440,Math.max(180,window.innerHeight-margin*2));
+    summaryModelDropdown.style.width=`${width}px`;
+    summaryModelDropdown.style.maxHeight=`${maxHeight}px`;
+    summaryModelDropdown.style.left=`${Math.max(margin,Math.min(rect.right-width,window.innerWidth-width-margin))}px`;
+    summaryModelDropdown.style.top=`${Math.min(rect.bottom+6,window.innerHeight-margin)}px`;
+    const rendered=summaryModelDropdown.getBoundingClientRect();
+    if(rendered.bottom>window.innerHeight-margin&&rect.top>rendered.height+margin){
+      summaryModelDropdown.style.top=`${Math.max(margin,rect.top-rendered.height-6)}px`;
+    }else if(rendered.bottom>window.innerHeight-margin){
+      summaryModelDropdown.style.top=`${Math.max(margin,window.innerHeight-rendered.height-margin)}px`;
+    }
+  }
+
+  function summaryModelOption(provider,model,label,providerLabel){
+    const option=document.createElement('div');
+    const active=summaryModelMatches(summaryModelConfig.provider,summaryModelConfig.model,provider,model);
+    option.className=`model-opt${active?' active':''}`;
+    option.tabIndex=0;
+    option.setAttribute('role','option');
+    option.setAttribute('aria-selected',String(active));
+    const top=document.createElement('span');
+    top.className='model-opt-top';
+    const name=document.createElement('span');
+    name.className='model-opt-name';
+    name.textContent=label;
+    top.appendChild(name);
+    if(providerLabel){
+      const providerChip=document.createElement('span');
+      providerChip.className='model-opt-provider';
+      providerChip.textContent=providerLabel;
+      top.appendChild(providerChip);
+    }
+    option.appendChild(top);
+    const select=()=>void saveSummaryModel(provider,model,label);
+    option.addEventListener('click',select);
+    option.addEventListener('keydown',event=>{
+      if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}
+    });
+    return option;
+  }
+
+  function renderSummaryModelDropdown(){
+    if(!summaryModelDropdown){
+      summaryModelDropdown=document.createElement('div');
+      summaryModelDropdown.id='sessionDashboardModelDropdown';
+      summaryModelDropdown.className='model-dropdown model-dropdown--floating session-dashboard-model-dropdown';
+      summaryModelDropdown.setAttribute('role','listbox');
+      summaryModelDropdown.setAttribute('aria-label','Goal and Status model');
+      document.body.appendChild(summaryModelDropdown);
+    }
+    summaryModelDropdown.replaceChildren();
+    const note=document.createElement('div');
+    note.className='model-scope-note';
+    note.textContent=summaryModelError||'Shared by Goal and Status everywhere';
+    summaryModelDropdown.appendChild(note);
+    summaryModelDropdown.appendChild(summaryModelOption('auto','','Auto','Hermes'));
+    summaryModelGroups.forEach(group=>{
+      const heading=document.createElement('div');
+      heading.className='model-group';
+      heading.textContent=group.provider;
+      summaryModelDropdown.appendChild(heading);
+      group.models.forEach(model=>summaryModelDropdown.appendChild(summaryModelOption(group.providerId,model.id,model.label,group.provider)));
+    });
+  }
+
+  async function saveSummaryModel(provider,model,label){
+    if(summaryModelSaving||grokSummaryRequests.size) return;
+    if(summaryModelMatches(summaryModelConfig.provider,summaryModelConfig.model,provider,model)){
+      closeSummaryModelDropdown();
+      return;
+    }
+    summaryModelSaving=true;
+    summaryModelError='';
+    syncSummaryModelControls();
+    try{
+      if(typeof api!=='function') throw new Error('Model selector unavailable');
+      await api('/api/model/set',{
+        method:'POST',
+        body:JSON.stringify({scope:'auxiliary',task:SUMMARY_MODEL_TASK,provider,model})
+      });
+      summaryModelConfig={provider:String(provider||'auto'),model:String(model||''),label:String(label||prettySummaryModelLabel(model))};
+      summaryModelLoaded=true;
+      grokSummaryCache.clear();
+      grokSummaryErrors.clear();
+      closeSummaryModelDropdown();
+      renderGrokSummary('goal');
+      renderGrokSummary('status');
+      window.dispatchEvent(new CustomEvent('hermesui:high-signal-model-changed',{detail:{provider:summaryModelConfig.provider,model:summaryModelConfig.model,label:summaryModelConfig.label}}));
+      if(typeof window._loadAuxiliaryModels==='function') void window._loadAuxiliaryModels();
+    }catch(error){
+      summaryModelError=compact(error&&error.message||'Model change failed',100);
+      renderSummaryModelDropdown();
+      if(summaryModelAnchor) positionSummaryModelDropdown(summaryModelAnchor);
+    }finally{
+      summaryModelSaving=false;
+      syncSummaryModelControls();
+    }
+  }
+
+  async function toggleSummaryModelDropdown(event){
+    const anchor=event&&event.currentTarget;
+    if(!anchor||summaryModelSaving||grokSummaryRequests.size) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if(summaryModelAnchor===anchor&&summaryModelDropdown&&summaryModelDropdown.classList.contains('open')){
+      closeSummaryModelDropdown();
+      return;
+    }
+    summaryModelAnchor=anchor;
+    await loadSummaryModelConfig();
+    renderSummaryModelDropdown();
+    summaryModelDropdown.classList.add('open');
+    summaryModelControls().forEach(button=>button.setAttribute('aria-expanded',String(button===anchor)));
+    positionSummaryModelDropdown(anchor);
+  }
+
+  function applyExternalSummaryModel(detail){
+    if(!detail||summaryModelSaving) return;
+    const provider=String(detail.provider||'auto');
+    const model=String(detail.model||'');
+    summaryModelConfig={provider,model,label:String(detail.label||summaryModelCatalogLabel(provider,model))};
+    summaryModelLoaded=true;
+    ensureConfiguredSummaryModelVisible();
+    grokSummaryCache.clear();
+    grokSummaryErrors.clear();
+    closeSummaryModelDropdown();
+    syncSummaryModelControls();
+    renderGrokSummary('goal');
+    renderGrokSummary('status');
+  }
+
+  function summaryRelativeTime(updatedAt){
+    const elapsed=Math.max(0,Math.floor((Date.now()-Number(updatedAt))/1000));
+    if(!Number.isFinite(elapsed)) return '';
+    if(elapsed<60) return 'now';
+    if(elapsed<3600) return `${Math.floor(elapsed/60)}m ago`;
+    if(elapsed<86400) return `${Math.floor(elapsed/3600)}h ago`;
+    return `${Math.floor(elapsed/86400)}d ago`;
+  }
+
   function renderGrokSummary(kind){
     const sid=sessionKey();
     const key=grokCacheKey(kind,sid);
     const record=grokSummaryCache.get(key);
-    const request=grokSummaryRequests.get(key);
     const error=grokSummaryErrors.get(key);
     const targetId=kind==='goal'?'sessionDashboardOriginalRequest':'sessionDashboardStatus';
     const metaId=kind==='goal'?'sessionDashboardSummaryUpdated':'sessionDashboardUpdated';
     const emptyText=kind==='goal'
       ? 'Select Refresh to generate the goal summary.'
       : 'Select Refresh to generate the current status.';
-    const label=record&&(
-      String(record.provider||'').includes('xai')
-      || String(record.model||'').toLowerCase().includes('grok')
-    )?'Grok':'AI';
-    setMarkdown(targetId,record&&record.text?record.text:emptyText);
-    if(request) setText(metaId,'AI • Evaluating…');
-    else if(error) setText(metaId,`AI • ${error}`);
-    else if(record){
-      const currentFingerprint=grokEvidence(kind).fingerprint;
-      setText(metaId,record.fingerprint===currentFingerprint?`${label} • Updated ${record.updated}`:`${label} • Refresh for latest`);
-    }else setText(metaId,'AI • Manual refresh');
+    setMarkdown(targetId,record&&record.text?record.text:error?`Could not refresh: ${error}`:emptyText);
+    const updated=byId(metaId);
+    if(updated){
+      const relative=record&&record.updatedAt?summaryRelativeTime(record.updatedAt):'';
+      updated.textContent=relative;
+      updated.hidden=!relative;
+    }
   }
 
   function setSummaryButtonBusy(kind,busy){
@@ -520,6 +782,7 @@
     button.disabled=!!busy;
     button.setAttribute('aria-busy',busy?'true':'false');
     button.textContent=busy?'Updating…':'Refresh';
+    syncSummaryModelControls();
   }
 
   async function refreshGrokSummary(kind){
@@ -561,7 +824,7 @@
         grokSummaryCache.set(key,{
           text:String(payload.summary).trim(),
           fingerprint:evidence.fingerprint,
-          updated:new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}),
+          updatedAt:Date.now(),
           provider:String(payload.provider||'auto'),
           model:String(payload.model||'')
         });
@@ -698,6 +961,17 @@
     if(refresh) refresh.addEventListener('click',refreshDashboardStatus);
     const summaryRefresh=byId('sessionDashboardSummaryRefresh');
     if(summaryRefresh) summaryRefresh.addEventListener('click',refreshDashboardSummary);
+    const controls=summaryModelControls();
+    controls.forEach(button=>button.addEventListener('click',toggleSummaryModelDropdown));
+    if(controls.length){
+      void loadSummaryModelConfig();
+      document.addEventListener('pointerdown',event=>{
+        if(summaryModelDropdown&&summaryModelDropdown.classList.contains('open')&&!summaryModelDropdown.contains(event.target)&&!controls.includes(event.target)&&!controls.some(button=>button.contains(event.target))) closeSummaryModelDropdown();
+      });
+      document.addEventListener('keydown',event=>{if(event.key==='Escape') closeSummaryModelDropdown();});
+      window.addEventListener('resize',closeSummaryModelDropdown);
+      window.addEventListener('hermesui:high-signal-model-changed',event=>applyExternalSummaryModel(event.detail));
+    }
     syncSessionDashboard();
   };
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true});

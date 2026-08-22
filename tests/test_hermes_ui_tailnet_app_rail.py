@@ -72,6 +72,9 @@ def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
     assert 'id="tailnetNotificationsBadge" hidden' in rail
     assert 'id="tailnetNotifications" aria-labelledby="tailnetNotificationsTitle" hidden' in INDEX
     assert 'id="tailnetNotificationsReadAll"' in INDEX
+    assert INDEX.count('data-notification-filter=') == 2
+    assert 'data-notification-filter="unread"' in INDEX
+    assert 'data-notification-filter="all"' in INDEX
     assert "const NOTIFICATION_STATE_KEY='hermesui.cron-notifications.v1'" in JS
     assert "api('/api/crons')" in JS
     assert "/api/crons/output?job_id=" in JS
@@ -80,11 +83,19 @@ def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
     assert ".sort((left,right)=>right.modified-left.modified)" in JS
     assert "markNotificationRead(item)" in JS
     assert "markAllNotificationsRead" in JS
+    assert "notificationFilter==='unread'?items.filter(notificationIsUnread):items" in JS
+    assert "setNotificationFilter('unread')" in JS
     assert "hermesui:cron-completions" in JS
     assert "Status:\\*\\*\\s*silent" in JS
     assert "dividerIndex" in JS
     assert ".tailnet-notifications-badge" in CSS
     assert ".tailnet-notification-response" in CSS
+    assert "notificationPreviewText" in JS
+    assert "hydrateNotificationRich" in JS
+    assert "renderMd(item.response)" in JS
+    assert "postProcessRenderedMessages(body)" in JS
+    assert "loadPdfInline(body)" in JS
+    assert 'className=\'tailnet-notification-rich msg-body\'' in JS
 
 
 def test_cron_notifications_reuse_existing_frontend_apis_only():
@@ -481,7 +492,7 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v3"'
+        '&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v5"'
         in INDEX
     )
     assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3"' in INDEX

@@ -12791,6 +12791,7 @@ async function _loadAuxiliaryModels(){
     if(!(await showConfirmDialog({title:t('settings_aux_reset_confirm_title')||'Reset auxiliary models?',message:t('settings_aux_reset_confirm_msg')||'This will set all auxiliary tasks to auto (use main model).',confirmLabel:t('settings_btn_reset_aux_models')||'Reset',danger:true}))) return;
     try{
      await api('/api/model/set',{method:'POST',body:JSON.stringify({scope:'auxiliary',task:'__reset__',provider:'auto',model:''})});
+     window.dispatchEvent(new CustomEvent('hermesui:high-signal-model-changed',{detail:{provider:'auto',model:'',label:'Auto'}}));
      if(typeof showToast==='function') showToast(t('settings_aux_reset_done')||'Auxiliary models reset to auto');
      _loadAuxiliaryModels();
     }catch(e){
@@ -12823,6 +12824,7 @@ async function _applyAuxModels(){
   if(provider!==orig.provider||model!==orig.model){
    try{
     await api('/api/model/set',{method:'POST',body:JSON.stringify({scope:'auxiliary',task:task.task,provider,model})});
+    if(task.task==='high_signal_summary') window.dispatchEvent(new CustomEvent('hermesui:high-signal-model-changed',{detail:{provider,model}}));
     saved++;
    }catch(e){
     console.warn('[settings] failed to save aux task',task.task,e);

@@ -70,7 +70,7 @@
     };
   }
 })()</script>
-<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v6&cron-notifications=v3">
+<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v6&cron-notifications=v7&high-signal-model=v2">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
@@ -178,7 +178,13 @@
           <span class="tailnet-notifications-kicker">Scheduled jobs</span>
           <h1 id="tailnetNotificationsTitle">Notifications</h1>
         </div>
-        <button class="tailnet-notifications-read-all" id="tailnetNotificationsReadAll" type="button">Mark all read</button>
+        <div class="tailnet-notifications-actions">
+          <div class="tailnet-notifications-filters" role="tablist" aria-label="Filter notifications">
+            <button class="tailnet-notifications-filter is-active" type="button" role="tab" aria-selected="true" data-notification-filter="unread">Unread</button>
+            <button class="tailnet-notifications-filter" type="button" role="tab" aria-selected="false" data-notification-filter="all">All</button>
+          </div>
+          <button class="tailnet-notifications-read-all" id="tailnetNotificationsReadAll" type="button">Mark all read</button>
+        </div>
       </header>
       <div class="tailnet-notifications-status" id="tailnetNotificationsStatus" role="status" aria-live="polite">Loading…</div>
       <div class="tailnet-notifications-list" id="tailnetNotificationsList"></div>
@@ -517,11 +523,18 @@
           <div class="session-dashboard-card-head">
             <div class="session-dashboard-heading-actions">
               <div class="session-dashboard-label">Goal</div>
+              <div class="composer-model-wrap session-dashboard-model-wrap">
+                <button class="composer-model-chip session-dashboard-model-chip" type="button" data-high-signal-model data-summary-kind="goal" aria-label="Select Goal and Status model" aria-haspopup="listbox" aria-expanded="false" aria-controls="sessionDashboardModelDropdown" title="Goal and Status model">
+                  <span class="composer-model-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg></span>
+                  <span class="composer-model-label" data-high-signal-model-label>AI model</span>
+                  <span class="composer-model-chevron" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </button>
+              </div>
               <button type="button" class="session-dashboard-refresh" id="sessionDashboardSummaryRefresh" aria-label="Refresh goal">Refresh</button>
+              <span class="session-dashboard-updated" id="sessionDashboardSummaryUpdated" hidden></span>
             </div>
           </div>
           <div class="session-dashboard-copy session-dashboard-copy--original" id="sessionDashboardOriginalRequest"></div>
-          <div class="session-dashboard-updated" id="sessionDashboardSummaryUpdated">Goal placeholder</div>
         </article>
         <article class="session-dashboard-section session-dashboard-section--instruction">
           <div class="session-dashboard-label">Last instruction</div>
@@ -531,12 +544,18 @@
           <div class="session-dashboard-card-head">
             <div class="session-dashboard-heading-actions">
               <div class="session-dashboard-label">Status</div>
-              <span class="session-dashboard-turn" id="sessionDashboardTurn" hidden></span>
+              <div class="composer-model-wrap session-dashboard-model-wrap">
+                <button class="composer-model-chip session-dashboard-model-chip" type="button" data-high-signal-model data-summary-kind="status" aria-label="Select Goal and Status model" aria-haspopup="listbox" aria-expanded="false" aria-controls="sessionDashboardModelDropdown" title="Goal and Status model">
+                  <span class="composer-model-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg></span>
+                  <span class="composer-model-label" data-high-signal-model-label>AI model</span>
+                  <span class="composer-model-chevron" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </button>
+              </div>
               <button type="button" class="session-dashboard-refresh" id="sessionDashboardRefresh" aria-label="Refresh status">Refresh</button>
+              <span class="session-dashboard-updated" id="sessionDashboardUpdated" hidden></span>
             </div>
           </div>
           <div class="session-dashboard-copy" id="sessionDashboardStatus" aria-live="polite"></div>
-          <div class="session-dashboard-updated" id="sessionDashboardUpdated"></div>
         </article>
         <article class="session-dashboard-section session-dashboard-section--completed" id="sessionDashboardCompletedCard">
           <div class="session-dashboard-label">Result</div>
@@ -1910,10 +1929,10 @@
 <script src="static/commands.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/messages.js?v=__WEBUI_VERSION__&tab-polish=v1" defer></script>
 <script src="static/extension_settings.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/panels.js?v=__WEBUI_VERSION__&cron-notifications=v3" defer></script>
-<script src="static/session-dashboard.js?v=__WEBUI_VERSION__&tab-polish=v1" defer></script>
+<script src="static/panels.js?v=__WEBUI_VERSION__&cron-notifications=v3&high-signal-model=v1" defer></script>
+<script src="static/session-dashboard.js?v=__WEBUI_VERSION__&tab-polish=v1&high-signal-model=v4" defer></script>
 <script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v3" defer></script>
+<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v6&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v5" defer></script>
 <script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3" defer></script>
 <script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/boot.js?v=__WEBUI_VERSION__&tab-polish=v1" defer></script>

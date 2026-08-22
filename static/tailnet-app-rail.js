@@ -42,6 +42,7 @@
   const notificationsStatus=document.getElementById('tailnetNotificationsStatus');
   const notificationsList=document.getElementById('tailnetNotificationsList');
   const notificationsReadAll=document.getElementById('tailnetNotificationsReadAll');
+  const notificationFilterButtons=Array.from(document.querySelectorAll('[data-notification-filter]'));
   const home=document.getElementById('tailnetAppHome');
   const links=document.getElementById('tailnetAppLinks');
   const companyLinks=document.getElementById('tailnetCompanyAppLinks');
@@ -75,6 +76,7 @@
   let notificationState=readNotificationState();
   let notificationItems=new Map();
   let notificationsLoading=false;
+  let notificationFilter='unread';
 
 
   function normalizeBookmarkUrl(raw){
@@ -389,6 +391,26 @@
 
   function notificationIsUnread(item){return item.modified>notificationReadCutoff(item.jobId);}
 
+  function notificationStatusText(unreadCount,totalCount){
+    if(notificationFilter==='unread')return unreadCount?`${unreadCount} unread`:'All caught up';
+    return totalCount?`${totalCount} notification${totalCount===1?'':'s'}`:'No scheduled-job responses yet.';
+  }
+
+  function syncNotificationFilterControls(){
+    notificationFilterButtons.forEach(button=>{
+      const active=button.dataset.notificationFilter===notificationFilter;
+      button.classList.toggle('is-active',active);
+      button.setAttribute('aria-selected',String(active));
+      button.tabIndex=active?0:-1;
+    });
+  }
+
+  function setNotificationFilter(value){
+    notificationFilter=value==='all'?'all':'unread';
+    syncNotificationFilterControls();
+    renderCronNotifications();
+  }
+
   function setNotificationsBadge(count){
     if(!notificationsBadge||!notificationsButton)return;
     const unread=Math.max(0,Number(count)||0);
@@ -487,13 +509,47 @@
     return new Date(timestamp*1000).toLocaleDateString(undefined,{month:'short',day:'numeric'});
   }
 
+  function notificationPreviewText(content){
+    return String(content||'')
+      .replace(/^\s*MEDIA:\S+\s*$/gim,'')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g,'')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g,'$1')
+      .replace(/^\s{0,3}#{1,6}\s+/gm,'')
+      .replace(/[*_~`]+/g,'')
+      .replace(/\n{2,}/g,'\n')
+      .trim()
+      .slice(0,480);
+  }
+
+  function hydrateNotificationRich(body,item){
+    if(!body||body.dataset.richReady==='1')return;
+    body.dataset.richReady='1';
+    try{
+      if(typeof renderMd==='function')body.innerHTML=renderMd(item.response);
+      else body.textContent=item.response;
+    }catch(_){body.textContent=item.response;}
+    const enhance=()=>{
+      if(typeof postProcessRenderedMessages==='function')postProcessRenderedMessages(body);
+      else{
+        if(typeof highlightCode==='function')highlightCode(body);
+        if(typeof addCopyButtons==='function')addCopyButtons(body);
+        if(typeof loadPdfInline==='function')loadPdfInline(body);
+      }
+    };
+    if(typeof requestAnimationFrame==='function')requestAnimationFrame(enhance);
+    else setTimeout(enhance,0);
+  }
+
   function markNotificationRead(item){
     if(!item)return;
     notificationState.readJobs[item.jobId]=Math.max(Number(notificationState.readJobs[item.jobId])||0,item.modified);
     writeNotificationState();
-    const unreadCount=Array.from(notificationItems.values()).filter(notificationIsUnread).length;
+    const visibleItems=Array.from(notificationItems.values())
+      .sort((left,right)=>right.modified-left.modified)
+      .slice(0,NOTIFICATION_LIST_LIMIT);
+    const unreadCount=visibleItems.filter(notificationIsUnread).length;
     setNotificationsBadge(unreadCount);
-    if(notificationsStatus)notificationsStatus.textContent=unreadCount?`${unreadCount} unread`:'All caught up';
+    if(notificationsStatus)notificationsStatus.textContent=notificationStatusText(unreadCount,visibleItems.length);
     if(notificationsReadAll)notificationsReadAll.disabled=unreadCount===0;
   }
 
@@ -511,43 +567,63 @@
       .sort((left,right)=>right.modified-left.modified)
       .slice(0,NOTIFICATION_LIST_LIMIT);
     const unreadCount=items.filter(notificationIsUnread).length;
+    const visibleItems=notificationFilter==='unread'?items.filter(notificationIsUnread):items;
     setNotificationsBadge(unreadCount);
+    syncNotificationFilterControls();
     if(notificationsReadAll)notificationsReadAll.disabled=unreadCount===0;
     notificationsList.replaceChildren();
     if(!items.length){
       notificationsStatus.textContent=notificationsLoading?'Loading…':'No scheduled-job responses yet.';
       return;
     }
-    notificationsStatus.textContent=unreadCount?`${unreadCount} unread`:'All caught up';
-    items.forEach(item=>{
+    notificationsStatus.textContent=notificationStatusText(unreadCount,items.length);
+    if(!visibleItems.length)return;
+    visibleItems.forEach((item,index)=>{
       const unread=notificationIsUnread(item);
       const article=document.createElement('article');
       article.className=`tailnet-notification${unread?' is-unread':''}${item.status==='error'?' is-error':''}`;
+      article.dataset.role='assistant';
+      const role=document.createElement('div');
+      role.className='msg-role assistant tailnet-notification-role';
+      const icon=document.createElement('div');
+      icon.className='role-icon assistant';
+      icon.textContent='W';
+      icon.setAttribute('aria-hidden','true');
+      const name=document.createElement('span');
+      name.className='msg-role-name';
+      name.textContent=item.name;
+      const meta=document.createElement('span');
+      meta.className='msg-time tailnet-notification-meta';
+      meta.textContent=relativeNotificationTime(item.modified);
+      role.append(icon,name,meta);
       const button=document.createElement('button');
       button.type='button';
       button.className='tailnet-notification-toggle';
       button.setAttribute('aria-expanded','false');
-      const top=document.createElement('span');
-      top.className='tailnet-notification-top';
-      const name=document.createElement('strong');
-      name.textContent=item.name;
-      const meta=document.createElement('span');
-      meta.className='tailnet-notification-meta';
-      meta.textContent=relativeNotificationTime(item.modified);
-      top.append(name,meta);
+      const richId=`tailnetNotificationBody${index}`;
+      button.setAttribute('aria-controls',richId);
+      button.setAttribute('aria-label',`Open notification from ${item.name}`);
       const response=document.createElement('span');
       response.className='tailnet-notification-response';
-      response.textContent=item.response;
-      button.append(top,response);
+      response.textContent=notificationPreviewText(item.response)||'Attachment';
+      button.appendChild(response);
+      const rich=document.createElement('div');
+      rich.id=richId;
+      rich.className='tailnet-notification-rich msg-body';
+      rich.hidden=true;
       button.addEventListener('click',()=>{
         const open=article.classList.toggle('is-open');
         button.setAttribute('aria-expanded',String(open));
+        response.hidden=open;
+        rich.hidden=!open;
+        if(open)hydrateNotificationRich(rich,item);
         if(notificationIsUnread(item)){
           markNotificationRead(item);
           article.classList.remove('is-unread');
         }
+        if(!open&&notificationFilter==='unread'&&!notificationIsUnread(item))renderCronNotifications();
       });
-      article.appendChild(button);
+      article.append(role,button,rich);
       notificationsList.appendChild(article);
     });
   }
@@ -603,6 +679,7 @@
     markSelected(NOTIFICATIONS_ID);
     closeSessionsOverlay();
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:NOTIFICATIONS_ID,label:'Notifications'}}));
+    setNotificationFilter('unread');
     void loadCronNotifications();
   }
 
@@ -1169,6 +1246,7 @@
     });
     notificationsButton.addEventListener('click',activateNotifications);
     if(notificationsReadAll)notificationsReadAll.addEventListener('click',markAllNotificationsRead);
+    notificationFilterButtons.forEach(button=>button.addEventListener('click',()=>setNotificationFilter(button.dataset.notificationFilter)));
     appsById.set(privateMarketplace.id,privateMarketplace);
     privateAdd.addEventListener('click',()=>activateApp(privateMarketplace));
     companyAdd.addEventListener('click',()=>void addSavedApp('company'));

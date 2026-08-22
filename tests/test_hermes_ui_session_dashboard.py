@@ -12,6 +12,7 @@ INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 DASHBOARD = (ROOT / "static" / "session-dashboard.js").read_text(encoding="utf-8")
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 API_CONFIG = (ROOT / "api" / "config.py").read_text(encoding="utf-8")
+PANELS = (ROOT / "static" / "panels.js").read_text(encoding="utf-8")
 
 
 def test_contextual_view_action_sits_beside_settings_and_never_reloads():
@@ -54,8 +55,10 @@ def test_goal_and_status_are_stateless_manual_only_model_summaries():
     assert "credentials:'same-origin'" in DASHBOARD
     assert "Select Refresh to generate the goal summary." in DASHBOARD
     assert "Select Refresh to generate the current status." in DASHBOARD
-    assert "AI • Manual refresh" in DASHBOARD
-    assert "Refresh for latest" in DASHBOARD
+    assert "AI • Manual refresh" not in DASHBOARD
+    assert "Refresh for latest" not in DASHBOARD
+    assert "summaryRelativeTime" in DASHBOARD
+    assert "updatedAt:Date.now()" in DASHBOARD
     assert "maybeAutoRefreshSummaries" not in DASHBOARD
     assert "SUMMARY_AUTO_CHECK_MS" not in DASHBOARD
     assert "SUMMARY_AUTO_REFRESH_FLOOR_MS" not in DASHBOARD
@@ -63,6 +66,30 @@ def test_goal_and_status_are_stateless_manual_only_model_summaries():
     assert "visibilitychange" not in DASHBOARD
     assert "grokSummaryCache=new Map()" in DASHBOARD
     assert "localStorage.setItem('hermes-session-view'" in DASHBOARD
+
+
+def test_goal_and_status_share_one_visible_global_model_selector():
+    block = INDEX[INDEX.index('<section class="session-dashboard"'):INDEX.index('</section>', INDEX.index('<section class="session-dashboard"')) + len('</section>')]
+    assert block.count('data-high-signal-model data-summary-kind=') == 2
+    assert block.count('aria-controls="sessionDashboardModelDropdown"') == 2
+    assert block.index('data-high-signal-model data-summary-kind="goal"') < block.index('aria-label="Refresh goal"')
+    assert block.index('data-high-signal-model data-summary-kind="status"') < block.index('aria-label="Refresh status"')
+    assert block.index('aria-label="Refresh goal"') < block.index('id="sessionDashboardSummaryUpdated"') < block.index('id="sessionDashboardOriginalRequest"')
+    assert block.index('aria-label="Refresh status"') < block.index('id="sessionDashboardUpdated"') < block.index('id="sessionDashboardStatus"')
+    assert 'id="sessionDashboardSummaryUpdated" hidden' in block
+    assert 'id="sessionDashboardUpdated" hidden' in block
+    assert "SUMMARY_MODEL_TASK='high_signal_summary'" in DASHBOARD
+    assert "api('/api/model/auxiliary')" in DASHBOARD
+    assert "api('/api/models')" in DASHBOARD
+    assert "await api('/api/model/set'" in DASHBOARD
+    assert "scope:'auxiliary',task:SUMMARY_MODEL_TASK,provider,model" in DASHBOARD
+    assert "document.querySelectorAll('[data-high-signal-model]')" in DASHBOARD
+    assert "if(summaryModelLoaded&&!force) return summaryModelConfig" in DASHBOARD
+    assert "summaryModelLoaded=true" in DASHBOARD
+    assert "grokSummaryCache.clear()" in DASHBOARD
+    assert "hermesui:high-signal-model-changed" in DASHBOARD
+    assert "task.task==='high_signal_summary'" in PANELS
+    assert ".session-dashboard-model-chip" in CSS
     assert "localStorage.setItem('grok" not in DASHBOARD.lower()
     assert "setMarkdown('sessionDashboardOriginalRequest',dashboardSessionSummary(projection))" not in DASHBOARD
     assert "renderGrokSummary('goal')" in DASHBOARD
