@@ -7,14 +7,19 @@ SESSIONS = (ROOT / "static" / "sessions.js").read_text(encoding="utf-8")
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 
 
-def test_header_uses_session_language_and_compact_icon_actions():
+def test_header_keeps_secondary_actions_but_moves_new_session_into_the_list():
     assert '<span>Sessions</span>' in INDEX
-    for element_id in ("btnSessionSelectMode", "btnNewSessionFolder", "btnSessionSearch", "btnNewChat"):
+    for element_id in ("btnSessionSelectMode", "btnNewSessionFolder", "btnSessionSearch"):
         assert f'id="{element_id}"' in INDEX
     assert INDEX.index('id="btnSessionSelectMode"') < INDEX.index('id="btnNewSessionFolder"')
     assert INDEX.index('id="btnNewSessionFolder"') < INDEX.index('id="btnSessionSearch"')
-    assert INDEX.index('id="btnSessionSearch"') < INDEX.index('id="btnNewChat"')
-    assert 'aria-label="New session"' in INDEX
+    actions_start = INDEX.index('<div class="panel-head-actions">', INDEX.index('<span>Sessions</span>'))
+    actions_end = INDEX.index('</div>', actions_start)
+    assert 'id="btnNewChat"' not in INDEX[actions_start:actions_end]
+    assert 'class="session-new-session-proxy" id="btnNewChat"' in INDEX
+    assert "button.id='btnSessionListNewChat'" in SESSIONS
+    assert "label.textContent='New session'" in SESSIONS
+    assert "if(proxy&&!proxy.disabled) proxy.click();" in SESSIONS
     assert 'placeholder="Filter sessions..."' in INDEX
 
 

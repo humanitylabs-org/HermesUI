@@ -1465,6 +1465,7 @@ function _announceNewSessionWorkspace(session){
 
 function _setNewSessionPending(pending){
   const ids=['btnNewChat','btnTitlebarNewChat'];
+  ids.push('btnSessionListNewChat');
   for (let i=0;i<ids.length;i++){
     const btn=$(ids[i]);
     if(!btn) continue;
@@ -7182,6 +7183,34 @@ function _sessionStatusGroups(orderedSessions) {
   return groups;
 }
 
+function _sessionNewSessionLauncher() {
+  const divider=document.createElement('div');
+  divider.className='session-new-session-divider';
+  const button=document.createElement('button');
+  button.type='button';
+  button.id='btnSessionListNewChat';
+  button.className='session-new-session-button';
+  button.setAttribute('aria-label','New session');
+  button.title='New session (Cmd/Ctrl+K)';
+  const pending=Boolean(_newSessionInFlight);
+  button.disabled=pending;
+  button.setAttribute('aria-busy',pending?'true':'false');
+  const plus=document.createElement('span');
+  plus.className='session-new-session-plus';
+  plus.setAttribute('aria-hidden','true');
+  plus.textContent='+';
+  const label=document.createElement('span');
+  label.textContent='New session';
+  button.appendChild(plus);
+  button.appendChild(label);
+  button.onclick=()=>{
+    const proxy=$('btnNewChat');
+    if(proxy&&!proxy.disabled) proxy.click();
+  };
+  divider.appendChild(button);
+  return divider;
+}
+
 function _serverNowMs() {
   // Compensate for clock skew between client and server (issue #1144).
   // Returns an approximation of the current server time in ms.
@@ -8515,7 +8544,16 @@ function renderSessionListFromCache(){
   // current session-row window plus top/bottom spacers inside each group body;
   // headers remain real DOM so pin/archive/status grouping and clicks survive.
   let globalSessionRowIndex=0;
+  let newSessionLauncherInserted=false;
+  const appendNewSessionLauncher=()=>{
+    if(newSessionLauncherInserted) return;
+    list.appendChild(_sessionNewSessionLauncher());
+    newSessionLauncherInserted=true;
+  };
   for(const g of groups){
+    // With both status groups present, this puts the primary creation action in
+    // the requested visual gap: after Working and immediately before Done.
+    if(g.status==='done') appendNewSessionLauncher();
     const wrapper=document.createElement('div');
     wrapper.className='session-date-group';
     const hdr=document.createElement('div');
@@ -8556,7 +8594,10 @@ function renderSessionListFromCache(){
     if(groupBottomPad>0){ body.appendChild(_sessionVirtualSpacer(groupBottomPad,'after')); }
     wrapper.appendChild(body);
     list.appendChild(wrapper);
+    if(g.status==='working') appendNewSessionLauncher();
   }
+  // Empty lists and one-group edge states still keep New session reachable.
+  appendNewSessionLauncher();
   if(virtualAnchorScrollTop!==null){
     list.scrollTop=virtualAnchorScrollTop;
   }else if(listScrollTopBeforeRender>0){

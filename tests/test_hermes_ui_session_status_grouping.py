@@ -29,9 +29,21 @@ def test_sidebar_renders_only_working_and_done_status_groups():
     assert ".session-status-group-indicator{" in STYLE
 
 
+def test_new_session_launcher_separates_working_from_done():
+    assert "function _sessionNewSessionLauncher()" in SESSIONS
+    assert "button.id='btnSessionListNewChat'" in SESSIONS
+    assert "if(g.status==='done') appendNewSessionLauncher();" in SESSIONS
+    assert "if(g.status==='working') appendNewSessionLauncher();" in SESSIONS
+    assert "appendNewSessionLauncher();\n  if(virtualAnchorScrollTop" in SESSIONS
+    assert ".session-new-session-button{width:100%;min-height:44px" in STYLE
+    assert ".session-new-session-proxy[hidden]{display:none!important;}" in STYLE
+    assert "ids.push('btnSessionListNewChat')" in SESSIONS
+    assert "button.disabled=pending" in SESSIONS
+
+
 def test_status_group_assets_have_matching_cache_identity():
-    css_suffix = "&shell-theme=v1&session-status-groups=v1"
-    js_suffix = "&tab-polish=v1&status-groups=v1"
+    css_suffix = "&private-app-rail=v1&new-session-divider=v1"
+    js_suffix = "&tab-polish=v1&status-groups=v1&new-session-divider=v1"
     index_css = next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
     sw_css = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     assert css_suffix in index_css
