@@ -347,3 +347,67 @@ setTimeout(()=>{{
 def test_automatic_last_prompt_hydration_is_bounded_before_manual_load():
     assert "const PROMPT_EVIDENCE_MAX_PAGES=4;" in DASHBOARD
     assert "while(before>0&&!text&&pages<PROMPT_EVIDENCE_MAX_PAGES)" in DASHBOARD
+
+
+def test_high_signal_never_promotes_continue_now_control_to_last_prompt():
+    node = shutil.which("node")
+    assert node is not None
+    harness = f"""
+const fs=require('fs');const vm=require('vm');const elements=new Map();
+function element(id){{if(!elements.has(id))elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},disabled:false,addEventListener(){{}},setAttribute(){{}},removeAttribute(){{}}}});return elements.get(id);}}
+global.window=global;global.document={{readyState:'complete',documentElement:{{dataset:{{sessionView:'dashboard'}}}},getElementById:element,addEventListener(){{}}}};
+global.location={{href:'https://device.example/hermesUI/session/session-1'}};global.history={{state:null,replaceState(){{}}}};global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
+const continuation='[System: Continue now. Execute the required tool calls and only send your final answer after completing the task.]';
+global.S={{session:{{session_id:'session-1'}},messages:[
+  {{role:'user',content:'[Workspace::v1: /tmp]\\nPlease reconcile the client list.',id:'u1'}},
+  {{role:'user',content:continuation,id:'control'}},
+  {{role:'assistant',content:'The client list is reconciled.',id:'final',finish_reason:'stop'}},
+],busy:false,activeStreamId:null}};
+global.msgContent=m=>String(m&&m.content||'');global.renderMd=s=>String(s||'');global._stripWorkspaceDisplayPrefix=s=>String(s||'').replace(/^\\s*\\[Workspace[^\\]]*\\]\\s*/i,'').trim();global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');global._messageIsRenderable=m=>!!(m&&m.role!=='tool'&&m.content);global._isContextCompactionMessage=()=>false;global._isPreservedCompressionTaskListMessage=()=>false;global._isRecoveryControlMessage=m=>String(m&&m.content||'')===continuation;global.INFLIGHT={{}};global.requestAnimationFrame=cb=>{{cb();return 1;}};global.queueMicrotask=cb=>cb();global._messagesTruncated=false;global._oldestIdx=0;global.fetch=async()=>{{throw new Error('manual summaries must not run');}};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
+setTimeout(()=>{{syncSessionDashboard();process.stdout.write(JSON.stringify({{prompt:element('sessionDashboardInstruction').innerHTML,result:element('sessionDashboardCompleted').innerHTML}}));}},20);
+"""
+    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "prompt": "Please reconcile the client list.",
+        "result": "The client list is reconciled.",
+    }
+
+
+def test_continue_now_control_classifier_is_exact_in_loaded_and_live_paths():
+    node = shutil.which("node")
+    assert node is not None
+    exact = "[System: Continue now. Execute the required tool calls and only send your final answer after completing the task.]"
+    cases = [exact, f"User said: {exact}", "[System: Continue now.]"]
+
+    def extract_function(source: str, name: str) -> str:
+        start = source.index(f"function {name}(")
+        brace = source.index("{", start)
+        depth = 0
+        for index in range(brace, len(source)):
+            if source[index] == "{":
+                depth += 1
+            elif source[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    return source[start:index + 1]
+        raise AssertionError(f"{name} body not closed")
+
+    classifiers = [
+        ((ROOT / "static" / "ui.js").read_text(encoding="utf-8"), "_isRecoveryControlMessageText"),
+        ((ROOT / "static" / "messages.js").read_text(encoding="utf-8"), "_streamRecoveryControlMessageText"),
+    ]
+    for source, name in classifiers:
+        script = (
+            extract_function(source, name)
+            + "\nconst cases=JSON.parse(process.argv[1]);"
+            + f"process.stdout.write(JSON.stringify(cases.map({name})));"
+        )
+        result = subprocess.run(
+            [node, "-e", script, json.dumps(cases)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert json.loads(result.stdout) == [True, False, False]

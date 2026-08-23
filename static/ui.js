@@ -11077,7 +11077,8 @@ function _isRecoveryControlMessageText(text){
   if(!normalized) return false;
   const systemRecovery=/^\[System:/i.test(normalized)
     && (/continue exactly where you left off/i.test(normalized)
-      || /do not retry the same tool call/i.test(normalized));
+      || /do not retry the same tool call/i.test(normalized)
+      || /^\[System:\s*Continue now\.\s*Execute the required tool calls and only send your final answer after completing the task\.\s*\]$/i.test(normalized));
   const backendRecovery=/^the live worker stopped before this run finished\.?$/i.test(normalized);
   return !!(systemRecovery || backendRecovery);
 }

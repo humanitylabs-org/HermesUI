@@ -2276,14 +2276,15 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
     if(!normalized) return false;
     const systemRecovery=/^\[System:/i.test(normalized)
       && (/continue exactly where you left off/i.test(normalized)
-        || /do not retry the same tool call/i.test(normalized));
+        || /do not retry the same tool call/i.test(normalized)
+        || /^\[System:\s*Continue now\.\s*Execute the required tool calls and only send your final answer after completing the task\.\s*\]$/i.test(normalized));
     const backendRecovery=/^the live worker stopped before this run finished\.?$/i.test(normalized);
     return !!(systemRecovery || backendRecovery);
   }
   function _streamRecoveryControlMessage(m){
     if(!m||m.role==='tool') return false;
     if(m.recovery_control===true) return true;
-    // Backward-compat ONLY for pre-marker persisted sessions: match the two
+    // Backward-compat ONLY for pre-marker persisted sessions: match known
     // fully-anchored synthetic recovery strings. Do NOT fall back to
     // provider_details_label — a genuine "Response interrupted" card the user
     // SHOULD see also carries the 'Interruption details' label, and filtering
