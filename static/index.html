@@ -70,7 +70,7 @@
     };
   }
 })()</script>
-<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2">
+<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2&opus-polish=v1">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
@@ -514,6 +514,7 @@
           <div class="session-dashboard-card-head">
             <div class="session-dashboard-heading-actions">
               <div class="session-dashboard-label">Goal</div>
+              <span class="session-dashboard-updated" id="sessionDashboardSummaryUpdated" hidden></span>
               <div class="composer-model-wrap session-dashboard-model-wrap">
                 <button class="composer-model-chip session-dashboard-model-chip" type="button" data-high-signal-model data-summary-kind="goal" aria-label="Select Goal and Status model" aria-haspopup="listbox" aria-expanded="false" aria-controls="sessionDashboardModelDropdown" title="Goal and Status model">
                   <span class="composer-model-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg></span>
@@ -522,7 +523,6 @@
                 </button>
               </div>
               <button type="button" class="session-dashboard-refresh" id="sessionDashboardSummaryRefresh" aria-label="Refresh goal">Refresh</button>
-              <span class="session-dashboard-updated" id="sessionDashboardSummaryUpdated" hidden></span>
             </div>
           </div>
           <div class="session-dashboard-copy session-dashboard-copy--original" id="sessionDashboardOriginalRequest"></div>
@@ -536,6 +536,7 @@
           <div class="session-dashboard-card-head">
             <div class="session-dashboard-heading-actions">
               <div class="session-dashboard-label">Status</div>
+              <span class="session-dashboard-updated" id="sessionDashboardUpdated" hidden></span>
               <div class="composer-model-wrap session-dashboard-model-wrap">
                 <button class="composer-model-chip session-dashboard-model-chip" type="button" data-high-signal-model data-summary-kind="status" aria-label="Select Goal and Status model" aria-haspopup="listbox" aria-expanded="false" aria-controls="sessionDashboardModelDropdown" title="Goal and Status model">
                   <span class="composer-model-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg></span>
@@ -544,7 +545,6 @@
                 </button>
               </div>
               <button type="button" class="session-dashboard-refresh" id="sessionDashboardRefresh" aria-label="Refresh status">Refresh</button>
-              <span class="session-dashboard-updated" id="sessionDashboardUpdated" hidden></span>
             </div>
           </div>
           <div class="session-dashboard-copy" id="sessionDashboardStatus" aria-live="polite"></div>
@@ -1083,14 +1083,20 @@
                 <div class="settings-section-meta" id="hermesSessionMeta" data-i18n="active_conversation_none">No active conversation selected.</div>
               </div>
             </div>
-            <div class="hermes-action-grid">
-              <button class="settings-action-btn" id="btnDownload" title="Download as Markdown" data-i18n-title="download_transcript"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="transcript">Transcript</span></button>
-              <button class="settings-action-btn" id="btnExportJSON" title="Export full session as JSON" data-i18n-title="export_session_json_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"/><path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1"/></svg> <span data-i18n="export_session_json">JSON</span></button>
-              <button class="settings-action-btn" id="btnShareSession" title="Create a public read-only share link" data-i18n-title="share_session_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4"/><path d="M15.4 6.5 8.6 10.5"/></svg> <span data-i18n="share_session">Share</span></button>
-              <button class="settings-action-btn danger" id="btnStopSharingSession" title="Revoke the public read-only share link for this conversation" data-i18n-title="stop_sharing_session_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-8.49 0L6 11.5"/><path d="M18 16a6 6 0 0 1-8.49 0L6 12.5"/><line x1="3" y1="3" x2="21" y2="21"/></svg> <span data-i18n="stop_sharing_session">Stop sharing</span></button>
-              <button class="settings-action-btn" id="btnExportHTML" title="Export as a self-contained HTML page" data-i18n-title="export_session_html_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13l-2 2 2 2"/><path d="M15 13l2 2-2 2"/></svg> <span data-i18n="export_session_html">HTML</span></button>
-              <button class="settings-action-btn" id="btnImportJSON" title="Import session from JSON" data-i18n-title="import_session_json_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> <span data-i18n="import">Import</span></button>
-              <button class="settings-action-btn danger" id="btnClearConvModal" onclick="clearConversation()" title="Clear all messages in this conversation" data-i18n-title="clear_conversation_btn_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 1 2 2 2v2"/></svg> <span data-i18n="clear">Clear</span></button>
+            <div class="hermes-action-groups">
+              <div class="hermes-action-list" aria-label="Conversation files">
+                <button class="settings-action-btn" id="btnDownload" title="Download as Markdown" data-i18n-title="download_transcript"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <span data-i18n="transcript">Transcript</span><span class="settings-action-verb">Download</span></button>
+                <button class="settings-action-btn" id="btnExportJSON" title="Export full session as JSON" data-i18n-title="export_session_json_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"/><path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1"/></svg> <span data-i18n="export_session_json">JSON</span><span class="settings-action-verb">Export</span></button>
+                <button class="settings-action-btn" id="btnExportHTML" title="Export as a self-contained HTML page" data-i18n-title="export_session_html_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13l-2 2 2 2"/><path d="M15 13l2 2-2 2"/></svg> <span data-i18n="export_session_html">HTML</span><span class="settings-action-verb">Export</span></button>
+                <button class="settings-action-btn" id="btnImportJSON" title="Import session from JSON" data-i18n-title="import_session_json_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> <span data-i18n="import">Import</span><span class="settings-action-verb">Import</span></button>
+              </div>
+              <div class="hermes-action-list hermes-action-list--sharing" aria-label="Sharing">
+                <button class="settings-action-btn" id="btnShareSession" title="Create a public read-only share link" data-i18n-title="share_session_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4"/><path d="M15.4 6.5 8.6 10.5"/></svg> <span data-i18n="share_session">Share</span><span class="settings-action-verb">Create link</span></button>
+                <button class="settings-action-btn danger" id="btnStopSharingSession" title="Revoke the public read-only share link for this conversation" data-i18n-title="stop_sharing_session_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-8.49 0L6 11.5"/><path d="M18 16a6 6 0 0 1-8.49 0L6 12.5"/><line x1="3" y1="3" x2="21" y2="21"/></svg> <span data-i18n="stop_sharing_session">Stop sharing</span><span class="settings-action-verb">Revoke</span></button>
+              </div>
+              <div class="hermes-action-list hermes-action-list--danger" aria-label="Conversation data">
+                <button class="settings-action-btn danger" id="btnClearConvModal" onclick="clearConversation()" title="Clear all messages in this conversation" data-i18n-title="clear_conversation_btn_tooltip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 1 2 2 2v2"/></svg> <span data-i18n="clear">Clear</span><span class="settings-action-verb">Clear</span></button>
+              </div>
             </div>
             <input type="file" id="importFileInput" accept=".json" style="display:none">
           </div>
@@ -1914,16 +1920,16 @@
 <script src="static/i18n.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/icons.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/assistant_turn_anchors.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/ui.js?v=__WEBUI_VERSION__&tab-polish=v1&recovery-filter=v2&background-resume=v1" defer></script>
+<script src="static/ui.js?v=__WEBUI_VERSION__&tab-polish=v1&recovery-filter=v2&background-resume=v1&classic-duration=v1" defer></script>
 <script src="static/workspace.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/terminal.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/sessions.js?v=__WEBUI_VERSION__&tab-polish=v1&status-groups=v1&new-session-divider=v2" defer></script>
+<script src="static/sessions.js?v=__WEBUI_VERSION__&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1" defer></script>
 <script src="static/commands.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/messages.js?v=__WEBUI_VERSION__&tab-polish=v1&recovery-filter=v2" defer></script>
 <script src="static/extension_settings.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/panels.js?v=__WEBUI_VERSION__&cron-notifications=v3&high-signal-model=v1" defer></script>
-<script src="static/session-dashboard.js?v=__WEBUI_VERSION__&tab-polish=v1&high-signal-model=v6&high-signal-history=v1&background-resume=v1&mode-rail=v1" defer></script>
-<script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__" defer></script>
+<script src="static/session-dashboard.js?v=__WEBUI_VERSION__&tab-polish=v1&high-signal-model=v6&high-signal-history=v1&background-resume=v1&mode-rail=v1&summary-trust=v1" defer></script>
+<script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__&labeled-adjacent-tabs=v1" defer></script>
 <script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1" defer></script>
 <script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3&semantic-icons=v1" defer></script>
 <script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>

@@ -177,19 +177,19 @@
     tab.dataset.sid=sid;
     if(isCurrent) tab.setAttribute('aria-current','page');
 
-    const title=document.createElement('span');
-    title.className='mobile-session-tab-title';
-    title.textContent=label;
-    tab.appendChild(title);
-    if(visual.streaming||visual.unread||visual.attention){
+    if(visual.streaming||visual.attention){
       tab.classList.add('has-session-state');
       const indicator=document.createElement('span');
       indicator.className='mobile-session-tab-state session-state-indicator'
-        +(visual.streaming?' is-streaming':(visual.unread?' is-unread':''))
+        +(visual.streaming?' is-streaming':'')
         +(visual.attention?` is-attention-${visual.attention}`:'');
       indicator.setAttribute('aria-hidden','true');
       tab.appendChild(indicator);
     }
+    const title=document.createElement('span');
+    title.className='mobile-session-tab-title';
+    title.textContent=label;
+    tab.appendChild(title);
     return tab;
   }
 

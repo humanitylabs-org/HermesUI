@@ -11,10 +11,10 @@ UI = (ROOT / "static" / "ui.js").read_text(encoding="utf-8")
 
 
 def test_mobile_session_swipe_is_a_versioned_frontend_shell_asset():
-    script = 'static/session-swipe-navigation.js?v=__WEBUI_VERSION__'
+    script = 'static/session-swipe-navigation.js?v=__WEBUI_VERSION__&labeled-adjacent-tabs=v1'
     assert f'src="{script}" defer' in INDEX
     assert INDEX.index(script) > INDEX.index('static/sessions.js?v=__WEBUI_VERSION__')
-    assert "'./static/session-swipe-navigation.js' + VQ" in SW
+    assert "'./static/session-swipe-navigation.js' + VQ + '&labeled-adjacent-tabs=v1'" in SW
     assert "fetch(" not in SWIPE
     assert "/api/" not in SWIPE
 
@@ -140,6 +140,9 @@ def test_mobile_tab_boundaries_plus_position_and_session_state_are_explicit():
     assert "mobile-session-tab-spin" not in CSS
     assert "tabsRoot.setAttribute('aria-busy'" not in SWIPE
     assert "mobile-session-tab-state session-state-indicator" in SWIPE
+    assert "if(visual.streaming||visual.attention)" in SWIPE
+    assert "tab.appendChild(indicator)" in SWIPE
+    assert SWIPE.index("tab.appendChild(indicator)") < SWIPE.index("tab.appendChild(title)")
     assert "row.classList.contains('streaming')" in SWIPE
     assert "row.classList.contains('unread')" in SWIPE
     assert "row.classList.contains('needs-attention')" in SWIPE
@@ -164,7 +167,7 @@ def test_session_switch_loading_matches_classic_or_high_signal_layout():
         assert f'<span class="session-switch-skeleton-pane-label">{label}</span>' in INDEX
     assert 'html[data-session-view="classic"] .session-switch-skeleton-high-signal' in CSS
     assert 'html[data-session-view="dashboard"] .session-switch-skeleton-classic' in CSS
-    assert ".session-switch-skeleton-high-signal{height:100%;min-height:0;display:grid;grid-template-rows:minmax(104px,.55fr) minmax(160px,1.15fr)" in CSS
+    assert ".session-switch-skeleton-high-signal{height:100%;min-height:0;display:grid;grid-template-rows:auto auto auto minmax(0,1fr)" in CSS
     assert "session-switch-skeleton-pane--instruction" in INDEX
     assert "session-switch-skeleton-steer" in INDEX
     assert ".messages.session-switch-loading > .session-dashboard" in CSS

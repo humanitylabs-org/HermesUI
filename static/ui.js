@@ -18833,7 +18833,7 @@ function _syncToolCallGroupSummary(group){
     }else if(isWorklogGroup){
       const processedLabel=isLiveWorklog
         ? _activityProcessedElapsedLabel(group)
-        : _activitySettledProcessedLabel(group);
+        : t('processed_elapsed','');
       label.textContent=processedLabel||t('processed_elapsed','');
     }else{
       const rows=Array.from(group.querySelectorAll('.tool-card-row'));

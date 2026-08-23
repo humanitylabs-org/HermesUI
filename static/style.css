@@ -1628,7 +1628,7 @@
      when they're visible — covered by the hover / streaming / unread /
      menu-open / focus-within rule below. */
   .session-item{padding:8px 8px;margin-bottom:2px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted);transition:background .15s,color .15s,transform .5s cubic-bezier(.22,.61,.36,1),box-shadow .15s ease;display:flex;align-items:flex-start;gap:8px;min-width:0;position:relative;touch-action:pan-y;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transform:translate3d(var(--session-swipe-offset,0),var(--session-reflow-offset,0),0);}
-  .session-item.streaming,.session-item.unread,.session-item.needs-attention,.session-item:focus-within,.session-item.menu-open{padding-right:40px;}
+  .session-item.streaming,.session-item.needs-attention,.session-item:focus-within,.session-item.menu-open{padding-right:40px;}
   .session-item.needs-attention{box-shadow:inset 3px 0 0 var(--warning);background:color-mix(in srgb,var(--warning) 8%,transparent);}
   .session-item.attention-approval{box-shadow:inset 3px 0 0 var(--error);background:color-mix(in srgb,var(--error) 9%,transparent);}
   .session-item.attention-clarify{box-shadow:inset 3px 0 0 var(--warning);background:color-mix(in srgb,var(--warning) 8%,transparent);}
@@ -1749,7 +1749,7 @@
   /* ── Session action trigger + dropdown ── */
   .session-actions{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .15s ease;}
   .session-item:hover .session-actions,.session-item:focus-within .session-actions,.session-item.menu-open .session-actions{opacity:1;pointer-events:auto;}
-  .session-item.streaming:not(:hover):not(:focus-within):not(.menu-open) .session-actions,.session-item.unread:not(:hover):not(:focus-within):not(.menu-open) .session-actions{opacity:0;pointer-events:none;}
+  .session-item.streaming:not(:hover):not(:focus-within):not(.menu-open) .session-actions{opacity:0;pointer-events:none;}
   .session-actions-trigger{width:26px;height:26px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;padding:0;line-height:1;display:inline-flex;align-items:center;justify-content:center;transition:background .12s,color .12s,border-color .12s;}
   .session-actions-trigger:hover{background:var(--hover-bg);color:var(--text);}
   .session-actions-trigger.active{background:var(--accent-bg);border-color:var(--accent-bg-strong);color:var(--text);}
@@ -2199,7 +2199,9 @@
   .tailnet-session-view-icon svg{display:block;width:20px;height:20px;}
   html[data-session-view="classic"] .tailnet-session-view-icon--signal,
   html[data-session-view="dashboard"] .tailnet-session-view-icon--classic{display:flex;}
-  html[data-session-view="dashboard"] #sessionViewToggle{color:var(--text);background:var(--hover-bg);}
+  .tailnet-session-view-toggle{position:relative;margin-bottom:7px;background:var(--surface-subtle);color:var(--text);box-shadow:inset 0 0 0 1px var(--border);}
+  .tailnet-session-view-toggle::after{content:"";position:absolute;left:4px;right:4px;bottom:-5px;height:1px;background:var(--border);pointer-events:none;}
+  html[data-session-view="dashboard"] #sessionViewToggle{color:var(--accent-text);background:var(--accent-bg);box-shadow:inset 0 0 0 1px var(--accent-bg-strong);}
   .tailnet-theme-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
   .tailnet-theme-icon svg{display:block;width:20px;height:20px;}
   :root:not(.dark) .tailnet-theme-icon--sun,
@@ -2370,12 +2372,7 @@
   html[data-session-view="dashboard"] body .composer-workspace-files-btn,
   html[data-session-view="dashboard"] body .workspace-toggle-btn,
   html[data-session-view="dashboard"] body .mobile-files-btn{display:none!important;}
-  /* High Signal needs the reading pane more than the session list needs empty
-     width. Keep Classic at its normal 300px, while using the sidebar's proven
-     desktop floor for High Signal everywhere the sidebar is an inline pane. */
-  @media(min-width:641px){
-    html[data-session-view="dashboard"] .layout > .sidebar{width:180px;}
-  }
+  /* Keep the Sessions column stable while the right pane switches modes. */
   .composer-workspace-chip{border-left:0!important;border-radius:999px!important;padding-left:12px!important;}
   .composer-footer.cf-burger .composer-workspace-group{display:none!important;}
   .sidebar .panel-view{margin-left:0!important;}
@@ -2521,7 +2518,7 @@
   .messages-shell.session-swipe-active{overflow:hidden;}
   @media (max-width:640px) and (pointer:coarse){.messages-shell{touch-action:pan-y;}}
   .messages{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0;position:relative;z-index:0;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior-y:contain;overflow-anchor:auto;}
-  .session-dashboard{width:100%;max-width:none;height:100%;min-height:0;margin:0;padding:0;box-sizing:border-box;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(104px,.55fr) minmax(160px,1.15fr) minmax(88px,.55fr) minmax(0,1.8fr);gap:0;overflow:hidden;align-self:stretch;}
+  .session-dashboard{width:100%;max-width:none;height:100%;min-height:0;margin:0;padding:0;box-sizing:border-box;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr);gap:0;overflow:hidden;align-self:stretch;}
   html[data-session-view="dashboard"] .messages{overflow:hidden;}
   html[data-session-view="dashboard"] .session-dashboard:not([hidden]){display:grid;}
   html[data-session-view="dashboard"] #msgInner,
@@ -2543,7 +2540,7 @@
   .session-switch-skeleton-avatar{display:block;width:22px;height:22px;flex:0 0 22px;border-radius:50%;}
   .session-switch-skeleton-role-line{display:block;width:72px;height:9px;border-radius:999px;}
   .session-switch-skeleton-chat-copy{display:flex;flex-direction:column;gap:9px;width:min(680px,calc(100% - 30px));margin-left:30px;min-width:0;}
-  .session-switch-skeleton-high-signal{height:100%;min-height:0;display:grid;grid-template-rows:minmax(104px,.55fr) minmax(160px,1.15fr) minmax(88px,.55fr) minmax(0,1.8fr);overflow:hidden;}
+  .session-switch-skeleton-high-signal{height:100%;min-height:0;display:grid;grid-template-rows:auto auto auto minmax(0,1fr);overflow:hidden;}
   .session-switch-skeleton-pane{min-width:0;min-height:0;padding:14px 18px;display:flex;flex-direction:column;gap:10px;overflow:hidden;box-sizing:border-box;}
   .session-switch-skeleton-pane:not(:last-child){border-bottom:1px solid var(--border);}
   .session-switch-skeleton-pane-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:1px;}
@@ -2567,7 +2564,9 @@
   .session-dashboard-section{min-width:0;min-height:0;max-width:100%;padding:14px 18px;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;background:transparent;border:0;border-radius:0;box-shadow:none;isolation:isolate;}
   .session-dashboard-section:not(:last-child){border-bottom:1px solid var(--border);}
   .session-dashboard-section--completed[data-empty="1"]{opacity:.72;}
-  .session-dashboard-section--original{overflow:hidden;}
+  .session-dashboard-section--original{overflow:hidden;max-height:min(190px,24vh);}
+  .session-dashboard-section--instruction{max-height:min(220px,28vh);}
+  .session-dashboard-section--status{max-height:min(170px,22vh);}
   .session-dashboard-section--original .session-dashboard-label{margin-bottom:10px;}
   .session-dashboard-card-head{display:flex;align-items:center;justify-content:flex-start;gap:12px;}
   .session-dashboard-heading-actions,.session-dashboard-status-heading{display:flex;align-items:center;gap:8px;min-width:0;width:100%;}
@@ -2576,6 +2575,8 @@
   .session-dashboard-turn{display:inline-flex;align-items:center;white-space:nowrap;border:1px solid var(--border);border-radius:999px;padding:2px 7px;color:var(--muted);font-size:10px;font-weight:600;letter-spacing:0;text-transform:none;}
   .session-dashboard-turn[hidden]{display:none;}
   .session-dashboard-copy{min-width:0;max-width:100%;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;color:var(--text);font-size:14px;line-height:1.58;white-space:normal;overflow-wrap:anywhere;word-break:break-word;box-sizing:border-box;}
+  .session-dashboard-copy[data-summary-state="empty"]{color:var(--muted);}
+  .session-dashboard-copy[data-summary-state="error"]{color:var(--error);}
   .session-dashboard-copy>*{min-width:0;max-width:100%;box-sizing:border-box;}
   .session-dashboard-copy p{margin:0 0 10px;}
   .session-dashboard-copy p:last-child{margin-bottom:0;}
@@ -2603,15 +2604,17 @@
   .session-dashboard-refresh{border:1px solid var(--border2);border-radius:7px;background:transparent;color:var(--muted);padding:3px 7px;font:inherit;font-size:10px;font-weight:600;line-height:1.35;cursor:pointer;}
   .session-dashboard-refresh:hover{color:var(--text);background:var(--hover-bg);}
   .session-dashboard-model-wrap{min-width:0;}
-  .session-dashboard-model-chip{min-height:24px;max-width:172px;padding:3px 6px 3px 7px;gap:5px;border-radius:7px;font-size:10px;}
-  .session-dashboard-model-chip .composer-model-icon svg{width:11px;height:11px;}
+  .session-dashboard-model-chip{min-height:24px;max-width:172px;padding:3px 4px;gap:4px;border:0;background:transparent;box-shadow:none;border-radius:6px;font-size:10px;}
+  .session-dashboard-model-chip:hover,.session-dashboard-model-chip:focus-visible,.session-dashboard-model-chip.active{background:var(--hover-bg);border:0;box-shadow:none;}
+  .session-dashboard-model-chip .composer-model-icon{display:none;}
   .session-dashboard-model-chip .composer-model-chevron svg{width:8px;height:8px;}
   .session-dashboard-model-chip .composer-model-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .session-dashboard-model-dropdown .model-scope-note{font-size:10px;}
   .session-dashboard-model-dropdown .model-opt{padding:8px 11px;}
   .session-dashboard-model-dropdown .model-opt-name{font-size:12px;}
   .session-dashboard-model-dropdown .model-group{padding:7px 11px 3px;}
-  .session-dashboard-updated{display:inline-flex;align-items:center;flex:0 0 auto;white-space:nowrap;font-size:10px;color:var(--muted);opacity:.7;}
+  .session-dashboard-updated{display:inline-flex;align-items:center;flex:0 0 auto;white-space:nowrap;font-size:10px;color:var(--muted);opacity:.72;}
+  .session-dashboard-updated[data-stale="1"]{opacity:1;}
   .session-dashboard-updated[hidden]{display:none!important;}
 @media (hover:hover) and (pointer:fine){.messages{overflow-anchor:none;}}
   /* Overlay scroll controls so they do not affect the transcript's native scroll geometry. */
@@ -3414,10 +3417,10 @@
     .session-switch-skeleton-chat-row{gap:7px;}
     .session-switch-skeleton-chat-copy{gap:7px;width:calc(100% - 28px);margin-left:28px;}
     .session-switch-skeleton-line{height:10px;}
-    .session-switch-skeleton-high-signal{height:100%;grid-template-rows:minmax(104px,.5fr) minmax(132px,1.12fr) minmax(78px,.5fr) minmax(0,1.7fr);}
+    .session-switch-skeleton-high-signal{height:100%;grid-template-rows:auto auto auto minmax(0,1fr);}
     .session-switch-skeleton-pane{padding:9px 12px;gap:7px;}
     .session-switch-skeleton-pane-label{font-size:10px;margin-bottom:0;}
-    .session-dashboard{height:100%;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(104px,.5fr) minmax(132px,1.12fr) minmax(78px,.5fr) minmax(0,1.7fr);overflow:hidden;}
+    .session-dashboard{height:100%;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr);overflow:hidden;}
     html[data-session-view="dashboard"] .messages{overflow:hidden;}
     .session-dashboard-section{min-height:0;padding:9px 12px;overflow:hidden;}
     .session-dashboard-label{font-size:10px;margin-bottom:4px;}
@@ -3458,11 +3461,11 @@
     .mobile-session-tabs-track::before{content:'';flex:0 0 var(--mobile-session-tab-gutter,20%);height:1px;}
     .mobile-session-tabs-track::after{content:'';flex:0 0 var(--mobile-session-end-gutter,calc(50% - 20px));height:1px;}
     .mobile-session-tab-list{display:flex;align-items:flex-end;gap:4px;flex:0 0 auto;height:44px;}
-    .mobile-session-tab{position:relative;flex:0 0 var(--mobile-session-tab-width,60vw);width:var(--mobile-session-tab-width,60vw);height:40px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-bottom-color:var(--border);border-radius:11px 11px 0 0;background:color-mix(in srgb,var(--surface) 72%,var(--sidebar));color:var(--muted);padding:0 13px;font:inherit;font-size:11px;font-weight:600;line-height:1;cursor:pointer;overflow:hidden;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-sizing:border-box;box-shadow:0 -1px 5px rgba(0,0,0,.05);transition:color .14s,border-color .14s,background .14s,box-shadow .14s;}
+    .mobile-session-tab{position:relative;flex:0 0 var(--mobile-session-tab-width,60vw);width:var(--mobile-session-tab-width,60vw);height:40px;display:flex;align-items:center;justify-content:flex-start;gap:7px;border:1px solid var(--border);border-bottom-color:var(--border);border-radius:11px 11px 0 0;background:color-mix(in srgb,var(--surface) 72%,var(--sidebar));color:var(--muted);padding:0 13px;font:inherit;font-size:11px;font-weight:600;line-height:1;cursor:pointer;overflow:hidden;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-sizing:border-box;box-shadow:0 -1px 5px rgba(0,0,0,.05);transition:color .14s,border-color .14s,background .14s,box-shadow .14s;}
     .mobile-session-tab[aria-selected="true"]{z-index:2;background:var(--surface-subtle-hover,var(--hover-bg));border-color:var(--border);border-bottom-color:var(--border);color:var(--text);font-weight:800;box-shadow:none;}
     .mobile-session-tab-title{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     .mobile-session-tab.has-session-state .mobile-session-tab-title{max-width:calc(100% - 26px);}
-    .mobile-session-tab-state{position:absolute;right:10px;top:50%;transform:translateY(-50%);}
+    .mobile-session-tab-state{position:static;transform:none;flex:0 0 10px;}
     .app-titlebar-new-chat.mobile-session-new-tab{display:inline-flex;align-items:center;justify-content:center;flex:0 0 40px;width:40px;height:40px;margin-bottom:0;padding:0;border:1px solid var(--border);border-bottom-color:var(--border);border-radius:11px 11px 0 0;background:color-mix(in srgb,var(--surface) 72%,var(--sidebar));color:var(--muted);box-shadow:0 -1px 5px rgba(0,0,0,.05);}
     .app-titlebar-new-chat.mobile-session-new-tab:hover,.app-titlebar-new-chat.mobile-session-new-tab:focus-visible{background:var(--hover-bg);color:var(--text);}
     .app-titlebar-new-chat.mobile-session-new-tab:disabled{opacity:.45;cursor:wait;}
@@ -3495,7 +3498,7 @@
     .topbar-chips{flex-wrap:nowrap;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
     .topbar-chips .chip,.topbar-chips .ws-chip,.topbar-chips button{font-size:11px!important;padding:4px 8px!important;white-space:nowrap;}
     .settings-main{padding:18px 16px;}
-    .hermes-action-grid{grid-template-columns:1fr;}
+
     /* #4856: use overflow-x:clip, NOT hidden. `overflow-x:hidden` forces
        overflow-y from visible to auto (CSS spec: the two axes can't be
        visible+clipped), which turns .messages-inner into a scroll container.
@@ -3594,7 +3597,7 @@
     .icon-btn svg,
     .send-btn svg{display:block;flex:0 0 auto;}
     .session-item{min-height:44px;padding:10px 40px 10px 12px;}
-    .session-item.streaming,.session-item.unread{padding-right:40px;}
+    .session-item.streaming,.session-item.needs-attention{padding-right:40px;}
     .session-actions{opacity:1;pointer-events:auto;}
     /* Empty state */
     .empty-state h2{font-size:18px;}
@@ -3606,7 +3609,7 @@
   @media (hover:none) and (pointer:coarse){
     .session-actions{display:none;}
     .session-item{padding-right:6px;}
-    .session-item.streaming,.session-item.unread{padding-right:40px;}
+    .session-item.streaming,.session-item.needs-attention{padding-right:40px;}
     .session-item:focus-within,.session-item.menu-open{padding-right:6px;}
   }
 
@@ -5348,14 +5351,17 @@ body.settings-popup-open{overflow:hidden;}
 .settings-popup-header{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:58px;padding:10px 14px 10px 18px;box-sizing:border-box;border-bottom:1px solid var(--border);background:var(--sidebar);flex-shrink:0;}
 .settings-popup-title{font-size:15px;font-weight:650;color:var(--text);}
 .settings-popup-subtitle{margin-top:2px;font-size:11px;color:var(--muted);}
-.settings-popup-close{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;flex:0 0 36px;padding:0;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--muted);cursor:pointer;}
-.settings-popup-close:hover,.settings-popup-close:focus-visible{background:var(--hover-bg);border-color:var(--border);color:var(--text);outline:none;}
+.settings-popup-close{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex:0 0 32px;padding:0;border:0;border-radius:0;background:transparent;color:var(--muted);cursor:pointer;}
+.settings-popup-close:hover{background:transparent;color:var(--text);}
+.settings-popup-close:focus-visible{background:transparent;border:0;color:var(--accent-text);outline:none;box-shadow:inset 0 -2px var(--accent);}
 .settings-popup-layout{display:grid;grid-template-columns:240px minmax(0,1fr);flex:1;min-width:0;min-height:0;overflow:hidden;}
 .settings-popup #panelSettings{display:flex!important;min-width:0;min-height:0;margin:0!important;border-right:1px solid var(--border);background:var(--sidebar)!important;}
 .settings-popup #panelSettings>.panel-head{display:none;}
 .settings-popup #settingsMenu{display:flex;flex-direction:column;flex:1;min-height:0;padding:12px 8px 10px;box-sizing:border-box;}
 .settings-popup #mainSettings{display:flex!important;min-width:0;min-height:0;overflow-y:auto;background:var(--bg);}
 .settings-popup .settings-main{max-width:820px;padding:22px 24px 40px;}
+.settings-popup-surface:has(#settingsPaneConversation.active){height:auto;max-height:calc(100dvh - 48px);}
+.settings-popup-surface:has(#settingsPaneConversation.active) .settings-popup-layout{flex:0 1 auto;max-height:min(620px,calc(100dvh - 106px));}
 [data-panel="settings"].settings-popup-active,.chat-settings-toggle.settings-popup-active{background:var(--hover-bg);color:var(--text);}
 
 @media(max-width:700px){
@@ -5543,14 +5549,21 @@ body.settings-popup-open{overflow:hidden;}
 #mainSettings input:disabled,
 #mainSettings select:disabled{opacity:.6;cursor:not-allowed;}
 
-/* Quick-action grid in Conversation pane — outlined card buttons. */
-.hermes-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:18px;}
-.settings-action-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--sidebar);color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
-.settings-action-btn:hover{background:var(--accent-bg);border-color:var(--accent-bg-strong);color:var(--accent-text);}
-.settings-action-btn.danger{color:var(--error,#e05);border-color:color-mix(in srgb,var(--error,#e05) 30%,transparent);}
-.settings-action-btn.danger:hover{background:color-mix(in srgb,var(--error,#e05) 8%,transparent);border-color:var(--error,#e05);color:var(--error,#e05);}
+/* Conversation actions read as one quiet command hierarchy, not a card grid. */
+.hermes-action-groups{display:flex;flex-direction:column;margin-bottom:18px;}
+.hermes-action-list{display:flex;flex-direction:column;}
+.hermes-action-list+.hermes-action-list{margin-top:12px;}
+.settings-action-btn{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:0 2px;border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent;color:var(--text);font:inherit;font-size:13px;font-weight:500;text-align:left;cursor:pointer;transition:color .15s,background .15s;}
+.settings-action-btn>svg{display:none;}
+.settings-action-btn>span:not(.settings-action-verb){min-width:0;}
+.settings-action-verb{margin-left:auto;color:var(--muted);font-size:12px;font-weight:500;}
+.settings-action-btn:hover{background:transparent;color:var(--accent-text);}
+.settings-action-btn:hover .settings-action-verb{color:var(--accent-text);}
+.settings-action-btn.danger{color:var(--error,#e05);}
+.settings-action-btn.danger:hover{background:transparent;color:var(--error,#e05);}
+.settings-action-btn.danger .settings-action-verb{color:inherit;}
 .settings-action-btn:disabled,.settings-action-btn.disabled{opacity:.45;cursor:not-allowed;}
-.settings-action-btn:disabled:hover,.settings-action-btn.disabled:hover{background:var(--sidebar);border-color:var(--border);color:var(--text);}
+.settings-action-btn:disabled:hover,.settings-action-btn.disabled:hover{background:transparent;color:var(--text);}
 
 /* Primary save buttons (Appearance / Preferences "Save Settings"). */
 #mainSettings .settings-btn,
@@ -5658,7 +5671,7 @@ body.settings-popup-open{overflow:hidden;}
   .settings-section-title{font-size:16px;}
   #checkUpdatesBlock{flex-wrap:wrap;row-gap:6px;width:100%;}
   .settings-version-badge{white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;display:block;}
-  .hermes-action-grid{grid-template-columns:1fr;}
+
   #mainSettings .settings-field{padding:14px;}
   #mainSettings .chat-activity-mode-toggle{grid-template-columns:1fr;}
 }

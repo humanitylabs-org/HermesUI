@@ -33,9 +33,10 @@ def test_contextual_view_action_stays_in_the_app_rail_and_never_reloads():
     assert "location.reload" not in DASHBOARD
 
 
-def test_high_signal_uses_the_available_inline_width_without_changing_classic():
-    assert '@media(min-width:641px){\n    html[data-session-view="dashboard"] .layout > .sidebar{width:180px;}\n  }' in CSS
-    assert 'html[data-session-view="classic"] .layout > .sidebar{width:180px;}' not in CSS
+def test_high_signal_uses_the_available_inline_width_without_resizing_sessions():
+    assert '.sidebar{width:300px;' in CSS
+    assert 'data-session-view="dashboard"] .layout > .sidebar{width:' not in CSS
+    assert 'data-session-view="classic"] .layout > .sidebar{width:' not in CSS
     dashboard_rule = CSS[CSS.index(".session-dashboard{"):CSS.index("}", CSS.index(".session-dashboard{"))]
     section_rule = CSS[CSS.index(".session-dashboard-section{"):CSS.index("}", CSS.index(".session-dashboard-section{"))]
     assert "width:100%" in dashboard_rule and "max-width:none" in dashboard_rule
@@ -45,7 +46,10 @@ def test_high_signal_uses_the_available_inline_width_without_changing_classic():
 def test_goal_section_does_not_waste_vertical_space_with_extra_top_inset():
     assert ".session-dashboard-section:first-child" not in CSS
     assert ".session-switch-skeleton-pane:first-child" not in CSS
-    assert CSS.count("grid-template-rows:minmax(104px,.5fr) minmax(132px,1.12fr) minmax(78px,.5fr) minmax(0,1.7fr)") == 2
+    assert CSS.count("grid-template-rows:auto auto auto minmax(0,1fr)") == 4
+    assert ".session-dashboard-section--original{overflow:hidden;max-height:min(190px,24vh);}" in CSS
+    assert ".session-dashboard-section--instruction{max-height:min(220px,28vh);}" in CSS
+    assert ".session-dashboard-section--status{max-height:min(170px,22vh);}" in CSS
 
 
 def test_high_signal_keeps_one_unboxed_goal_and_exactly_three_cards():
@@ -98,8 +102,8 @@ def test_goal_and_status_share_one_visible_global_model_selector():
     assert block.count('aria-controls="sessionDashboardModelDropdown"') == 2
     assert block.index('data-high-signal-model data-summary-kind="goal"') < block.index('aria-label="Refresh goal"')
     assert block.index('data-high-signal-model data-summary-kind="status"') < block.index('aria-label="Refresh status"')
-    assert block.index('aria-label="Refresh goal"') < block.index('id="sessionDashboardSummaryUpdated"') < block.index('id="sessionDashboardOriginalRequest"')
-    assert block.index('aria-label="Refresh status"') < block.index('id="sessionDashboardUpdated"') < block.index('id="sessionDashboardStatus"')
+    assert block.index('>Goal<') < block.index('id="sessionDashboardSummaryUpdated"') < block.index('data-summary-kind="goal"') < block.index('aria-label="Refresh goal"')
+    assert block.index('>Status<') < block.index('id="sessionDashboardUpdated"') < block.index('data-summary-kind="status"') < block.index('aria-label="Refresh status"')
     assert 'id="sessionDashboardSummaryUpdated" hidden' in block
     assert 'id="sessionDashboardUpdated" hidden' in block
     assert "SUMMARY_MODEL_TASK='high_signal_summary'" in DASHBOARD
@@ -133,7 +137,7 @@ def test_last_prompt_keeps_base_prompt_all_accepted_steers_and_copy_buttons():
     assert "latestSteerRunBySession.set(sid,{key,baseText})" in DASHBOARD
     assert "if(typeof highlightCode==='function') highlightCode(element)" in DASHBOARD
     assert "if(typeof addCopyButtons==='function') addCopyButtons(element)" in DASHBOARD
-    assert "minmax(160px,1.15fr)" in CSS
+    assert ".session-dashboard-section--instruction{max-height:min(220px,28vh);}" in CSS
 
 
 def test_goal_uses_bounded_opening_and_recent_evidence_without_full_history_fetch():

@@ -939,11 +939,19 @@
     const emptyText=kind==='goal'
       ? 'Select Refresh to generate the goal summary.'
       : 'Select Refresh to generate the current status.';
+    const currentEvidence=record?grokEvidence(kind):null;
+    const stale=Boolean(record&&record.fingerprint&&currentEvidence&&record.fingerprint!==currentEvidence.fingerprint);
     setMarkdown(targetId,record&&record.text?record.text:error?`Could not refresh: ${error}`:emptyText);
+    const target=byId(targetId);
+    if(target){
+      target.dataset.summaryState=record&&record.text?(stale?'stale':'current'):(error?'error':'empty');
+    }
     const updated=byId(metaId);
     if(updated){
       const relative=record&&record.updatedAt?summaryRelativeTime(record.updatedAt):'';
-      updated.textContent=relative;
+      updated.textContent=relative?`· ${relative}${stale?' · stale':''}`:'';
+      updated.dataset.stale=stale?'1':'0';
+      updated.title=stale?'The session has advanced since this summary was refreshed.':'';
       updated.hidden=!relative;
     }
   }

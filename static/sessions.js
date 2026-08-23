@@ -8745,15 +8745,11 @@ function renderSessionListFromCache(){
     title.title=_sessionFullTitleTooltip(rawTitle,cleanTitle,s);
     const tsMs=_sessionTimestampMs(s);
     const ts=document.createElement('span');
-    const hasAttentionState=isStreaming||hasUnread||Boolean(attention);
+    const hasAttentionState=isStreaming||Boolean(attention);
     ts.className='session-time'+(hasAttentionState?' is-hidden':'');
     ts.textContent=hasAttentionState?'':_formatRelativeSessionTime(tsMs);
-    titleRow.appendChild(title);
-    // Project color dot: placed BETWEEN title and timestamp, not inside the
-    // title span. Inside the title span it would be clipped by the ellipsis
-    // truncation, becoming invisible exactly when the title is long enough
-    // to need the project marker. As a flex-flow sibling it stays visible
-    // regardless of title length and sits next to the timestamp on the right.
+    // Project color belongs with project identity, immediately before the title.
+    // Keeping it outside the truncating title span preserves it for long names.
     if(s.project_id){
       const proj=_allProjects.find(p=>p.project_id===s.project_id);
       if(proj){
@@ -8764,6 +8760,7 @@ function renderSessionListFromCache(){
         titleRow.appendChild(dot);
       }
     }
+    titleRow.appendChild(title);
     const density=(window._sidebarDensity==='detailed'?'detailed':'compact');
     const showLineageMetadata=density==='detailed';
     const lineageKey=_sidebarLineageKeyForRow(s);
@@ -9217,12 +9214,12 @@ function renderSessionListFromCache(){
     el._startRename = startRename;
     el.dataset.sid = s.session_id;
 
-    // (Project dot is appended above, between title and timestamp, so it
-    // sits outside the truncating title span and stays visible.)
+    // Project identity is attached to the title. The far-right slot is reserved
+    // for work state (spinner/attention) or Done elapsed time.
     el.appendChild(sessionText);
     const state=document.createElement('span');
     const attentionDotClass=attention?(attention.kind==='approval'?' is-attention-approval':(attention.kind==='clarify'?' is-attention-clarify':' is-attention-generic')):'';
-    state.className='session-attention-indicator session-state-indicator'+(isStreaming?' is-streaming':(hasUnread?' is-unread':''))+attentionDotClass;
+    state.className='session-attention-indicator session-state-indicator'+(isStreaming?' is-streaming':'')+attentionDotClass;
     state.setAttribute('aria-hidden','true');
     // Tooltip precedence: a localized attention title (pending approval/clarify,
     // from the attention-indicator feature) is more specific and actionable than

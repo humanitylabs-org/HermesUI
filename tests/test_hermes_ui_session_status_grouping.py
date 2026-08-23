@@ -47,8 +47,8 @@ def test_new_session_launcher_separates_working_from_done():
 
 
 def test_status_group_assets_have_matching_cache_identity():
-    css_suffix = "&private-app-rail=v1&new-session-divider=v2"
-    js_suffix = "&tab-polish=v1&status-groups=v1&new-session-divider=v2"
+    css_suffix = "&private-app-rail=v1&new-session-divider=v2&opus-polish=v1"
+    js_suffix = "&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1"
     index_css = next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
     sw_css = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     assert css_suffix in index_css
