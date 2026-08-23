@@ -1848,10 +1848,11 @@
   @media (prefers-reduced-motion:reduce){.skeleton-empty-hint{animation:none;}}
   .session-item.new-flash{animation:newflash 1.4s ease-out forwards;}
   .session-item.session-list-flip-enter{animation:sessionListFlipIn .28s cubic-bezier(.2,.8,.2,1) backwards;transform-origin:center top;}
-  /* Collapsible date group headers */
+  /* Collapsible session group headers */
   .session-date-header{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:8px 10px 4px;cursor:pointer;user-select:none;opacity:.8;transition:opacity .15s;}
   .session-date-header:hover{opacity:1;}
   .session-date-header.pinned{color:var(--accent);}
+  .session-status-group-indicator{position:static;width:10px;height:10px;color:inherit;visibility:visible;}
 
   /* ── Batch select mode ── */
   .session-select-toggle{font-size:11px;padding:6px 10px;color:var(--muted);cursor:pointer;text-align:center;opacity:.6;transition:opacity .15s;user-select:none;margin-top:4px;border-radius:6px;}

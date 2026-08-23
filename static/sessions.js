@@ -5635,8 +5635,8 @@ function animateNextSessionListRefresh(options={}){
 // resolving render knows to replace it (and so we don't stack skeletons).
 let _sessionListSkeletonActive = false;
 
-// Skeleton structure mirrors a real sidebar: a couple of group headers
-// (Pinned / Today / Last week) with single-line rows under each. Title widths
+// Skeleton structure mirrors a populated sidebar with grouped single-line rows.
+// Title widths
 // vary so it reads as real conversations. `stamp:false` omits the timestamp bar
 // on the occasional row (a real list mixes rows with/without a visible time).
 const _SESSION_SKELETON_GROUPS = [
@@ -7152,8 +7152,15 @@ function _sessionSortTimestampMs(session) {
   return Math.max(base, pendingMs);
 }
 
+function _sessionSidebarWorking(session) {
+  return Boolean(session && (
+    _isSessionEffectivelyStreaming(session) ||
+    session._child_session_streaming
+  ));
+}
+
 function _sessionRunningSortRank(session) {
-  if(_isSessionEffectivelyStreaming(session)) return 1;
+  if(_sessionSidebarWorking(session)) return 1;
   return session && session.active_stream_id && session.has_pending_user_message ? 1 : 0;
 }
 
@@ -7161,6 +7168,18 @@ function _sessionSidebarSortCompare(a, b) {
   const activeDelta = _sessionRunningSortRank(b) - _sessionRunningSortRank(a);
   if(activeDelta) return activeDelta;
   return _sessionSortTimestampMs(b) - _sessionSortTimestampMs(a);
+}
+
+function _sessionStatusGroups(orderedSessions) {
+  const working=[];
+  const done=[];
+  for(const session of orderedSessions||[]){
+    (_sessionSidebarWorking(session)?working:done).push(session);
+  }
+  const groups=[];
+  if(working.length) groups.push({label:'Working',status:'working',items:working});
+  if(done.length) groups.push({label:'Done',status:'done',items:done});
+  return groups;
 }
 
 function _serverNowMs() {
@@ -8428,28 +8447,14 @@ function renderSessionListFromCache(){
     list.appendChild(empty);
   }
   const orderedSessions=[...sessions].sort(_sessionSidebarSortCompare);
-  // Separate pinned from unpinned
-  const pinned=orderedSessions.filter(s=>s.pinned);
-  const unpinned=orderedSessions.filter(s=>!s.pinned);
-  // Date grouping: Pinned / Today / Yesterday / This week / Last week / Older
-  const now=_serverNowMs();
-  // Collapse state persisted in localStorage
+  // Project the existing chronological ordering into the same two states used
+  // by each row's status indicator. Pinned sessions keep their pin marker but
+  // remain in Working or Done so every conversation has exactly one status.
+  const groups=_sessionStatusGroups(orderedSessions);
+  // Keep status collapse state separate from the retired date-bucket state.
   let _groupCollapsed={};
-  try{_groupCollapsed=JSON.parse(localStorage.getItem('hermes-date-groups-collapsed')||'{}');}catch(e){}
-  const _saveCollapsed=()=>{try{localStorage.setItem('hermes-date-groups-collapsed',JSON.stringify(_groupCollapsed));}catch(e){}};
-  // Group sessions by date
-  const groups=[];
-  let curLabel=null,curItems=[];
-  if(pinned.length) groups.push({label:'\u2605 Pinned',items:pinned,isPinned:true});
-  for(const s of unpinned){
-    const ts=_sessionSortTimestampMs(s);
-    const label=_sessionTimeBucketLabel(ts, now);
-    if(label!==curLabel){
-      if(curItems.length) groups.push({label:curLabel,items:curItems});
-      curLabel=label;curItems=[s];
-    } else { curItems.push(s); }
-  }
-  if(curItems.length) groups.push({label:curLabel,items:curItems});
+  try{_groupCollapsed=JSON.parse(localStorage.getItem('hermes-status-groups-collapsed')||'{}');}catch(e){}
+  const _saveCollapsed=()=>{try{localStorage.setItem('hermes-status-groups-collapsed',JSON.stringify(_groupCollapsed));}catch(e){}};
   const flatSessionRows=[];
   for(const g of groups){
     if(_groupCollapsed[g.label]) continue;
@@ -8508,19 +8513,22 @@ function renderSessionListFromCache(){
   list.dataset.sessionVirtualEnd=String(virtualWindow.end);
   // Render groups with collapsible headers. Large sidebars render only the
   // current session-row window plus top/bottom spacers inside each group body;
-  // headers remain real DOM so pin/archive/date grouping and clicks survive.
+  // headers remain real DOM so pin/archive/status grouping and clicks survive.
   let globalSessionRowIndex=0;
   for(const g of groups){
     const wrapper=document.createElement('div');
     wrapper.className='session-date-group';
     const hdr=document.createElement('div');
-    hdr.className='session-date-header'+(g.isPinned?' pinned':'');
+    hdr.className='session-date-header session-status-header';
     const caret=document.createElement('span');
     caret.className='session-date-caret';
     caret.textContent='\u25BE'; // down when expanded; rotated right when collapsed
+    const state=document.createElement('span');
+    state.className='session-state-indicator session-status-group-indicator '+(g.status==='working'?'is-streaming':'is-unread');
+    state.setAttribute('aria-hidden','true');
     const label=document.createElement('span');
     label.textContent=g.label;
-    hdr.appendChild(caret);hdr.appendChild(label);
+    hdr.appendChild(caret);hdr.appendChild(state);hdr.appendChild(label);
     const body=document.createElement('div');
     body.className='session-date-body';
     const isGroupCollapsed=Boolean(_groupCollapsed[g.label]);
@@ -8540,7 +8548,7 @@ function renderSessionListFromCache(){
       if(isGroupCollapsed) continue;
       const rowIndex=globalSessionRowIndex++;
       const inWindow=!virtualWindow.virtualized||(rowIndex>=virtualWindow.start&&rowIndex<virtualWindow.end);
-      if(inWindow){ body.appendChild(_renderOneSession(s, Boolean(g.isPinned))); }
+      if(inWindow){ body.appendChild(_renderOneSession(s)); }
       else if(rowIndex<virtualWindow.start){ groupTopPad+=virtualWindow.itemHeight; }
       else { groupBottomPad+=virtualWindow.itemHeight; }
     }
