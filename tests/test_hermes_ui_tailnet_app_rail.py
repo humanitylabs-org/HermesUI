@@ -528,7 +528,7 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v7&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1"'
         in INDEX
     )
     assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3"' in INDEX

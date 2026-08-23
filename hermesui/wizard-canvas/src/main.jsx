@@ -13,6 +13,15 @@ const SAVE_DELAY_MS = 800;
 const SAVED_VISIBLE_MS = 2600;
 const CLIENT_MAX_BYTES = 8 * 1024 * 1024;
 const LIGHT_BACKGROUND = '#ffffff';
+const INITIAL_FIT_VIEWPORT_FACTOR = 0.72;
+
+function canonicalViewport() {
+  return {
+    scrollX: 0,
+    scrollY: 0,
+    zoom: { value: 1 },
+  };
+}
 
 function storedTheme() {
   try {
@@ -41,6 +50,9 @@ function sceneData(scene, theme) {
       // Excalidraw's dark renderer maps the canonical white scene background
       // into its dark canvas. Supplying a dark color here would invert it light.
       viewBackgroundColor: LIGHT_BACKGROUND,
+      // Viewport position is local presentation state. Start neutral, then fit
+      // all restored content after Excalidraw and its container are ready.
+      ...canonicalViewport(),
     },
     files: scene.files && typeof scene.files === 'object' ? scene.files : {},
   };
@@ -63,6 +75,10 @@ function WizardCanvas() {
   const initialThemeRef = useRef(storedTheme());
   const canvasThemeRef = useRef(initialThemeRef.current);
   const excalidrawApiRef = useRef(null);
+  const canvasShellRef = useRef(null);
+  const initialElementsRef = useRef(null);
+  const initialFitFrameRef = useRef(null);
+  const initialFitDoneRef = useRef(false);
   const [problem, setProblem] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
   const [sceneReady, setSceneReady] = useState(false);
@@ -105,6 +121,32 @@ function WizardCanvas() {
     ));
   }, []);
 
+  const fitInitialScene = useCallback(() => {
+    if (initialFitDoneRef.current || initialFitFrameRef.current) return;
+    const restoredElements = initialElementsRef.current;
+    if (!Array.isArray(restoredElements)) return;
+    const liveElements = restoredElements.filter(element => element && !element.isDeleted);
+    if (!liveElements.length) {
+      initialFitDoneRef.current = true;
+      return;
+    }
+    initialFitFrameRef.current = window.requestAnimationFrame(() => {
+      initialFitFrameRef.current = window.requestAnimationFrame(() => {
+        initialFitFrameRef.current = null;
+        const api = excalidrawApiRef.current;
+        const shell = canvasShellRef.current;
+        if (!api || !shell || shell.clientWidth <= 0 || shell.clientHeight <= 0) return;
+        api.scrollToContent(liveElements, {
+          fitToViewport: true,
+          viewportZoomFactor: INITIAL_FIT_VIEWPORT_FACTOR,
+          animate: false,
+          maxZoom: 1,
+        });
+        initialFitDoneRef.current = true;
+      });
+    });
+  }, []);
+
   const loadInitialData = useMemo(() => (async () => {
     try {
       const response = await fetch(ENDPOINT, {
@@ -115,10 +157,12 @@ function WizardCanvas() {
       const payload = await response.json();
       revisionRef.current = Number.isInteger(payload.revision) ? payload.revision : 0;
       const initialScene = sceneData(payload.scene, canvasThemeRef.current);
+      initialElementsRef.current = initialScene?.elements || [];
       setSceneBlank(isSceneBlank(initialScene?.elements));
       setSceneReady(true);
       readyRef.current = true;
       setProblem(null);
+      fitInitialScene();
       return initialScene;
     } catch (error) {
       console.error('[wizard-canvas] load failed', error);
@@ -126,7 +170,7 @@ function WizardCanvas() {
       updateProblem('error', 'Server save unavailable');
       return null;
     }
-  })(), [updateProblem]);
+  })(), [fitInitialScene, updateProblem]);
 
   const flushSave = useCallback(async () => {
     if (savingRef.current || lockedRef.current || !readyRef.current) return;
@@ -195,6 +239,8 @@ function WizardCanvas() {
         ...appState,
         theme: 'light',
         viewBackgroundColor: LIGHT_BACKGROUND,
+        // Pan and zoom are local view state and must not rewrite the shared scene.
+        ...canonicalViewport(),
       };
       serialized = serializeAsJSON(elements, persistentAppState, files, 'local');
     } catch (error) {
@@ -226,8 +272,17 @@ function WizardCanvas() {
       window.removeEventListener('pagehide', flushOnHide);
       window.clearTimeout(timerRef.current);
       window.clearTimeout(savedTimerRef.current);
+      window.cancelAnimationFrame(initialFitFrameRef.current);
     };
   }, [flushSave]);
+
+  useEffect(() => {
+    const shell = canvasShellRef.current;
+    if (!shell || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => fitInitialScene());
+    observer.observe(shell);
+    return () => observer.disconnect();
+  }, [fitInitialScene]);
 
   useEffect(() => {
     document.documentElement.dataset.canvasTheme = canvasTheme;
@@ -261,7 +316,8 @@ function WizardCanvas() {
   const captureExcalidrawApi = useCallback(api => {
     excalidrawApiRef.current = api;
     applyCanvasTheme(canvasThemeRef.current);
-  }, [applyCanvasTheme]);
+    fitInitialScene();
+  }, [applyCanvasTheme, fitInitialScene]);
 
   const topRightUi = useCallback(() => {
     if (problem) {
@@ -284,7 +340,7 @@ function WizardCanvas() {
   }, [problem, saveStatus]);
 
   return (
-    <main className="wizard-canvas-shell" aria-label="Persistent Wizard canvas">
+    <main ref={canvasShellRef} className="wizard-canvas-shell" aria-label="Persistent Wizard canvas">
       <Excalidraw
         excalidrawAPI={captureExcalidrawApi}
         initialData={loadInitialData}

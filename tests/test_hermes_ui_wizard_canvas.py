@@ -13,7 +13,7 @@ BUILD = ROOT / "static" / "wizard-canvas"
 def test_wizard_icon_opens_one_embedded_desktop_canvas():
     assert 'id="tailnetWizardHome" aria-label="Wizard Canvas"' in INDEX
     assert 'id="wizardCanvasFrame" title="Wizard Canvas"' in INDEX
-    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v7' in INDEX
+    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v8' in INDEX
     assert "showWizardHome=isWizardHomeDesktop()" in RAIL
     assert "wizardHome.hidden=!showWizardHome" in RAIL
     assert "if(wizardHome)wizardHome.hidden=true" in RAIL
@@ -22,7 +22,7 @@ def test_wizard_icon_opens_one_embedded_desktop_canvas():
 
 def test_canvas_is_self_hosted_and_cloud_actions_are_disabled():
     assert (BUILD / "index.html").is_file()
-    assert (BUILD / "assets" / "app-v7.min.js").is_file()
+    assert (BUILD / "assets" / "app-v8.min.js").is_file()
     assert (BUILD / "EXCALIDRAW_LICENSE.txt").is_file()
     assert (BUILD / "fonts").is_dir()
     assert "@excalidraw/excalidraw" in SOURCE
@@ -66,7 +66,7 @@ def test_canvas_uses_only_the_server_autosave_endpoint():
     assert "baseRevision" in SOURCE
     assert "method: 'PUT'" in SOURCE
     assert "Changed in another tab" in SOURCE
-    assert "wizard-canvas-v7" in SW
+    assert "wizard-canvas-v8" in SW
 
 
 def test_canvas_dark_mode_is_local_and_follows_the_parent_shell():
@@ -79,3 +79,19 @@ def test_canvas_dark_mode_is_local_and_follows_the_parent_shell():
     assert "so a light/dark toggle never creates a server save" in SOURCE
     assert ':root[data-canvas-theme="dark"]' in SOURCE_CSS
     assert ":root.dark[data-skin=\"e-ink\"]" in CSS
+
+
+def test_canvas_fits_all_restored_content_once_without_persisting_the_viewport():
+    assert "INITIAL_FIT_VIEWPORT_FACTOR = 0.72" in SOURCE
+    assert "initialElementsRef.current = initialScene?.elements || []" in SOURCE
+    assert "api.scrollToContent(liveElements" in SOURCE
+    assert "fitToViewport: true" in SOURCE
+    assert "viewportZoomFactor: INITIAL_FIT_VIEWPORT_FACTOR" in SOURCE
+    assert "animate: false" in SOURCE
+    assert "maxZoom: 1" in SOURCE
+    assert "initialFitDoneRef.current = true" in SOURCE
+    assert "new ResizeObserver(() => fitInitialScene())" in SOURCE
+    assert "scrollX: 0" in SOURCE
+    assert "scrollY: 0" in SOURCE
+    assert "zoom: { value: 1 }" in SOURCE
+    assert "Pan and zoom are local view state" in SOURCE
