@@ -26,11 +26,11 @@ const CACHE_NAME = 'hermes-shell-__WEBUI_VERSION__';
 // Navigations populate './' only after a successful non-redirect network load.
 const VQ = '?v=__WEBUI_VERSION__';
 const SHELL_ASSETS = [
-  './static/style.css' + VQ + '&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&shell-theme=v1',
+  './static/style.css' + VQ + '&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1',
   './static/pwa-startup.js' + VQ,
   './static/boot.js' + VQ + '&tab-polish=v1',
   './static/assistant_turn_anchors.js' + VQ,
-  './static/ui.js' + VQ + '&tab-polish=v1&recovery-filter=v2',
+  './static/ui.js' + VQ + '&tab-polish=v1&recovery-filter=v2&background-resume=v1',
   './static/messages.js' + VQ + '&tab-polish=v1&recovery-filter=v2',
   './static/sessions.js' + VQ + '&tab-polish=v1',
   './static/session-swipe-navigation.js' + VQ,
@@ -43,7 +43,7 @@ const SHELL_ASSETS = [
   './static/workspace.js' + VQ,
   './static/terminal.js' + VQ,
   './static/onboarding.js' + VQ,
-  './static/session-dashboard.js' + VQ + '&tab-polish=v1&high-signal-model=v6&high-signal-history=v1',
+  './static/session-dashboard.js' + VQ + '&tab-polish=v1&high-signal-model=v6&high-signal-history=v1&background-resume=v1&mode-rail=v1',
   './static/vendor/smd.min.js' + VQ,
   './static/vendor/katex/0.16.22/katex.min.css' + VQ,
   './static/vendor/katex/0.16.22/katex.min.js' + VQ,

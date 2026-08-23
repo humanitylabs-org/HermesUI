@@ -107,13 +107,18 @@ def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
     assert "if(jobIds.length)void loadCronNotifications({jobIds});" in JS
 
 
-def test_theme_and_settings_controls_are_fixed_at_the_bottom_of_the_app_rail():
+def test_mode_theme_and_settings_controls_are_fixed_at_the_bottom_of_the_app_rail():
     rail = _rail_markup()
     groups = rail.index('id="tailnetAppGroups"')
+    mode = rail.index('id="sessionViewToggle"')
     theme = rail.index('id="tailnetThemeToggle"')
     settings = rail.index('id="chatSettingsToggle"')
-    assert groups < theme < settings
+    assert groups < mode < theme < settings
+    assert INDEX.count('id="sessionViewToggle"') == 1
     assert INDEX.count('id="chatSettingsToggle"') == 1
+    assert 'aria-label="Switch to High Signal mode"' in rail
+    assert 'tailnet-session-view-icon--signal' in rail
+    assert 'tailnet-session-view-icon--classic' in rail
     assert 'aria-label="Switch to dark mode"' in rail
     assert ".tailnet-app-controls" in CSS
     assert "tailnetThemeToggle" in JS

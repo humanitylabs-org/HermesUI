@@ -2187,6 +2187,11 @@
   .tailnet-app-groups::-webkit-scrollbar{display:none;}
   .tailnet-app-controls{width:100%;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 0 0;border-top:1px solid var(--border);box-sizing:border-box;}
   .tailnet-rail-control{flex:0 0 auto;}
+  .tailnet-session-view-icon{width:20px;height:20px;display:none;align-items:center;justify-content:center;}
+  .tailnet-session-view-icon svg{display:block;width:20px;height:20px;}
+  html[data-session-view="classic"] .tailnet-session-view-icon--signal,
+  html[data-session-view="dashboard"] .tailnet-session-view-icon--classic{display:flex;}
+  html[data-session-view="dashboard"] #sessionViewToggle{color:var(--text);background:var(--hover-bg);}
   .tailnet-theme-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
   .tailnet-theme-icon svg{display:block;width:20px;height:20px;}
   :root:not(.dark) .tailnet-theme-icon--sun,
@@ -2374,12 +2379,8 @@
     html body .workspace-panel-edge-toggle,
     html body .composer-workspace-files-btn{display:none!important;}
   }
-  .chat-settings-footer{flex-shrink:0;padding:8px;display:flex;align-items:center;gap:6px;}
   .chat-settings-toggle{min-width:0;flex:1 1 auto;display:flex;align-items:center;gap:9px;padding:9px 10px;border:0;border-radius:8px;background:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;}
   .chat-settings-toggle:hover,.chat-settings-toggle.active{background:var(--hover-bg);color:var(--text);}
-  .session-view-toggle{flex:0 1 auto;max-width:178px;min-height:36px;padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface-subtle);color:var(--muted);font:inherit;font-size:11px;font-weight:650;line-height:1.2;text-align:center;cursor:pointer;white-space:normal;}
-  .chat-settings-footer .session-view-toggle{flex:1 1 auto;max-width:none;}
-  .session-view-toggle:hover,.session-view-toggle:focus-visible{border-color:var(--accent-bg-strong);background:var(--hover-bg);color:var(--text);outline:none;}
   .settings-field:has(#themePickerGrid),.settings-field:has(#skinPickerGrid){display:none;}
   /* Sidebar navigation tabs */
   .sidebar-nav{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;padding:6px 8px 0;gap:2px;}

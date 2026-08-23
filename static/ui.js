@@ -642,21 +642,49 @@ function _assistantContinuesUserDirectedTurn(m){
   if(Array.isArray(m.content)&&m.content.some(part=>part&&part.type==='tool_use')) return true;
   return String(m.finish_reason||'').toLowerCase()==='tool_calls';
 }
+function _backgroundUpdateTaskId(m){
+  if(!m) return '';
+  const meta=m._wakeup_meta&&typeof m._wakeup_meta==='object'?m._wakeup_meta:{};
+  const direct=[meta.task_id,meta.process_id,meta.delegation_id,meta.completion_id]
+    .map(value=>String(value||'').trim())
+    .find(value=>value.length>=4&&value.length<=200);
+  if(direct) return direct;
+  const text=String(msgContent(m)||'');
+  const processMatch=text.match(/\b(proc_[A-Za-z0-9_-]+)\b/);
+  if(processMatch) return processMatch[1];
+  const delegationMatch=text.match(/^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE\s*(?:—|-)\s*([^\]\s]+)/i);
+  return delegationMatch?delegationMatch[1]:'';
+}
+function _backgroundUpdateResumesUserRun(messages,triggerIdx,lastUserIdx){
+  const list=Array.isArray(messages)?messages:[];
+  const taskId=_backgroundUpdateTaskId(list[triggerIdx]);
+  if(!taskId||lastUserIdx<0||triggerIdx<=lastUserIdx) return false;
+  const start=Math.max(lastUserIdx+1,triggerIdx-600);
+  for(let index=triggerIdx-1;index>=start;index--){
+    const message=list[index];
+    if(message&&message.role==='tool'&&String(msgContent(message)||'').includes(taskId)) return true;
+  }
+  return false;
+}
 function _getVisibleMessagesWithIdx(){
   if(!_visWithIdxCache || _visWithIdxCacheLen !== S.messages.length || _visWithIdxCacheSrc !== S.messages){
     const rebuilt=[];
     let rawIdx=0;
     let backgroundUpdateActive=false;
     let userDirectedRunOpen=false;
+    let lastUserDirectedIdx=-1;
     for(const m of (S.messages||[])){
       if(m&&m.role==='user'){
         if(_isBackgroundUpdateTriggerMessage(m)){
-          backgroundUpdateActive=!userDirectedRunOpen;
+          const resumesUserRun=_backgroundUpdateResumesUserRun(S.messages,rawIdx,lastUserDirectedIdx);
+          backgroundUpdateActive=!userDirectedRunOpen&&!resumesUserRun;
+          if(resumesUserRun) userDirectedRunOpen=true;
           rawIdx++;
           continue;
         }
         backgroundUpdateActive=false;
         userDirectedRunOpen=true;
+        lastUserDirectedIdx=rawIdx;
       }
       if(backgroundUpdateActive){
         if(m&&m.role==='assistant'&&_messageIsRenderable(m)&&!!(msgContent(m)||m.attachments?.length||m._statusCard)){

@@ -1,9 +1,9 @@
 """Regression coverage for process-wakeup transcript rendering.
 
 A background-process wakeup is stored as a synthetic user turn
-(`_source: "process_wakeup"`). The trigger itself stays out of the transcript;
-any useful assistant follow-up is retained as a collapsed intermediary update,
-not as a normal answer to a human-authored instruction.
+(`_source: "process_wakeup"`). The trigger itself stays out of the transcript.
+Standalone follow-ups remain compact background updates, while a wakeup whose
+task id was launched inside the latest human turn resumes that turn normally.
 """
 
 import json
@@ -73,6 +73,8 @@ const heightEnd = src.indexOf('const MESSAGE_VIRTUAL_MEASUREMENT_MAX_RERENDERS',
 if(heightStart !== -1 && heightEnd !== -1) eval(src.slice(heightStart, heightEnd));
 eval(extractFunc('_isBackgroundUpdateTriggerMessage'));
 eval(extractFunc('_assistantContinuesUserDirectedTurn'));
+eval(extractFunc('_backgroundUpdateTaskId'));
+eval(extractFunc('_backgroundUpdateResumesUserRun'));
 eval(extractFunc('_stripWorkspaceDisplayPrefix'));
 eval(extractFunc('_stripAttachedFilesMarkerForDisplay'));
 eval(extractFunc('_messageIsRenderable'));
@@ -137,6 +139,22 @@ const interleaved = _getVisibleMessagesWithIdx().map(entry=>({
   backgroundUpdate:!!entry.backgroundUpdate,
 }));
 
+_visWithIdxCache = null;
+_visWithIdxCacheLen = 0;
+_visWithIdxCacheSrc = null;
+S.messages = [
+  {role:'user',content:'Run the long verification.'},
+  {role:'assistant',content:'',tool_calls:[{function:{name:'terminal'}}],finish_reason:'tool_calls'},
+  {role:'tool',content:'Started background process proc_linked_1.'},
+  {role:'assistant',content:'Verification is still running.',finish_reason:'stop'},
+  {role:'user',content:'[IMPORTANT: Background process proc_linked_1 completed (exit_code=0).]',_source:'process_wakeup',_wakeup_meta:{task_id:'proc_linked_1'}},
+  {role:'assistant',content:'Verification passed and the change is live.',finish_reason:'stop'},
+];
+const linked = _getVisibleMessagesWithIdx().map(entry=>({
+  text:String(entry.m.content||''),
+  backgroundUpdate:!!entry.backgroundUpdate,
+}));
+
 process.stdout.write(JSON.stringify({
   visible: visible.map(e => ({rawIdx: e.rawIdx, role: e.m.role, source: e.m._source || '', backgroundUpdate: !!e.backgroundUpdate, text: String(e.m.content).slice(0, 32)})),
   turns,
@@ -145,6 +163,7 @@ process.stdout.write(JSON.stringify({
   attachmentOnlyRenderable: _messageIsRenderable(attachmentOnlyWakeup),
   strippedWakeupDisplay: _stripAttachedFilesMarkerForDisplay(_stripWorkspaceDisplayPrefix(markerWakeupContent)),
   interleaved,
+  linked,
 }));
 """
 
@@ -185,6 +204,14 @@ def test_interleaved_wakeup_does_not_capture_the_real_user_run_result():
         {"text": "Deploying now.", "backgroundUpdate": False},
         {"text": "Live now and verified.", "backgroundUpdate": False},
         {"text": "Independent review completed.", "backgroundUpdate": True},
+    ]
+
+
+def test_linked_process_completion_keeps_direct_final_answer_out_of_background_updates():
+    result = _run_driver()
+    assert result["linked"][-2:] == [
+        {"text": "Verification is still running.", "backgroundUpdate": False},
+        {"text": "Verification passed and the change is live.", "backgroundUpdate": False},
     ]
 
 

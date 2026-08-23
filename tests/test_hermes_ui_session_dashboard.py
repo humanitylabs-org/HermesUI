@@ -15,18 +15,22 @@ API_CONFIG = (ROOT / "api" / "config.py").read_text(encoding="utf-8")
 PANELS = (ROOT / "static" / "panels.js").read_text(encoding="utf-8")
 
 
-def test_contextual_view_action_stays_in_the_session_footer_and_never_reloads():
-    footer = INDEX[INDEX.index('<div class="chat-settings-footer">'):INDEX.index('<div class="resize-handle"')]
-    assert 'id="chatSettingsToggle"' not in footer
-    assert 'id="sessionViewToggle"' in footer
-    assert "Switch to High Signal mode" in footer
-    assert "session-view-toggle-track" not in footer
+def test_contextual_view_action_stays_in_the_app_rail_and_never_reloads():
+    rail_start = INDEX.index('<nav class="rail tailnet-app-rail"')
+    rail = INDEX[rail_start:INDEX.index('</nav>', rail_start)]
+    assert INDEX.count('id="sessionViewToggle"') == 1
+    assert 'id="sessionViewToggle"' in rail
+    assert rail.index('id="sessionViewToggle"') < rail.index('id="tailnetThemeToggle"')
+    assert 'tailnet-session-view-icon--signal' in rail
+    assert 'tailnet-session-view-icon--classic' in rail
+    assert "chat-settings-footer" not in INDEX
+    assert ".session-view-toggle" not in CSS
     assert "Switch to Classic view" in DASHBOARD
     assert "Switch to High Signal mode" in DASHBOARD
+    assert "toggle.setAttribute('data-tooltip',label)" in DASHBOARD
+    assert "toggle.setAttribute('aria-pressed',dashboard?'true':'false')" in DASHBOARD
     assert "window.history.replaceState" in DASHBOARD
     assert "location.reload" not in DASHBOARD
-    footer_rule = CSS[CSS.index(".chat-settings-footer{"):CSS.index("}", CSS.index(".chat-settings-footer{"))]
-    assert "border-top" not in footer_rule
 
 
 def test_high_signal_uses_the_available_inline_width_without_changing_classic():
@@ -411,3 +415,30 @@ def test_continue_now_control_classifier_is_exact_in_loaded_and_live_paths():
             text=True,
         )
         assert json.loads(result.stdout) == [True, False, False]
+
+
+def test_linked_process_wakeup_promotes_direct_completion_to_high_signal_result():
+    node = shutil.which("node")
+    assert node is not None
+    harness = f"""
+const fs=require('fs');const vm=require('vm');const elements=new Map();
+function element(id){{if(!elements.has(id))elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},disabled:false,attrs:{{}},addEventListener(){{}},setAttribute(name,value){{this.attrs[name]=String(value);}},removeAttribute(name){{delete this.attrs[name];}}}});return elements.get(id);}}
+global.window=global;global.document={{readyState:'complete',documentElement:{{dataset:{{sessionView:'dashboard'}}}},getElementById:element,addEventListener(){{}}}};
+global.location={{href:'https://device.example/hermesUI/session/session-1'}};global.history={{state:null,replaceState(){{}}}};global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
+global.S={{session:{{session_id:'session-1'}},messages:[
+  {{role:'user',content:'Run the long verification.',id:'u1'}},
+  {{role:'assistant',content:'',tool_calls:[{{function:{{name:'terminal'}}}}],finish_reason:'tool_calls'}},
+  {{role:'tool',content:'Started background process proc_linked_1.'}},
+  {{role:'assistant',content:'Verification is still running.',finish_reason:'stop'}},
+  {{role:'user',content:'[IMPORTANT: Background process proc_linked_1 completed (exit_code=0).]',_source:'process_wakeup',_wakeup_meta:{{task_id:'proc_linked_1'}}}},
+  {{role:'assistant',content:'Verification passed and the change is live.',finish_reason:'stop'}},
+],busy:false,activeStreamId:null}};
+global.msgContent=m=>String(m&&m.content||'');global.renderMd=s=>String(s||'');global._stripWorkspaceDisplayPrefix=s=>String(s||'').trim();global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');global._messageIsRenderable=m=>!!(m&&m.role!=='tool'&&(m.content||(Array.isArray(m.tool_calls)&&m.tool_calls.length)));global._isContextCompactionMessage=()=>false;global._isPreservedCompressionTaskListMessage=()=>false;global._isRecoveryControlMessage=()=>false;global.INFLIGHT={{}};global.requestAnimationFrame=cb=>{{cb();return 1;}};global.queueMicrotask=cb=>cb();global._messagesTruncated=false;global._oldestIdx=0;global.fetch=async()=>{{throw new Error('manual summaries must not run');}};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
+setTimeout(()=>{{syncSessionDashboard();process.stdout.write(JSON.stringify({{prompt:element('sessionDashboardInstruction').innerHTML,result:element('sessionDashboardCompleted').innerHTML}}));}},20);
+"""
+    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
+    assert json.loads(result.stdout) == {
+        "prompt": "Run the long verification.",
+        "result": "Verification passed and the change is live.",
+    }

@@ -118,6 +118,31 @@
     if(Array.isArray(message.content)&&message.content.some(part=>part&&part.type==='tool_use')) return true;
     return String(message.finish_reason||'').toLowerCase()==='tool_calls';
   }
+  function backgroundTriggerTaskId(message){
+    if(!message) return '';
+    const meta=message._wakeup_meta&&typeof message._wakeup_meta==='object'?message._wakeup_meta:{};
+    const direct=[meta.task_id,meta.process_id,meta.delegation_id,meta.completion_id]
+      .map(value=>String(value||'').trim())
+      .find(value=>value.length>=4&&value.length<=200);
+    if(direct) return direct;
+    const text=rawText(message);
+    const processMatch=text.match(/\b(proc_[A-Za-z0-9_-]+)\b/);
+    if(processMatch) return processMatch[1];
+    const delegationMatch=text.match(/^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE\s*(?:—|-)\s*([^\]\s]+)/i);
+    return delegationMatch?delegationMatch[1]:'';
+  }
+  function backgroundTriggerResumesUserRun(cached,message,index){
+    const taskId=backgroundTriggerTaskId(message);
+    const lastUserIdx=Number(cached&&cached.lastUserDirectedIdx);
+    const messages=cached&&Array.isArray(cached.source)?cached.source:[];
+    if(!taskId||!Number.isInteger(lastUserIdx)||lastUserIdx<0||index<=lastUserIdx) return false;
+    const start=Math.max(lastUserIdx+1,index-600);
+    for(let cursor=index-1;cursor>=start;cursor--){
+      const prior=messages[cursor];
+      if(prior&&prior.role==='tool'&&rawText(prior).includes(taskId)) return true;
+    }
+    return false;
+  }
   const isRenderable=message=>{
     if(!message||!['user','assistant'].includes(message.role)) return false;
     if(isSystemLike(message)) return false;
@@ -137,6 +162,15 @@
   const appendMessageEntry=(cached,message,index)=>{
     if(message&&message.role==='user'){
       if(isBackgroundUpdateTrigger(message)){
+        const resumesUserRun=backgroundTriggerResumesUserRun(cached,message,index);
+        if(resumesUserRun){
+          const boundary=latestMatchingEntry(cached.entries,entry=>entry.message.role==='assistant'&&!entry.intermediary&&rawText(entry.message));
+          if(boundary) boundary.intermediary=true;
+          cached.backgroundUpdateActive=false;
+          cached.backgroundResumeBoundary=null;
+          cached.userDirectedRunOpen=true;
+          return;
+        }
         cached.backgroundUpdateActive=!cached.userDirectedRunOpen;
         cached.backgroundResumeBoundary=cached.backgroundUpdateActive
           ? latestMatchingEntry(cached.entries,entry=>entry.message.role==='assistant'&&!entry.intermediary&&rawText(entry.message))
@@ -146,6 +180,7 @@
       cached.backgroundUpdateActive=false;
       cached.backgroundResumeBoundary=null;
       cached.userDirectedRunOpen=true;
+      cached.lastUserDirectedIdx=index;
     }
     if(cached.backgroundUpdateActive){
       if(message&&message.role==='assistant'&&assistantContinuesUserDirectedTurn(message)){
@@ -176,7 +211,7 @@
     if(!cached.firstUser&&message.role==='user'&&cleanUserText(message)) cached.firstUser=entry;
   };
   const rebuildProjection=(messages)=>{
-    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:'',backgroundUpdateActive:false,backgroundResumeBoundary:null,userDirectedRunOpen:false};
+    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:'',backgroundUpdateActive:false,backgroundResumeBoundary:null,userDirectedRunOpen:false,lastUserDirectedIdx:-1};
     for(let index=0;index<messages.length;index++) appendMessageEntry(cached,messages[index],index);
     cached.length=messages.length;
     cached.firstSignature=messages.length?messageSignature(messages[0]):'';
@@ -200,8 +235,8 @@
       if(firstSignature!==cached.firstSignature||!oldTailStillMatches){
         cached=rebuildProjection(messages);
       }else if(messages.length>cached.length){
-        for(let index=cached.length;index<messages.length;index++) appendMessageEntry(cached,messages[index],index);
         cached.source=messages;
+        for(let index=cached.length;index<messages.length;index++) appendMessageEntry(cached,messages[index],index);
         cached.length=messages.length;
         cached.tailSignature=messages.length?messageSignature(messages[messages.length-1]):'';
       }else{
@@ -1022,13 +1057,11 @@
     if(!toggle||typeof toggle.setAttribute!=='function') return;
     const root=document.documentElement;
     const dashboard=!!(root&&root.dataset&&root.dataset.sessionView==='dashboard');
-    if(typeof toggle.removeAttribute==='function'){
-      toggle.removeAttribute('aria-pressed');
-      toggle.removeAttribute('aria-checked');
-    }
     const label=dashboard?'Switch to Classic view':'Switch to High Signal mode';
-    toggle.textContent=label;
     toggle.setAttribute('aria-label',label);
+    toggle.setAttribute('aria-pressed',dashboard?'true':'false');
+    toggle.setAttribute('data-tooltip',label);
+    toggle.dataset.targetView=dashboard?'classic':'dashboard';
     toggle.title=label;
   }
 
