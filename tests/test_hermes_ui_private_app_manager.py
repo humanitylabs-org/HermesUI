@@ -8,14 +8,15 @@ RAIL = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
 SW = (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
 
 
-def test_manager_is_the_last_private_tile_before_plus():
+def test_app_manager_is_the_last_app_tile_before_marketplace():
     links = INDEX.index('id="tailnetAppLinks"')
     manager = INDEX.index('id="tailnetPrivateManager"')
     add = INDEX.index('id="tailnetPrivateAdd"')
     assert links < manager < add
     assert 'data-tailnet-app-id="private-app-manager"' in INDEX
-    assert 'aria-label="Detected"' in INDEX
-    assert '<circle cx="12" cy="12" r="3"/>' in INDEX
+    assert 'aria-label="App Manager"' in INDEX
+    assert 'data-tooltip="App Manager"' in INDEX
+    assert '<rect x="3" y="3" width="7" height="7" rx="1.5"/>' in INDEX
     assert 'tailnetAppManagerBadge' not in INDEX
 
 
@@ -60,7 +61,7 @@ def test_private_rail_has_no_preseeded_app_inventory():
     assert "static/tailnet-apps.json" not in RAIL
     assert "fetch(new URL(CONFIG_PATH" not in RAIL
     assert "privateCount:0" in RAIL
-    assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3"' in INDEX
+    assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3&semantic-icons=v1"' in INDEX
 
 
 def test_approved_routes_keep_stable_detector_identity():
@@ -73,14 +74,14 @@ def test_approved_routes_keep_stable_detector_identity():
 
 
 def test_service_worker_delivers_both_private_app_scripts_without_caching_apis():
-    assert "'./static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1'" in SW
-    assert "'./static/tailnet-app-manager.js' + VQ + '&cron-notifications=v3'" in SW
+    assert "'./static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1'" in SW
+    assert "'./static/tailnet-app-manager.js' + VQ + '&cron-notifications=v3&semantic-icons=v1'" in SW
     assert "url.pathname.includes('/api/')" in SW
     assert "return; // let browser handle normally" in SW
 
 
 def test_manager_copy_is_concise_and_cards_expand_to_four_columns():
-    assert '<h1 id="tailnetAppManagerTitle">Private apps</h1>' in INDEX
+    assert '<h1 id="tailnetAppManagerTitle">App Manager</h1>' in INDEX
     assert INDEX.index('id="tailnetAppManagerOrigin"') < INDEX.index('id="tailnetAppManagerTitle"')
     assert 'Apps detected on this Tailnet node' not in INDEX
     assert 'Choose which ones appear' not in INDEX
@@ -92,6 +93,14 @@ def test_manager_copy_is_concise_and_cards_expand_to_four_columns():
     assert "Start at boot" not in JS
     assert "setAutostart" not in JS
     assert '@container(min-width:680px){.tailnet-app-manager-list{grid-template-columns:repeat(4,minmax(0,1fr));}}' in CSS
+
+
+def test_installed_apps_receive_opinionated_semantic_icons():
+    assert "function semanticIconName(app)" in JS
+    assert "if(/book|reader|document|compressor/.test(identity))return 'book'" in JS
+    assert "if(/terminal|console|shell/.test(identity))return 'terminal'" in JS
+    assert "if(/browser|web/.test(identity))return 'browser'" in JS
+    assert JS.count("icon.innerHTML=semanticIcon(app);") == 2
 
 
 def test_hidden_routes_are_transparent_but_read_only_and_collapsed():

@@ -7,7 +7,27 @@
   const PRIVATE_APPS_PATH='/apps/api/private-apps';
   const STORAGE_KEY='hermesui.tailnet-app';
   const BLOCKED_PATHS=new Set(['/','/apps','/hermesUI','/frame-check','/tailnet-frame','/hermes-sidepanel']);
-  const GENERIC_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
+  const APP_ICONS={
+    apps:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+    book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z"/></svg>',
+    browser:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
+    terminal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>',
+    pipeline:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M16 4v16M3 10h18"/></svg>',
+    draw:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></svg>'
+  };
+
+  function semanticIconName(app){
+    const identity=[app&&app.id,app&&app.label,app&&app.name,app&&app.path].filter(Boolean).join(' ').toLowerCase();
+    if(/book|reader|document|compressor/.test(identity))return 'book';
+    if(/terminal|console|shell/.test(identity))return 'terminal';
+    if(/browser|web/.test(identity))return 'browser';
+    if(/pipeline|workflow|kanban/.test(identity))return 'pipeline';
+    if(/draw|canvas|sketch/.test(identity))return 'draw';
+    const declared=String(app&&app.icon||'').toLowerCase();
+    return Object.hasOwn(APP_ICONS,declared)?declared:'apps';
+  }
+
+  function semanticIcon(app){return APP_ICONS[semanticIconName(app)];}
 
   const root=document.documentElement;
   const workspace=document.getElementById('tailnetAppWorkspace');
@@ -124,7 +144,7 @@
       const icon=document.createElement('span');
       icon.className='tailnet-app-icon';
       icon.setAttribute('aria-hidden','true');
-      icon.innerHTML=GENERIC_ICON;
+      icon.innerHTML=semanticIcon(app);
       button.appendChild(icon);
       button.addEventListener('click',()=>openPrivateApp(app));
       privateLinks.appendChild(button);
@@ -154,12 +174,12 @@
   function activateManager(){
     frame.hidden=true;
     panel.hidden=false;
-    workspace.setAttribute('aria-label','Manage private apps');
+    workspace.setAttribute('aria-label','App Manager');
     workspace.hidden=false;
     root.setAttribute('data-tailnet-view','external');
     markSelected(MANAGER_ID);
     try{sessionStorage.setItem(STORAGE_KEY,MANAGER_ID);}catch(_){}
-    document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:MANAGER_ID,label:'Detected',mode:'native'}}));
+    document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:MANAGER_ID,label:'App Manager',mode:'native'}}));
     void loadStatus();
   }
 
@@ -268,9 +288,9 @@
       await postJson(PRIVATE_APPS_PATH,{action,appId:app.actionKey});
       await loadApprovedApps();
       setNotice(`${managedApps().length} app${managedApps().length===1?'':'s'}`);
-      notify(action==='approve'?'Added to PRIVATE.':'Removed from PRIVATE.');
+      notify(action==='approve'?'Added to the app rail.':'Removed from the app rail.');
     }catch(error){
-      setNotice(error.message||'The PRIVATE list could not be changed.',{error:true});
+      setNotice(error.message||'The app rail could not be changed.',{error:true});
     }finally{
       busy=false;
       renderStatus();
@@ -318,7 +338,7 @@
       const icon=document.createElement('span');
       icon.className='tailnet-managed-app-icon';
       icon.setAttribute('aria-hidden','true');
-      icon.innerHTML=GENERIC_ICON;
+      icon.innerHTML=semanticIcon(app);
       const copy=document.createElement('div');
       copy.className='tailnet-managed-app-copy';
       const name=document.createElement('strong');
@@ -335,9 +355,9 @@
       const actions=document.createElement('div');
       actions.className='tailnet-managed-app-actions';
       if(appIsEligible(app)){
-        if(isPinned)actions.appendChild(button('Added',()=>{}, {active:true,disabled:true,title:`${app.name||app.path} is in PRIVATE`}));
-        else if(isApproved)actions.appendChild(button('Remove',()=>void changePrivateApp(app,'remove'),{active:true,title:`Remove ${app.name||app.path} from PRIVATE`}));
-        else actions.appendChild(button('Add',()=>void changePrivateApp(app,'approve'),{primary:true,title:`Add ${app.name||app.path} to PRIVATE`}));
+        if(isPinned)actions.appendChild(button('Added',()=>{}, {active:true,disabled:true,title:`${app.name||app.path} is in the app rail`}));
+        else if(isApproved)actions.appendChild(button('Remove',()=>void changePrivateApp(app,'remove'),{active:true,title:`Remove ${app.name||app.path} from the app rail`}));
+        else actions.appendChild(button('Add',()=>void changePrivateApp(app,'approve'),{primary:true,title:`Add ${app.name||app.path} to the app rail`}));
       }
       if(app.canRestart)actions.appendChild(button('Restart',()=>void runAction(app,'restart'),{title:`Restart ${app.name||app.path} now`}));
       if(app.canUpdate)actions.appendChild(button('Update',()=>void runAction(app,'update'),{title:`Update ${app.name||app.path}`}));

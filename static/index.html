@@ -70,7 +70,7 @@
     };
   }
 })()</script>
-<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1">
+<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
@@ -162,7 +162,7 @@
     <section class="tailnet-app-manager" id="tailnetAppManager" aria-labelledby="tailnetAppManagerTitle" hidden>
       <header class="tailnet-app-manager-head">
         <a class="tailnet-app-manager-origin" id="tailnetAppManagerOrigin" href="/" target="_blank" rel="noopener noreferrer"></a>
-        <h1 id="tailnetAppManagerTitle">Private apps</h1>
+        <h1 id="tailnetAppManagerTitle">App Manager</h1>
         <button class="btn secondary tailnet-app-manager-refresh" id="tailnetAppManagerRefresh" type="button">Refresh</button>
       </header>
       <div class="tailnet-app-manager-notice" id="tailnetAppManagerNotice" role="status" aria-live="polite">Loading…</div>
@@ -199,30 +199,15 @@
       <span class="tailnet-notifications-badge" id="tailnetNotificationsBadge" hidden aria-hidden="true">0</span>
     </button>
     <div class="tailnet-app-groups" id="tailnetAppGroups">
-      <section class="tailnet-app-group" data-app-group="private" aria-labelledby="tailnetPrivateAppsLabel">
-        <div class="tailnet-app-group-head has-tooltip" id="tailnetPrivateAppsLabel" role="heading" aria-level="2" aria-label="Private Tailnet apps" data-tooltip="Private Tailnet apps">
-          <span class="tailnet-app-group-badge" aria-hidden="true">PRIVATE</span>
-        </div>
+      <div class="tailnet-app-primary" aria-label="Installed apps">
         <div class="tailnet-app-links" id="tailnetAppLinks"></div>
-        <button class="rail-btn tailnet-app-link tailnet-app-manager-link has-tooltip" id="tailnetPrivateManager" type="button" data-tailnet-app-id="private-app-manager" aria-label="Detected" data-tooltip="Detected">
-          <span class="tailnet-app-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.09A1.65 1.65 0 0 0 20.91 10H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"/></svg></span>
+        <button class="rail-btn tailnet-app-link tailnet-app-manager-link has-tooltip" id="tailnetPrivateManager" type="button" data-tailnet-app-id="private-app-manager" aria-label="App Manager" data-tooltip="App Manager">
+          <span class="tailnet-app-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
         </button>
-        <button class="rail-btn tailnet-app-add tailnet-app-marketplace has-tooltip" id="tailnetPrivateAdd" type="button" data-tailnet-app-id="private-marketplace" aria-label="Open private app library" data-tooltip="Open private app library"><span aria-hidden="true">+</span></button>
-      </section>
-      <section class="tailnet-app-group" data-app-group="work" aria-labelledby="tailnetCompanyAppsLabel">
-        <div class="tailnet-app-group-head has-tooltip" id="tailnetCompanyAppsLabel" role="heading" aria-level="2" aria-label="Work apps" data-tooltip="Work apps">
-          <span class="tailnet-app-group-badge" aria-hidden="true">WORK</span>
-        </div>
-        <div class="tailnet-app-links" id="tailnetCompanyAppLinks"></div>
-        <button class="tailnet-app-add has-tooltip" id="tailnetCompanyAdd" type="button" aria-label="Add work app" data-tooltip="Add work app"><span aria-hidden="true">+</span></button>
-      </section>
-      <section class="tailnet-app-group" data-app-group="web" aria-labelledby="tailnetPublicAppsLabel">
-        <div class="tailnet-app-group-head has-tooltip" id="tailnetPublicAppsLabel" role="heading" aria-level="2" aria-label="Web bookmarks" data-tooltip="Web bookmarks">
-          <span class="tailnet-app-group-badge" aria-hidden="true">WEB</span>
-        </div>
-        <div class="tailnet-app-links" id="tailnetPublicAppLinks"></div>
-        <button class="tailnet-app-add has-tooltip" id="tailnetPublicAdd" type="button" aria-label="Add web bookmark" data-tooltip="Add web bookmark"><span aria-hidden="true">+</span></button>
-      </section>
+        <button class="rail-btn tailnet-app-add tailnet-app-marketplace has-tooltip" id="tailnetPrivateAdd" type="button" data-tailnet-app-id="private-marketplace" aria-label="Marketplace" data-tooltip="Marketplace">
+          <span class="tailnet-app-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16l-2-6H6z"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/><path d="M8 4 7 10M12 4v6M16 4l1 6"/></svg></span>
+        </button>
+      </div>
     </div>
     <div class="tailnet-app-controls" aria-label="Appearance and settings">
       <button class="rail-btn tailnet-rail-control tailnet-session-view-toggle has-tooltip" id="sessionViewToggle" type="button" onclick="toggleSessionView()" aria-label="Switch to High Signal mode" aria-pressed="false" data-tooltip="Switch to High Signal mode" title="Switch to High Signal mode">
@@ -1939,8 +1924,8 @@
 <script src="static/panels.js?v=__WEBUI_VERSION__&cron-notifications=v3&high-signal-model=v1" defer></script>
 <script src="static/session-dashboard.js?v=__WEBUI_VERSION__&tab-polish=v1&high-signal-model=v6&high-signal-history=v1&background-resume=v1&mode-rail=v1" defer></script>
 <script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1" defer></script>
-<script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3" defer></script>
+<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1" defer></script>
+<script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3&semantic-icons=v1" defer></script>
 <script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/boot.js?v=__WEBUI_VERSION__&tab-polish=v1" defer></script>
 <script src="static/outline.js?v=__WEBUI_VERSION__" defer></script>

@@ -1272,7 +1272,7 @@
   }
 
   async function loadApps(){
-    if(!links||!home||!workspace||!frame||!companyLinks||!publicLinks||!privateAdd||!companyAdd||!publicAdd||!notificationsButton||!notificationsPanel)return;
+    if(!links||!home||!workspace||!frame||!privateAdd||!notificationsButton||!notificationsPanel)return;
     root.setAttribute('data-tailnet-view','hermes');
     bindOverlayInteractions();
     home.addEventListener('click',event=>{
@@ -1288,8 +1288,6 @@
     notificationFilterButtons.forEach(button=>button.addEventListener('click',()=>setNotificationFilter(button.dataset.notificationFilter)));
     appsById.set(privateMarketplace.id,privateMarketplace);
     privateAdd.addEventListener('click',()=>activateApp(privateMarketplace));
-    companyAdd.addEventListener('click',()=>void addSavedApp('company'));
-    publicAdd.addEventListener('click',()=>void addSavedApp('public'));
     document.addEventListener('hermesui:tailnet-app-selected',event=>{
       const id=event&&event.detail&&event.detail.id;
       if(!id||id==='hermes-ui')return;
@@ -1302,11 +1300,6 @@
       const jobIds=Array.from(new Set(completions.map(item=>String(item&&item.job_id||'')).filter(Boolean)));
       if(jobIds.length)void loadCronNotifications({jobIds});
     });
-    savedGroups=readSavedGroups();
-    renderSavedGroup('company');
-    renderSavedGroup('public');
-    bookmarkSyncPromise=hydrateSavedGroups();
-    void bookmarkSyncPromise.then(()=>refreshSavedFrameDecisions());
     let remembered='';
     try{remembered=sessionStorage.getItem(STORAGE_KEY)||'';}catch(_){}
     if(remembered&&appsById.has(remembered))activateApp(appsById.get(remembered));
@@ -1319,10 +1312,11 @@
     else if(typeof desktopHomeMedia.addListener==='function')desktopHomeMedia.addListener(syncHomeAcrossBreakpoint);
     root.dataset.tailnetAppsReady='true';
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-apps-ready',{detail:{
-      count:savedGroups.company.length+savedGroups.public.length+2,
+      count:2,
       privateCount:0,
-      companyCount:savedGroups.company.length,
-      publicCount:savedGroups.public.length,
+      companyCount:0,
+      publicCount:0,
+      scope:'private-only',
       activeId:activeId||'hermes-ui'
     }}));
   }

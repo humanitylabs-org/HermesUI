@@ -66,8 +66,8 @@ def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
     rail = _rail_markup()
     home = rail.index('id="tailnetAppHome"')
     bell = rail.index('id="tailnetNotificationsButton"')
-    private = rail.index('id="tailnetPrivateAppsLabel"')
-    assert home < bell < private
+    apps = rail.index('id="tailnetAppLinks"')
+    assert home < bell < apps
     assert 'data-tailnet-app-id="cron-notifications"' in rail
     assert 'id="tailnetNotificationsBadge" hidden' in rail
     assert 'id="tailnetNotifications" aria-labelledby="tailnetNotificationsTitle" hidden' in INDEX
@@ -149,29 +149,31 @@ def test_cron_notifications_reuse_existing_frontend_apis_only():
     assert "id!==NOTIFICATIONS_ID" in MANAGER
 
 
-def test_app_selector_has_three_ordered_groups_and_add_controls():
+def test_app_selector_is_private_only_without_category_labels():
     rail = _rail_markup()
-    private = rail.index('id="tailnetPrivateAppsLabel"')
-    company = rail.index('id="tailnetCompanyAppsLabel"')
-    public = rail.index('id="tailnetPublicAppsLabel"')
-    assert private < company < public
-    assert '<span class="tailnet-app-group-badge" aria-hidden="true">PRIVATE</span>' in rail
-    assert '<span class="tailnet-app-group-badge" aria-hidden="true">WORK</span>' in rail
-    assert '<span class="tailnet-app-group-badge" aria-hidden="true">WEB</span>' in rail
-    assert 'aria-label="Private Tailnet apps"' in rail
-    assert 'aria-label="Work apps"' in rail
-    assert 'aria-label="Web bookmarks"' in rail
+    assert 'tailnet-app-group-badge' not in rail
+    assert '>PRIVATE<' not in rail
+    assert '>WORK<' not in rail
+    assert '>WEB<' not in rail
     assert 'id="tailnetPrivateAdd"' in rail
-    assert 'id="tailnetCompanyAdd"' in rail
-    assert 'id="tailnetPublicAdd"' in rail
-    assert 'id="tailnetCompanyAppLinks"' in rail
-    assert 'id="tailnetPublicAppLinks"' in rail
-    assert rail.index('id="tailnetAppLinks"') < rail.index('id="tailnetPrivateAdd"')
-    assert rail.index('id="tailnetCompanyAppLinks"') < rail.index('id="tailnetCompanyAdd"')
-    assert rail.index('id="tailnetPublicAppLinks"') < rail.index('id="tailnetPublicAdd"')
+    assert 'id="tailnetCompanyAdd"' not in rail
+    assert 'id="tailnetPublicAdd"' not in rail
+    assert 'id="tailnetCompanyAppLinks"' not in rail
+    assert 'id="tailnetPublicAppLinks"' not in rail
+    links = rail.index('id="tailnetAppLinks"')
+    manager = rail.index('id="tailnetPrivateManager"')
+    marketplace = rail.index('id="tailnetPrivateAdd"')
+    assert links < manager < marketplace
 
 
-def test_work_and_web_entries_are_server_synced_with_a_local_warm_cache():
+def test_work_and_web_bookmark_code_is_not_initialized_by_the_private_only_rail():
+    load = JS[JS.index("async function loadApps()"):JS.index("\n  loadApps();")]
+    assert "companyAdd.addEventListener" not in load
+    assert "publicAdd.addEventListener" not in load
+    assert "renderSavedGroup('company')" not in load
+    assert "renderSavedGroup('public')" not in load
+    assert "hydrateSavedGroups()" not in load
+    assert "scope:'private-only'" in load
     assert "const BOOKMARK_STORAGE_KEY='hermesui.app-selector.bookmarks.v1'" in JS
     assert "const BOOKMARK_API_PATH='/apps/api/bookmarks'" in JS
     assert "localStorage.getItem(BOOKMARK_STORAGE_KEY)" in JS
@@ -179,14 +181,12 @@ def test_work_and_web_entries_are_server_synced_with_a_local_warm_cache():
     assert "method:'PUT'" in JS
     assert "credentials:'same-origin'" in JS
     assert "baseRevision:bookmarkRevision" in JS
-    assert "bookmarkSyncPromise=hydrateSavedGroups()" in JS
     assert "if(!record.initialized&&savedBookmarkCount(savedGroups)>0)" in JS
     assert "if(error&&error.status===409)record=await fetchBookmarkRecord()" in JS
     assert "if(record.initialized)installSavedGroups(record.groups)" in JS
     assert "if(!await ensureBookmarkSync())return" in JS
     assert "showPromptDialog" in JS
-    assert "addSavedApp('company')" in JS
-    assert "addSavedApp('public')" in JS
+
     assert "link.dataset.bookmarkGroup=group" in JS
     bookmark_renderer = JS[JS.index("function renderBookmark"):JS.index("function containerForGroup")]
     assert "document.createElement('button')" in bookmark_renderer
@@ -252,7 +252,7 @@ def test_group_list_scrolls_inside_the_fixed_rail():
     assert ".rail.tailnet-app-rail{display:flex!important;order:1;position:relative;z-index:240;overflow:hidden;}" in CSS
     assert ".tailnet-app-groups{width:100%;min-height:0;flex:1 1 auto;" in CSS
     assert "overflow-y:auto" in CSS[CSS.index(".tailnet-app-groups{"):CSS.index("}", CSS.index(".tailnet-app-groups{"))]
-    assert ".tailnet-app-group{width:100%;display:flex;flex-direction:column" in CSS
+    assert ".tailnet-app-primary{width:100%;display:flex;flex-direction:column" in CSS
 
 
 def test_private_app_inventory_is_local_config_not_public_source():
@@ -294,7 +294,12 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "frameHref.origin!==location.origin" in MANAGER
 
 
-def test_private_plus_is_the_ai_wizards_panel_app_library():
+def test_marketplace_storefront_is_the_ai_wizards_panel_app_library():
+    rail = _rail_markup()
+    assert 'aria-label="Marketplace"' in rail
+    assert 'data-tooltip="Marketplace"' in rail
+    assert '<path d="M4 10h16l-2-6H6z"/>' in rail
+    assert '<span aria-hidden="true">+</span>' not in rail
     assert "id:'private-marketplace'" in JS
     assert "href:'https://www.aiwizards.com/apps'" in JS
     assert "frameHref:new URL('/tailnet-frame/?app=private-marketplace&library=aiwizards-v2',location.origin).href" in JS
@@ -533,8 +538,12 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1"'
         in INDEX
     )
-    assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3"' in INDEX
+    assert (
+        'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__'
+        '&cron-notifications=v3&semantic-icons=v1"'
+        in INDEX
+    )
     assert "new URL(PRIVATE_APPS_PATH,location.origin)" in MANAGER
