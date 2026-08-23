@@ -7195,10 +7195,14 @@ function _sessionNewSessionLauncher() {
   const pending=Boolean(_newSessionInFlight);
   button.disabled=pending;
   button.setAttribute('aria-busy',pending?'true':'false');
-  const plus=document.createElement('span');
-  plus.className='session-new-session-plus';
+  const plus=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  plus.classList.add('session-new-session-plus');
+  plus.setAttribute('viewBox','0 0 16 16');
+  plus.setAttribute('fill','none');
   plus.setAttribute('aria-hidden','true');
-  plus.textContent='+';
+  const plusPath=document.createElementNS('http://www.w3.org/2000/svg','path');
+  plusPath.setAttribute('d','M8 3.5v9M3.5 8h9');
+  plus.appendChild(plusPath);
   const label=document.createElement('span');
   label.textContent='New session';
   button.appendChild(plus);

@@ -39,11 +39,16 @@ def test_new_session_launcher_separates_working_from_done():
     assert ".session-new-session-proxy[hidden]{display:none!important;}" in STYLE
     assert "ids.push('btnSessionListNewChat')" in SESSIONS
     assert "button.disabled=pending" in SESSIONS
+    assert "createElementNS('http://www.w3.org/2000/svg','svg')" in SESSIONS
+    assert "plusPath.setAttribute('d','M8 3.5v9M3.5 8h9')" in SESSIONS
+    assert "font-family:inherit;font-size:13px;font-weight:inherit;line-height:inherit" in STYLE
+    assert "stroke-linecap:round" in STYLE
+    assert "background:var(--accent)" not in STYLE[STYLE.index('.session-new-session-plus{'):STYLE.index('.sidebar-search{')]
 
 
 def test_status_group_assets_have_matching_cache_identity():
-    css_suffix = "&private-app-rail=v1&new-session-divider=v1"
-    js_suffix = "&tab-polish=v1&status-groups=v1&new-session-divider=v1"
+    css_suffix = "&private-app-rail=v1&new-session-divider=v2"
+    js_suffix = "&tab-polish=v1&status-groups=v1&new-session-divider=v2"
     index_css = next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
     sw_css = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     assert css_suffix in index_css
