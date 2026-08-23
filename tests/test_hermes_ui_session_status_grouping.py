@@ -41,14 +41,16 @@ def test_new_session_launcher_separates_working_from_done():
     assert "button.disabled=pending" in SESSIONS
     assert "createElementNS('http://www.w3.org/2000/svg','svg')" in SESSIONS
     assert "plusPath.setAttribute('d','M8 3.5v9M3.5 8h9')" in SESSIONS
-    assert "font-family:inherit;font-size:13px;font-weight:inherit;line-height:inherit" in STYLE
+    assert "border:1px solid var(--border2)" in STYLE
+    assert "background:var(--surface-subtle-hover)" in STYLE
+    assert "font-family:inherit;font-size:13px;font-weight:600;line-height:inherit" in STYLE
     assert "stroke-linecap:round" in STYLE
     assert "background:var(--accent)" not in STYLE[STYLE.index('.session-new-session-plus{'):STYLE.index('.sidebar-search{')]
 
 
 def test_status_group_assets_have_matching_cache_identity():
-    css_suffix = "&private-app-rail=v1&new-session-divider=v2&opus-polish=v1"
-    js_suffix = "&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1"
+    css_suffix = "&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1"
+    js_suffix = "&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1"
     index_css = next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
     sw_css = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     assert css_suffix in index_css
@@ -81,23 +83,36 @@ function _isSessionEffectivelyStreaming(s){
   return Boolean(s&&(s.is_streaming||s.cron_running||s.pending_user_message));
 }
 function _sessionSortTimestampMs(s){ return Number(s.updated_at||0); }
+let S={session:{session_id:'blank-current',message_count:0},messages:[],busy:false};
+eval(extractFunc('_sessionSidebarCurrentBlankDraft'));
 eval(extractFunc('_sessionSidebarWorking'));
 eval(extractFunc('_sessionRunningSortRank'));
 eval(extractFunc('_sessionSidebarSortCompare'));
 eval(extractFunc('_sessionStatusGroups'));
 const rows=[
+  {session_id:'blank-current',updated_at:500,message_count:0},
   {session_id:'done-new',updated_at:300,pinned:true},
   {session_id:'child-working',updated_at:200,_child_session_streaming:true},
   {session_id:'own-working',updated_at:400,is_streaming:true},
   {session_id:'done-old',updated_at:100},
 ];
 const grouped=_sessionStatusGroups([...rows].sort(_sessionSidebarSortCompare));
-rows[1]._child_session_streaming=false;
-rows[2].is_streaming=false;
+rows[2]._child_session_streaming=false;
+rows[3].is_streaming=false;
 const afterCompletion=_sessionStatusGroups([...rows].sort(_sessionSidebarSortCompare));
+S.busy=true;
+S.session.pending_user_message=true;
+rows[0].pending_user_message=true;
+const afterSend=_sessionStatusGroups([...rows].sort(_sessionSidebarSortCompare));
+S.busy=false;
+S.session={session_id:'another-session',message_count:1};
+rows[0].pending_user_message=false;
+const afterNavigation=_sessionStatusGroups([...rows].sort(_sessionSidebarSortCompare));
 console.log(JSON.stringify({
   grouped:grouped.map(group=>({label:group.label,status:group.status,ids:group.items.map(row=>row.session_id)})),
   afterCompletion:afterCompletion.map(group=>({label:group.label,ids:group.items.map(row=>row.session_id)})),
+  afterSend:afterSend.map(group=>({label:group.label,ids:group.items.map(row=>row.session_id)})),
+  afterNavigation:afterNavigation.map(group=>({label:group.label,ids:group.items.map(row=>row.session_id)})),
 }));
 """
     result = subprocess.run(
@@ -108,9 +123,17 @@ console.log(JSON.stringify({
     )
     payload = json.loads(result.stdout)
     assert payload["grouped"] == [
-        {"label": "Working", "status": "working", "ids": ["own-working", "child-working"]},
+        {"label": "Working", "status": "working", "ids": ["own-working", "child-working", "blank-current"]},
         {"label": "Done", "status": "done", "ids": ["done-new", "done-old"]},
     ]
     assert payload["afterCompletion"] == [
-        {"label": "Done", "ids": ["own-working", "done-new", "child-working", "done-old"]}
+        {"label": "Working", "ids": ["blank-current"]},
+        {"label": "Done", "ids": ["own-working", "done-new", "child-working", "done-old"]},
+    ]
+    assert payload["afterSend"] == [
+        {"label": "Working", "ids": ["blank-current"]},
+        {"label": "Done", "ids": ["own-working", "done-new", "child-working", "done-old"]},
+    ]
+    assert payload["afterNavigation"] == [
+        {"label": "Done", "ids": ["blank-current", "own-working", "done-new", "child-working", "done-old"]},
     ]

@@ -7153,10 +7153,28 @@ function _sessionSortTimestampMs(session) {
   return Math.max(base, pendingMs);
 }
 
+function _sessionSidebarCurrentBlankDraft(session) {
+  if(!session || !S || !S.session || session.session_id!==S.session.session_id) return false;
+  // Reuse the canonical new-chat guard so only the current untouched session is
+  // projected into Working. Historical empty sessions remain in Done.
+  if(typeof _currentSessionIsReusableEmptyChat==='function'){
+    return _currentSessionIsReusableEmptyChat();
+  }
+  // Standalone fallback for lightweight frontend tests that do not load boot.js.
+  const hasVisibleMessages=Array.isArray(S.messages)
+    && S.messages.some(message=>message&&message.role&&message.role!=='tool');
+  return Number(S.session.message_count||0)===0
+    && !hasVisibleMessages
+    && !S.busy
+    && !S.session.active_stream_id
+    && !S.session.pending_user_message;
+}
+
 function _sessionSidebarWorking(session) {
   return Boolean(session && (
     _isSessionEffectivelyStreaming(session) ||
-    session._child_session_streaming
+    session._child_session_streaming ||
+    _sessionSidebarCurrentBlankDraft(session)
   ));
 }
 
@@ -7173,10 +7191,18 @@ function _sessionSidebarSortCompare(a, b) {
 
 function _sessionStatusGroups(orderedSessions) {
   const working=[];
+  const blankDrafts=[];
   const done=[];
   for(const session of orderedSessions||[]){
-    (_sessionSidebarWorking(session)?working:done).push(session);
+    if(_sessionSidebarWorking(session)){
+      (_sessionSidebarCurrentBlankDraft(session)?blankDrafts:working).push(session);
+    }else{
+      done.push(session);
+    }
   }
+  // The untouched current session is a starting point, not active work yet. Keep
+  // it in Working, but after all genuinely running sessions.
+  working.push(...blankDrafts);
   const groups=[];
   if(working.length) groups.push({label:'Working',status:'working',items:working});
   if(done.length) groups.push({label:'Done',status:'done',items:done});
