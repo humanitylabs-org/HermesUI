@@ -18,6 +18,7 @@
   const grokSummaryErrors=new Map();
   const OPENING_EVIDENCE_LIMIT=30;
   const PROMPT_EVIDENCE_LIMIT=30;
+  const PROMPT_EVIDENCE_MAX_PAGES=4;
   const GROK_SUMMARY_ENDPOINT='/apps/api/high-signal-summary';
   const SUMMARY_MODEL_TASK='high_signal_summary';
   let summaryModelConfig={provider:'',model:'',label:'AI model'};
@@ -312,21 +313,38 @@
   function dashboardInstruction(entries,resultAnchor=''){
     const runUsers=latestRunUserEntries(entries);
     let text=runUsers.length?cleanUserText(runUsers[runUsers.length-1].message):'';
+    let pending=false;
     if(!text&&resultAnchor){
       const evidence=promptEvidenceCache.get(sessionKey());
       if(evidence&&evidence.anchor===resultAnchor){
         if(evidence.text) text=evidence.text;
-        else if(evidence.pending) text='Loading the last prompt…';
+        else if(evidence.pending) pending=true;
       }
     }
-    if(!text) text='No prompt is available yet.';
-    return {text,steers:acceptedSteersForInstruction(text)};
+    const empty=!text&&!pending;
+    if(!text) text=pending?'Loading the last prompt…':'No prompt is available yet.';
+    return {text,pending,empty,steers:acceptedSteersForInstruction(text)};
+  }
+
+  function updateDashboardLoadEarlier(instruction){
+    const button=byId('sessionDashboardLoadEarlier');
+    if(!button) return;
+    const before=typeof _oldestIdx!=='undefined'?Number(_oldestIdx):0;
+    const hasOlder=typeof _messagesTruncated!=='undefined'&&!!_messagesTruncated&&Number.isFinite(before)&&before>0;
+    const loading=typeof _loadingOlder!=='undefined'&&!!_loadingOlder;
+    const visible=!!(instruction&&instruction.empty&&hasOlder);
+    button.hidden=!visible;
+    button.disabled=visible&&loading;
+    button.textContent=loading
+      ? 'Loading earlier messages…'
+      : (hasOlder?`Load earlier messages (${before} older)`:'Load earlier messages');
   }
 
   function renderDashboardInstruction(entries,resultAnchor=''){
     const element=byId('sessionDashboardInstruction');
     if(!element) return;
     const instruction=dashboardInstruction(entries,resultAnchor);
+    updateDashboardLoadEarlier(instruction);
     if(!instruction.steers.length){
       setMarkdown('sessionDashboardInstruction',instruction.text);
       return;
@@ -336,6 +354,20 @@
     )).join('');
     element.innerHTML=`<div class="session-dashboard-instruction-copy">${markdownHtml(instruction.text)}</div><div class="session-dashboard-steers" aria-label="Accepted steers">${cards}</div>`;
     enhanceMarkdown(element);
+  }
+
+  async function loadEarlierDashboardMessages(){
+    if(typeof _loadOlderMessages!=='function') return;
+    const button=byId('sessionDashboardLoadEarlier');
+    if(button){
+      button.disabled=true;
+      button.textContent='Loading earlier messages…';
+    }
+    try{
+      await _loadOlderMessages();
+    }finally{
+      scheduleSessionDashboardSync();
+    }
   }
 
   function dashboardSessionSummary(projection){
@@ -396,8 +428,10 @@
     const request=(async()=>{
       let text='';
       let error='missing';
+      let pages=0;
       try{
-        while(before>0&&!text){
+        while(before>0&&!text&&pages<PROMPT_EVIDENCE_MAX_PAGES){
+          pages+=1;
           const data=await api(`/api/session?session_id=${encodeURIComponent(key)}&messages=1&resolve_model=0&msg_before=${before}&msg_limit=${PROMPT_EVIDENCE_LIMIT}`,{timeoutMs:120000});
           const session=data&&data.session?data.session:data;
           const messages=session&&Array.isArray(session.messages)?session.messages:[];
@@ -1068,6 +1102,8 @@
     if(refresh) refresh.addEventListener('click',refreshDashboardStatus);
     const summaryRefresh=byId('sessionDashboardSummaryRefresh');
     if(summaryRefresh) summaryRefresh.addEventListener('click',refreshDashboardSummary);
+    const loadEarlier=byId('sessionDashboardLoadEarlier');
+    if(loadEarlier) loadEarlier.addEventListener('click',()=>{void loadEarlierDashboardMessages();});
     const controls=summaryModelControls();
     controls.forEach(button=>button.addEventListener('click',toggleSummaryModelDropdown));
     if(controls.length){

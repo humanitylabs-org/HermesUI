@@ -55,6 +55,8 @@ def test_high_signal_keeps_one_unboxed_goal_and_exactly_three_cards():
     assert 'session-dashboard-section--completed' in block
     assert 'id="sessionDashboardOriginalRequest"' in block
     assert 'id="sessionDashboardInstruction"' in block
+    assert 'id="sessionDashboardLoadEarlier" hidden' in block
+    assert '>Load earlier messages</button>' in block
     assert 'id="sessionDashboardStatus"' in block
     assert 'id="sessionDashboardCompleted"' in block
     assert 'id="sessionDashboardSummaryRefresh"' in block
@@ -304,3 +306,44 @@ setTimeout(()=>{{syncSessionDashboard();process.stdout.write(JSON.stringify({{pr
     assert len(payload["historyRequests"]) == 2
     assert "msg_before=61&msg_limit=30" in payload["historyRequests"][0]
     assert "msg_before=31&msg_limit=30" in payload["historyRequests"][1]
+
+
+def test_empty_last_prompt_shows_existing_load_earlier_control_after_hydration():
+    node = shutil.which("node")
+    assert node is not None
+    harness = f"""
+const fs=require('fs');const vm=require('vm');const elements=new Map();
+function element(id){{if(!elements.has(id))elements.set(id,{{id,hidden:id==='sessionDashboardLoadEarlier',textContent:'',innerHTML:'',dataset:{{}},disabled:false,attrs:{{}},listeners:{{}},addEventListener(name,fn){{this.listeners[name]=fn;}},setAttribute(name,value){{this.attrs[name]=String(value);}},removeAttribute(name){{delete this.attrs[name];}}}});return elements.get(id);}}
+global.window=global;global.document={{readyState:'complete',documentElement:{{dataset:{{sessionView:'dashboard'}}}},getElementById:element,addEventListener(){{}}}};
+global.location={{href:'https://device.example/hermesUI/session/session-1'}};global.history={{state:null,replaceState(){{}}}};global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
+global.S={{session:{{session_id:'session-1'}},messages:[{{role:'assistant',content:'A result whose prompt is outside the loaded tail.',id:'result-1',finish_reason:'stop'}}],busy:false,activeStreamId:null}};
+global.msgContent=m=>String(m&&m.content||'');global.renderMd=s=>String(s||'');global._stripWorkspaceDisplayPrefix=s=>String(s||'').replace(/^\\s*\\[Workspace[^\\]]*\\]\\s*/i,'').trim();global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');global._messageIsRenderable=m=>!!(m&&m.role!=='tool'&&m.content);global._isContextCompactionMessage=()=>false;global._isPreservedCompressionTaskListMessage=()=>false;global._isRecoveryControlMessage=()=>false;global.INFLIGHT={{}};global.requestAnimationFrame=cb=>{{cb();return 1;}};global.queueMicrotask=cb=>cb();global._messagesTruncated=true;global._oldestIdx=151;global._loadingOlder=false;
+const historyRequests=[];global.api=async url=>{{historyRequests.push(url);const match=String(url).match(/msg_before=(\\d+)/);const before=match?Number(match[1]):0;return {{session:{{messages:[{{role:'assistant',content:'Still no user prompt.',id:'a-older-'+before}}],_messages_truncated:true,_messages_offset:Math.max(1,before-30)}}}};}};
+let olderLoads=0;global._loadOlderMessages=async()=>{{olderLoads++;global._messagesTruncated=false;global._oldestIdx=0;}};
+let summaryRequests=0;global.fetch=async()=>{{summaryRequests++;throw new Error('Summary refresh must remain manual');}};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
+setTimeout(()=>{{
+  syncSessionDashboard();
+  const button=element('sessionDashboardLoadEarlier');
+  const before={{hidden:button.hidden,disabled:button.disabled,label:button.textContent,prompt:element('sessionDashboardInstruction').innerHTML}};
+  button.listeners.click();
+  setTimeout(()=>process.stdout.write(JSON.stringify({{before,afterHidden:button.hidden,olderLoads,historyRequests,summaryRequests}})),10);
+}},30);
+"""
+    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
+    payload = json.loads(result.stdout)
+    assert payload["before"] == {
+        "hidden": False,
+        "disabled": False,
+        "label": "Load earlier messages (151 older)",
+        "prompt": "No prompt is available yet.",
+    }
+    assert payload["afterHidden"] is True
+    assert payload["olderLoads"] == 1
+    assert len(payload["historyRequests"]) == 4
+    assert payload["summaryRequests"] == 0
+
+
+def test_automatic_last_prompt_hydration_is_bounded_before_manual_load():
+    assert "const PROMPT_EVIDENCE_MAX_PAGES=4;" in DASHBOARD
+    assert "while(before>0&&!text&&pages<PROMPT_EVIDENCE_MAX_PAGES)" in DASHBOARD
