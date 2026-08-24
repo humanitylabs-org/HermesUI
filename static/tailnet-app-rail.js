@@ -914,12 +914,35 @@
     return grouped;
   }
 
-  function conciseScheduledTime(job,groupKey){
+  function scheduledRelativeMeta(job,groupKey){
     const future=groupKey==='active'||groupKey==='paused';
     const value=future?job.next_run_at:job.last_run_at;
-    const stamp=typeof value==='number'?value*1000:Date.parse(value||'');
-    if(!Number.isFinite(stamp))return '';
-    return `${future?'Next':'Last'} ${new Date(stamp).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`;
+    const relative=typeof cronRelativeTimeMeta==='function'
+      ?cronRelativeTimeMeta(value,future?'next':'last')
+      :{text:future?'Not scheduled':'Never run',absolute:'',stamp:null};
+    return {
+      text:relative.stamp==null?relative.text:`${future?'Next':'Last'} ${relative.text}`,
+      absolute:relative.absolute||'',
+      value:value==null?'':String(value),
+      kind:future?'next':'last'
+    };
+  }
+
+  function refreshScheduledRelativeTimes(){
+    if(!scheduledList)return;
+    scheduledList.querySelectorAll('[data-scheduled-time-kind]').forEach(node=>{
+      const kind=node.dataset.scheduledTimeKind;
+      const value=node.dataset.scheduledTimeValue;
+      const relative=typeof cronRelativeTimeMeta==='function'
+        ?cronRelativeTimeMeta(value,kind)
+        :{text:kind==='next'?'Not scheduled':'Never run',absolute:'',stamp:null};
+      node.textContent=relative.stamp==null?relative.text:`${kind==='next'?'Next':'Last'} ${relative.text}`;
+      node.title=relative.absolute||'';
+      const row=node.closest('.tailnet-scheduled-job');
+      if(row&&row.hasAttribute('aria-label')){
+        row.setAttribute('aria-label',`${row.dataset.jobName}. ${row.dataset.jobGroup}. ${node.textContent}. Press Enter, right-click, or hold for actions.`);
+      }
+    });
   }
 
   function scheduledJobButton(label,action,{danger=false}={}){
@@ -1067,10 +1090,15 @@
       const detail=document.createElement('div');
       detail.className='tailnet-scheduled-job-detail';
       const next=document.createElement('span');
-      next.textContent=conciseScheduledTime(job,groupMeta.key);
-      if(next.textContent)detail.append(next);
-      detail.hidden=!next.textContent;
+      const timing=scheduledRelativeMeta(job,groupMeta.key);
+      next.textContent=timing.text;
+      next.title=timing.absolute;
+      next.dataset.scheduledTimeKind=timing.kind;
+      next.dataset.scheduledTimeValue=timing.value;
+      detail.append(next);
       main.append(top,detail);
+      row.dataset.jobName=String(job.name||job.id);
+      row.dataset.jobGroup=groupMeta.label;
       if(!job.read_only){
         const menuId=`tailnet-scheduled-job-menu-${menuIndex++}`;
         row.tabIndex=0;
@@ -1136,6 +1164,10 @@
     body.classList.add('is-cron-modal-body');
     cronEditMount.appendChild(body);
     if(cronEditTitle)cronEditTitle.textContent=String(job.name||job.id||'Edit job');
+    if(cronEditSave){
+      cronEditSave.disabled=false;
+      cronEditSave.textContent='Save changes';
+    }
     openCronEdit(job);
     cronEditDialog.showModal();
     requestAnimationFrame(()=>{
@@ -2316,6 +2348,8 @@
     notificationFilterButtons.forEach(button=>button.addEventListener('click',()=>setNotificationFilter(button.dataset.notificationFilter)));
     notificationsModeButtons.forEach(button=>button.addEventListener('click',()=>setNotificationsMode(button.dataset.notificationsMode)));
     if(scheduledRefresh)scheduledRefresh.addEventListener('click',()=>void loadScheduledJobs());
+    window.setInterval(()=>{if(!document.hidden&&notificationsMode==='scheduled')refreshScheduledRelativeTimes();},30000);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden&&notificationsMode==='scheduled')refreshScheduledRelativeTimes();});
     if(scheduledNew)scheduledNew.addEventListener('click',async()=>{
       activateHermes({remember:false});
       if(typeof switchPanel==='function')await switchPanel('tasks');
@@ -2341,10 +2375,8 @@
         cronEditSave.textContent='Saving…';
         try{await saveCronForm();}
         finally{
-          if(cronEditDialog.open){
-            cronEditSave.disabled=false;
-            cronEditSave.textContent='Save changes';
-          }
+          cronEditSave.disabled=false;
+          cronEditSave.textContent='Save changes';
         }
       });
       cronEditDialog.addEventListener('cancel',event=>{

@@ -514,26 +514,81 @@ function _syncCronScheduleWarning() {
   _syncCronSchedulePreview();
 }
 
-// Live preview of the generated cron expression in the preset hint line (the
-// cron-job.org / GitHub-schedule-editor convention) so a cron-literate user sees
-// exactly what the friendly controls produce. Empty on Custom (the raw field is shown).
+function _cronScheduleTimeText(hour, minute) {
+  const date = new Date(2000, 0, 1, Number(hour) || 0, Number(minute) || 0);
+  try { return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date); }
+  catch (_) { return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`; }
+}
+
+function _cronScheduleHumanSummary(presetId, values = {}) {
+  const time = _cronScheduleTimeText(values.hour, values.minute);
+  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  if (presetId === 'every5m') return 'Runs every 5 minutes.';
+  if (presetId === 'every15m') return 'Runs every 15 minutes.';
+  if (presetId === 'every30m') return 'Runs every 30 minutes.';
+  if (presetId === 'hourly') return `Runs every hour at :${String(values.minute ?? 0).padStart(2, '0')}.`;
+  if (presetId === 'daily') return `Runs every day at ${time}.`;
+  if (presetId === 'weekdays') return `Runs every weekday at ${time}.`;
+  if (presetId === 'weekly') return `Runs every ${weekdays[Number(values.weekday)] || 'week'} at ${time}.`;
+  if (presetId === 'monthly') return `Runs on day ${values.monthDay || 1} of every month at ${time}.`;
+  if (presetId === 'yearly') return `Runs every ${months[Math.max(0, Number(values.month || 1) - 1)] || 'year'} ${values.monthDay || 1} at ${time}.`;
+  return '';
+}
+
+function _cronScheduleHumanSummaryForInput(value) {
+  const state = _cronSchedulePresetStateForInput(value);
+  return state.presetId === 'custom' ? 'Uses an advanced schedule.' : _cronScheduleHumanSummary(state.presetId, state);
+}
+
+function cronRelativeTimeMeta(value, kind = 'next', now = Date.now()) {
+  const stamp = typeof value === 'number' ? value * 1000 : Date.parse(value || '');
+  const unknown = kind === 'next' ? 'Not scheduled' : 'Never run';
+  if (!Number.isFinite(stamp)) return { text: unknown, absolute: '', stamp: null };
+  const delta = stamp - now;
+  const magnitude = Math.abs(delta);
+  let compact = '<1m';
+  if (magnitude >= 60000) {
+    const units = magnitude < 3600000 ? [60000, 'm']
+      : magnitude < 86400000 ? [3600000, 'h']
+      : magnitude < 1209600000 ? [86400000, 'd']
+      : magnitude < 5184000000 ? [604800000, 'w']
+      : magnitude < 31536000000 ? [2592000000, 'mo']
+      : [31536000000, 'y'];
+    compact = `${Math.max(1, Math.round(magnitude / units[0]))}${units[1]}`;
+  }
+  const text = kind === 'next'
+    ? (delta >= 0 ? `in ${compact}` : `${compact} overdue`)
+    : (delta <= 0 ? `${compact} ago` : `in ${compact}`);
+  return { text, absolute: new Date(stamp).toLocaleString(), stamp };
+}
+
+function _markCronScheduleDirty() {
+  const scheduleEl = $('cronFormSchedule');
+  if (scheduleEl && scheduleEl.dataset) scheduleEl.dataset.dirty = '1';
+}
+
+// Show a plain-language confirmation. The generated expression remains in the
+// hidden canonical field and appears only when Advanced schedule is selected.
 function _syncCronSchedulePreview() {
   const preview = $('cronFormSchedulePreview');
   const presetEl = $('cronFormSchedulePreset');
-  const scheduleEl = $('cronFormSchedule');
   if (!preview) return;
   const presetId = presetEl ? presetEl.value : 'custom';
-  const expr = String((scheduleEl && scheduleEl.value) || '').trim();
-  preview.textContent = (presetId !== 'custom' && expr) ? `${expr} · ` : '';
+  preview.textContent = presetId === 'custom' ? '' : `${_cronScheduleHumanSummary(presetId, _cronSchedulePresetValuesForSelection(presetId))} `;
 }
 
 const CRON_SCHEDULE_PRESETS = [
-  { id: 'hourly', label: 'cron_schedule_preset_hourly', fallback: 'Hourly', fields: ['minute'], defaults: { minute: 0 } },
-  { id: 'daily', label: 'cron_schedule_preset_daily', fallback: 'Daily', fields: ['time'], defaults: { hour: 9, minute: 0 } },
-  { id: 'weekdays', label: 'cron_schedule_preset_weekdays', fallback: 'Weekdays (Mon–Fri)', fields: ['time'], defaults: { hour: 9, minute: 0 } },
-  { id: 'weekly', label: 'cron_schedule_preset_weekly', fallback: 'Weekly', fields: ['weekday', 'time'], defaults: { hour: 9, minute: 0, weekday: 1 } },
-  { id: 'monthly', label: 'cron_schedule_preset_monthly', fallback: 'Monthly', fields: ['monthDay', 'time'], defaults: { hour: 9, minute: 0, monthDay: 1 } },
-  { id: 'custom', label: 'cron_schedule_preset_custom', fallback: 'Custom', fields: [] },
+  { id: 'every5m', label: 'cron_schedule_preset_every_5m', fallback: 'Every 5 minutes', fields: [], defaults: {} },
+  { id: 'every15m', label: 'cron_schedule_preset_every_15m', fallback: 'Every 15 minutes', fields: [], defaults: {} },
+  { id: 'every30m', label: 'cron_schedule_preset_every_30m', fallback: 'Every 30 minutes', fields: [], defaults: {} },
+  { id: 'hourly', label: 'cron_schedule_preset_hourly', fallback: 'Every hour', fields: ['minute'], defaults: { minute: 0 } },
+  { id: 'daily', label: 'cron_schedule_preset_daily', fallback: 'Every day', fields: ['time'], defaults: { hour: 9, minute: 0 } },
+  { id: 'weekdays', label: 'cron_schedule_preset_weekdays', fallback: 'Every weekday (Mon–Fri)', fields: ['time'], defaults: { hour: 9, minute: 0 } },
+  { id: 'weekly', label: 'cron_schedule_preset_weekly', fallback: 'Every week', fields: ['weekday', 'time'], defaults: { hour: 9, minute: 0, weekday: 1 } },
+  { id: 'monthly', label: 'cron_schedule_preset_monthly', fallback: 'Every month', fields: ['monthDay', 'time'], defaults: { hour: 9, minute: 0, monthDay: 1 } },
+  { id: 'yearly', label: 'cron_schedule_preset_yearly', fallback: 'Every year', fields: ['month', 'monthDay', 'time'], defaults: { hour: 9, minute: 0, month: 1, monthDay: 1 } },
+  { id: 'custom', label: 'cron_schedule_preset_custom', fallback: 'Advanced schedule…', fields: [] },
 ];
 
 function _cronSchedulePresetOptionHtml() {
@@ -552,6 +607,7 @@ function _cronSchedulePresetControlIds() {
     minute: 'cronFormScheduleMinute',
     weekday: 'cronFormScheduleWeekday',
     monthDay: 'cronFormScheduleMonthDay',
+    month: 'cronFormScheduleMonth',
   };
 }
 
@@ -563,6 +619,7 @@ function _cronSchedulePresetFieldWrapId(field) {
   if (field === 'minute') return 'cronFormScheduleMinuteField';
   if (field === 'weekday') return 'cronFormScheduleWeekdayField';
   if (field === 'monthDay') return 'cronFormScheduleMonthDayField';
+  if (field === 'month') return 'cronFormScheduleMonthField';
   return '';
 }
 
@@ -581,6 +638,7 @@ function _cronSchedulePresetBounds(field) {
   if (field === 'minute') return { min: 0, max: 59 };
   if (field === 'weekday') return { min: 0, max: 6 };
   if (field === 'monthDay') return { min: 1, max: 31 };
+  if (field === 'month') return { min: 1, max: 12 };
   return { min: 0, max: 999 };
 }
 
@@ -644,7 +702,7 @@ function _cronSchedulePresetApplyValues(values) {
     const minuteBox = $('cronFormScheduleMinute');
     if (minuteBox) minuteBox.value = _cronSchedulePresetNormalizeValue('minute', values.minute, values.minute);
   }
-  ['weekday', 'monthDay'].forEach((field) => {
+  ['weekday', 'monthDay', 'month'].forEach((field) => {
     const el = _cronSchedulePresetFieldEl(field);
     if (!el || values[field] == null) return;
     el.value = _cronSchedulePresetNormalizeValue(field, values[field], values[field]);
@@ -661,7 +719,7 @@ function _cronSchedulePresetSyncVisibility(presetId) {
   // shows ONLY on Custom (kept in the DOM as a hidden field otherwise).
   if (wrapper) wrapper.style.display = isCustom ? 'none' : '';
   if (customRow) customRow.style.display = isCustom ? '' : 'none';
-  ['time', 'minute', 'weekday', 'monthDay'].forEach((field) => {
+  ['time', 'minute', 'weekday', 'monthDay', 'month'].forEach((field) => {
     const fieldWrap = $(_cronSchedulePresetFieldWrapId(field));
     if (fieldWrap) fieldWrap.style.display = showFields.includes(field) ? '' : 'none';
   });
@@ -693,22 +751,37 @@ function _cronSchedulePresetValuesForSelection(presetId) {
       monthDay: _cronSchedulePresetValueForField('monthDay', defaults.monthDay),
     };
   }
+  if (presetId === 'yearly') {
+    return {
+      hour: _cronSchedulePresetValueForField('hour', defaults.hour),
+      minute: _cronSchedulePresetValueForField('minute', defaults.minute),
+      month: _cronSchedulePresetValueForField('month', defaults.month),
+      monthDay: _cronSchedulePresetValueForField('monthDay', defaults.monthDay),
+    };
+  }
   return {};
 }
 
 function _cronSchedulePresetValueForSelection(presetId, selectedValues) {
   const values = selectedValues || _cronSchedulePresetValuesForSelection(presetId);
+  if (presetId === 'every5m') return '*/5 * * * *';
+  if (presetId === 'every15m') return '*/15 * * * *';
+  if (presetId === 'every30m') return '*/30 * * * *';
   if (presetId === 'hourly') return `${values.minute} * * * *`;
   if (presetId === 'daily') return `${values.minute} ${values.hour} * * *`;
   if (presetId === 'weekdays') return `${values.minute} ${values.hour} * * 1-5`;
   if (presetId === 'weekly') return `${values.minute} ${values.hour} * * ${values.weekday}`;
   if (presetId === 'monthly') return `${values.minute} ${values.hour} ${values.monthDay} * *`;
+  if (presetId === 'yearly') return `${values.minute} ${values.hour} ${values.monthDay} ${values.month} *`;
   return '';
 }
 
 function _cronSchedulePresetStateForInput(value) {
   const schedule = String(value || '').trim();
   if (!schedule) return { presetId: 'custom' };
+  if (/^(?:every\s+)?5m$/i.test(schedule) || schedule === '*/5 * * * *') return { presetId: 'every5m' };
+  if (/^(?:every\s+)?15m$/i.test(schedule) || schedule === '*/15 * * * *') return { presetId: 'every15m' };
+  if (/^(?:every\s+)?30m$/i.test(schedule) || schedule === '*/30 * * * *') return { presetId: 'every30m' };
   if (/^every\s+1h$/i.test(schedule)) {
     return { presetId: 'hourly', minute: '0' };
   }
@@ -732,6 +805,9 @@ function _cronSchedulePresetStateForInput(value) {
   if (_cronSchedulePresetRawFieldInBounds('hour', hour) && _cronSchedulePresetRawFieldInBounds('monthDay', dayOfMonth) && month === '*' && dayOfWeek === '*') {
     return { presetId: 'monthly', minute, hour, monthDay: dayOfMonth };
   }
+  if (_cronSchedulePresetRawFieldInBounds('hour', hour) && _cronSchedulePresetRawFieldInBounds('monthDay', dayOfMonth) && _cronSchedulePresetRawFieldInBounds('month', month) && dayOfWeek === '*') {
+    return { presetId: 'yearly', minute, hour, monthDay: dayOfMonth, month };
+  }
   return { presetId: 'custom' };
 }
 
@@ -754,11 +830,22 @@ function _syncCronSchedulePresetAndWarning() {
   _syncCronScheduleWarning();
 }
 
+function _syncCronScheduleWarningAndMarkDirty() {
+  _markCronScheduleDirty();
+  _syncCronScheduleWarning();
+}
+
+function _syncCronSchedulePresetAndWarningAndMarkDirty() {
+  _markCronScheduleDirty();
+  _syncCronSchedulePresetAndWarning();
+}
+
 function _applyCronSchedulePresetSelection() {
   const presetEl = $('cronFormSchedulePreset');
   const scheduleEl = $('cronFormSchedule');
   if (!presetEl || !scheduleEl) return;
   const presetId = presetEl.value;
+  _markCronScheduleDirty();
   if (presetId !== 'custom') {
     const values = _cronSchedulePresetValuesForSelection(presetId);
     _cronSchedulePresetApplyValues(values);
@@ -781,6 +868,7 @@ function _regenCronScheduleFromFields() {
   if (!presetEl || !scheduleEl) return;
   const presetId = presetEl.value;
   if (presetId === 'custom') return;
+  _markCronScheduleDirty();
   scheduleEl.value = _cronSchedulePresetValueForSelection(presetId);
   _syncCronScheduleWarning();
 }
@@ -791,7 +879,7 @@ function _initCronSchedulePresetControls() {
   if (!presetEl || !scheduleEl) return;
   presetEl.addEventListener('change', _applyCronSchedulePresetSelection);
   if ($('cronFormSchedulePresetParams')) {
-    ['cronFormScheduleTime', 'cronFormScheduleMinute', 'cronFormScheduleWeekday', 'cronFormScheduleMonthDay'].forEach((id) => {
+    ['cronFormScheduleTime', 'cronFormScheduleMinute', 'cronFormScheduleWeekday', 'cronFormScheduleMonthDay', 'cronFormScheduleMonth'].forEach((id) => {
       const el = $(id);
       if (!el) return;
       // On `change`/blur, clamp + normalize (writes values back). On `input`
@@ -808,8 +896,8 @@ function _initCronSchedulePresetControls() {
   // "0 9 * * 1,3" transiently equals Weekly's "0 9 * * 1") would switch the preset
   // and hide the focused raw field mid-keystroke (#5554). Preset re-detection runs
   // on initial render and on `change`/blur.
-  scheduleEl.addEventListener('input', _syncCronScheduleWarning);
-  scheduleEl.addEventListener('change', _syncCronSchedulePresetAndWarning);
+  scheduleEl.addEventListener('input', _syncCronScheduleWarningAndMarkDirty);
+  scheduleEl.addEventListener('change', _syncCronSchedulePresetAndWarningAndMarkDirty);
   _syncCronSchedulePresetAndWarning();
 }
 
@@ -1248,9 +1336,13 @@ function _renderCronDetail(job){
   if (!title || !body) return;
   title.textContent = job.name || job.schedule_display || '(unnamed)';
   const status = _cronStatusMeta(job);
-  const nextRun = job.next_run_at ? new Date(job.next_run_at).toLocaleString() : t('not_available');
-  const lastRun = job.last_run_at ? new Date(job.last_run_at).toLocaleString() : t('never');
-  const schedule = job.schedule_display || (job.schedule && job.schedule.expression) || '';
+  const nextRun = cronRelativeTimeMeta(job.next_run_at, 'next');
+  const lastRun = cronRelativeTimeMeta(job.last_run_at, 'last');
+  const scheduleRaw = job.schedule_display || (job.schedule && (job.schedule.expr || job.schedule.expression)) || '';
+  const scheduleSummary = _cronScheduleHumanSummaryForInput(scheduleRaw);
+  const scheduleAdvanced = _cronSchedulePresetIdForValue(scheduleRaw) === 'custom'
+    ? `<details class="cron-detail-advanced-schedule"><summary>Advanced schedule rule</summary><code>${esc(scheduleRaw)}</code></details>`
+    : '';
   const skills = Array.isArray(job.skills) && job.skills.length ? job.skills.join(', ') : '—';
   const deliver = job.deliver || 'local';
   const isNoAgent = _isCronScriptJob(job);
@@ -1300,9 +1392,9 @@ function _renderCronDetail(job){
       <div class="detail-card">
         <div class="detail-card-title">${esc(t('cron_status_active').replace(/./,c=>c.toUpperCase()))}</div>
         <div class="detail-row"><div class="detail-row-label">Status</div><div class="detail-row-value"><span class="detail-badge ${status.detailClass}">${esc(status.label)}</span></div></div>
-        <div class="detail-row"><div class="detail-row-label">Schedule</div><div class="detail-row-value"><code>${esc(schedule)}</code></div></div>
-        <div class="detail-row"><div class="detail-row-label">${esc(t('cron_next'))}</div><div class="detail-row-value">${esc(nextRun)}</div></div>
-        <div class="detail-row"><div class="detail-row-label">${esc(t('cron_last'))}</div><div class="detail-row-value">${esc(lastRun)}</div></div>
+        <div class="detail-row"><div class="detail-row-label">Schedule</div><div class="detail-row-value">${esc(scheduleSummary)}${scheduleAdvanced}</div></div>
+        <div class="detail-row"><div class="detail-row-label">${esc(t('cron_next'))}</div><div class="detail-row-value" title="${esc(nextRun.absolute)}">${esc(nextRun.text)}</div></div>
+        <div class="detail-row"><div class="detail-row-label">${esc(t('cron_last'))}</div><div class="detail-row-value" title="${esc(lastRun.absolute)}">${esc(lastRun.text)}</div></div>
         <div class="detail-row"><div class="detail-row-label">Deliver</div><div class="detail-row-value">${esc(deliver)}</div></div>
         <div class="detail-row"><div class="detail-row-label">${esc(t('cron_mode_label') || 'Mode')}</div><div class="detail-row-value"><span class="detail-badge cron-mode-badge ${isNoAgent ? 'script' : 'agent'}" id="cronJobMode">${esc(cronJobMode)}</span>${modelProvider ? ` <code>${modelProvider}</code>` : ''}</div></div>
         ${showOwnerRow ? `<div class="detail-row"><div class="detail-row-label">Owner profile</div><div class="detail-row-value"><span class="detail-badge active" title="${esc(ownerProfileTitle)}">${esc(ownerProfileLabel)}</span></div></div>` : ''}
@@ -1606,7 +1698,8 @@ function openCronEdit(job){
   _cronSelectedSkills = Array.isArray(job.skills) ? [...job.skills] : [];
   _renderCronForm({
     name: job.name || '',
-    schedule: job.schedule_display || (job.schedule && job.schedule.expression) || '',
+    schedule: job.schedule_display || (job.schedule && (job.schedule.expr || job.schedule.expression)) || '',
+    scheduleRaw: (job.schedule && (job.schedule.expr || job.schedule.expression)) || job.schedule_display || '',
     prompt: job.prompt || '',
     deliver: job.deliver || 'local',
     profile: job.profile || '',
@@ -1625,121 +1718,144 @@ function openCronEdit(job){
   loadCronProfiles().then(()=>_refreshCronProfileSelect(job.profile || '')).catch(()=>{});
 }
 
-function _renderCronForm({ name, schedule, prompt, deliver, profile, toast_notifications=true, no_agent=false, script='', model='', provider='', isEdit }){
+function _renderCronForm({ name, schedule, scheduleRaw, prompt, deliver, profile, toast_notifications=true, no_agent=false, script='', model='', provider='', isEdit }){
   const title = $('taskDetailTitle');
   const body = $('taskDetailBody');
   const empty = $('taskDetailEmpty');
   if (!body || !title) return;
   const isNoAgent = !!no_agent;
   const toastNotifications = toast_notifications !== false;
+  const scheduleValue = scheduleRaw != null ? String(scheduleRaw) : String(schedule || '');
+  const advancedCount = [profile, model || provider, _cronSelectedSkills.length ? 'skills' : ''].filter(Boolean).length;
   title.textContent = isEdit ? (t('edit') + ' · ' + (name || schedule || t('scheduled_jobs'))) : t('new_job');
   const promptBlock = isNoAgent ? '' : `
         <div class="detail-form-row">
-          <label for="cronFormPrompt">${esc(t('cron_prompt_label') || 'Prompt')}</label>
-          <textarea id="cronFormPrompt" rows="6" placeholder="${esc(t('cron_prompt_placeholder') || 'Must be self-contained')}" required>${esc(prompt || '')}</textarea>
+          <label for="cronFormPrompt">What should this job do?</label>
+          <textarea id="cronFormPrompt" rows="6" placeholder="Describe the task and include everything the job needs." required>${esc(prompt || '')}</textarea>
+          <div class="detail-form-hint">Write the instructions as if you were handing the task to a teammate.</div>
         </div>`;
   const scriptBlock = isNoAgent ? `
         <div class="detail-form-row">
-          <label for="cronFormScript">${esc(t('cron_script_path_label') || 'Script path')}</label>
+          <label for="cronFormScript">Script this job runs</label>
           <input type="text" id="cronFormScript" value="${esc(script || '')}" readonly autocomplete="off">
-          <div class="detail-form-hint">${esc(t('cron_script_path_hint') || 'Resolved under ~/.hermes/scripts/ unless an absolute path. Edit the script file on the server to change behavior.')}</div>
+          <div class="detail-form-hint" data-i18n-key="cron_script_path_hint">This is managed on the server. Edit the script file to change what the job does.</div>
         </div>` : '';
   const skillsBlock = isNoAgent ? '' : `
         <div class="detail-form-row">
-          <label for="cronFormSkillSearch">${esc(t('cron_skills_label') || 'Skills')}</label>
+          <label for="cronFormSkillSearch">Extra abilities</label>
           <div class="skill-picker-wrap">
-            <input type="text" id="cronFormSkillSearch" placeholder="${esc(t('cron_skills_placeholder') || 'Add skills (optional)...')}" autocomplete="off" ${isEdit ? 'disabled' : ''}>
+            <input type="text" id="cronFormSkillSearch" placeholder="Search abilities…" autocomplete="off" ${isEdit ? 'disabled' : ''}>
             <div id="cronFormSkillDropdown" class="skill-picker-dropdown" style="display:none"></div>
             <div id="cronFormSkillTags" class="skill-picker-tags"></div>
           </div>
-          ${isEdit ? `<div class="detail-form-hint">${esc(t('cron_skills_edit_hint') || 'Skill list is not editable after creation.')}</div>` : ''}
+          <div class="detail-form-hint">Optional specialized guidance the job can use.${isEdit ? ' Existing abilities stay attached and cannot be changed here.' : ''}</div>
         </div>`;
   body.innerHTML = `
     <div class="main-view-content">
       ${isNoAgent ? _cronScriptJobBannerHtml() : ''}
       <form class="detail-form" onsubmit="event.preventDefault(); saveCronForm();">
         <div class="detail-form-row">
-          <label for="cronFormName">${esc(t('cron_name_label') || 'Name')}</label>
-          <input type="text" id="cronFormName" value="${esc(name || '')}" placeholder="${esc(t('cron_name_placeholder') || 'Optional')}" autocomplete="off">
+          <label for="cronFormName">Job name</label>
+          <input type="text" id="cronFormName" value="${esc(name || '')}" placeholder="For example, Morning briefing" autocomplete="off">
+          <div class="detail-form-hint">A short name you will recognize in the jobs list.</div>
         </div>
         <div class="detail-form-row">
-          <label for="cronFormSchedulePreset">${esc(t('cron_schedule_preset_label') || 'Schedule')}</label>
+          <label for="cronFormSchedulePreset">When should this run?</label>
           <div class="cron-schedule-preset-shell">
-            <select id="cronFormSchedulePreset" class="cron-schedule-preset-select">
+            <select id="cronFormSchedulePreset" class="cron-schedule-preset-select" aria-label="When should this job run?">
               ${_cronSchedulePresetOptionHtml()}
             </select>
             <div id="cronFormSchedulePresetParams" class="cron-schedule-preset-params" style="display:none">
               <div class="cron-schedule-preset-field" id="cronFormScheduleWeekdayField">
-                <span class="cron-schedule-preset-conj" aria-hidden="true">${esc(t('cron_schedule_conj_on') || 'on')}</span>
-                <select id="cronFormScheduleWeekday" aria-label="${esc(t('cron_schedule_weekday_label') || 'Day of week')}">
-                  <option value="0">${esc(t('cron_weekday_sun') || 'Sunday')}</option>
-                  <option value="1" selected>${esc(t('cron_weekday_mon') || 'Monday')}</option>
-                  <option value="2">${esc(t('cron_weekday_tue') || 'Tuesday')}</option>
-                  <option value="3">${esc(t('cron_weekday_wed') || 'Wednesday')}</option>
-                  <option value="4">${esc(t('cron_weekday_thu') || 'Thursday')}</option>
-                  <option value="5">${esc(t('cron_weekday_fri') || 'Friday')}</option>
-                  <option value="6">${esc(t('cron_weekday_sat') || 'Saturday')}</option>
+                <span class="cron-schedule-preset-conj" aria-hidden="true">on</span>
+                <select id="cronFormScheduleWeekday" aria-label="Day of the week">
+                  <option value="0">Sunday</option>
+                  <option value="1" selected>Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                </select>
+              </div>
+              <div class="cron-schedule-preset-field" id="cronFormScheduleMonthField">
+                <span class="cron-schedule-preset-conj" aria-hidden="true">in</span>
+                <select id="cronFormScheduleMonth" aria-label="Month of the year">
+                  ${['January','February','March','April','May','June','July','August','September','October','November','December'].map((monthLabel,index)=>`<option value="${index+1}">${monthLabel}</option>`).join('')}
                 </select>
               </div>
               <div class="cron-schedule-preset-field" id="cronFormScheduleMonthDayField">
-                <span class="cron-schedule-preset-conj" aria-hidden="true">${esc(t('cron_schedule_conj_on_day') || 'on day')}</span>
-                <select id="cronFormScheduleMonthDay" aria-label="${esc(t('cron_schedule_month_day_label') || 'Day of month')}">
+                <span class="cron-schedule-preset-conj" aria-hidden="true">on day</span>
+                <select id="cronFormScheduleMonthDay" aria-label="Day of the month">
                   ${Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}
                 </select>
               </div>
               <div class="cron-schedule-preset-field" id="cronFormScheduleTimeField">
-                <span class="cron-schedule-preset-conj" aria-hidden="true">${esc(t('cron_schedule_conj_at') || 'at')}</span>
-                <input type="time" id="cronFormScheduleTime" value="09:00" step="60" autocomplete="off" aria-label="${esc(t('cron_schedule_time_label') || 'Time')}">
+                <span class="cron-schedule-preset-conj" aria-hidden="true">at</span>
+                <input type="time" id="cronFormScheduleTime" value="09:00" step="60" autocomplete="off" aria-label="Time of day">
               </div>
               <div class="cron-schedule-preset-field" id="cronFormScheduleMinuteField">
-                <span class="cron-schedule-preset-conj" aria-hidden="true">${esc(t('cron_schedule_conj_at_minute') || 'at minute')}</span>
-                <input type="number" id="cronFormScheduleMinute" min="0" max="59" step="1" value="0" autocomplete="off" aria-label="${esc(t('cron_schedule_minute_label') || 'Minute')}">
+                <span class="cron-schedule-preset-conj" aria-hidden="true">at</span>
+                <select id="cronFormScheduleMinute" aria-label="Minutes past each hour">
+                  ${Array.from({length:60},(_,i)=>`<option value="${i}">:${String(i).padStart(2,'0')}</option>`).join('')}
+                </select>
               </div>
-              <div class="detail-form-hint cron-schedule-preset-time-hint"><span id="cronFormSchedulePreview" class="cron-schedule-preview"></span>${esc(t('cron_schedule_time_hint') || 'Time is server time; cron runs server-side.')}</div>
+              <div class="detail-form-hint cron-schedule-preset-time-hint"><span id="cronFormSchedulePreview" class="cron-schedule-preview"></span>${esc(t('cron_schedule_time_hint') || 'Times follow the server clock.')}</div>
             </div>
           </div>
         </div>
-        <div class="detail-form-row" id="cronFormScheduleCustomRow" style="display:none">
-          <label for="cronFormSchedule">${esc(t('cron_schedule_label') || 'Cron expression')}</label>
-          <input type="text" id="cronFormSchedule" value="${esc(schedule || '')}" placeholder="0 9 * * *  —  every 1h  —  @daily" autocomplete="off" required>
-          <div class="detail-form-hint">${esc(t('cron_schedule_hint') || "Cron expression or shorthand like 'every 1h'.")}</div>
-          <div id="cronFormScheduleOnceWarning" class="detail-form-warning cron-once-warning" style="display:none">${esc(t('cron_schedule_once_warning') || "Duration forms like '30m' run once and are removed after running. Use 'every 30m' to keep a recurring job.")}</div>
+        <div class="detail-form-row cron-schedule-advanced-row" id="cronFormScheduleCustomRow" style="display:none">
+          <label for="cronFormSchedule">Advanced schedule rule</label>
+          <input type="text" id="cronFormSchedule" value="${esc(scheduleValue)}" placeholder="0 9 * * *  —  every 1h  —  @daily" autocomplete="off" required>
+          <div class="detail-form-hint">Only change this if you use cron syntax or another Hermes schedule shorthand. Leaving this untouched preserves the saved rule exactly.</div>
+          <div id="cronFormScheduleOnceWarning" class="detail-form-warning cron-once-warning" style="display:none">${esc(t('cron_schedule_once_warning') || 'A duration such as “30m” runs once. Use “every 30m” for a repeating job.')}</div>
         </div>
         ${scriptBlock}
         ${promptBlock}
         <div class="detail-form-row">
-          <label for="cronFormDeliver">${esc(t('cron_deliver_label') || 'Deliver output to')}</label>
+          <label for="cronFormDeliver">Where should results go?</label>
           <select id="cronFormDeliver">
-            <option value="" disabled>loading...</option>
+            <option value="" disabled>Loading destinations…</option>
           </select>
+          <div class="detail-form-hint">Choose where the completed result should be delivered.</div>
         </div>
         <div class="detail-form-row">
-          <label for="cronFormProfile">${esc(t('cron_profile_label') || 'Profile')}</label>
-          <select id="cronFormProfile">
-            ${_cronProfileOptions(profile)}
-          </select>
-          <div class="detail-form-hint">${esc(t('cron_profile_server_default_hint') || 'Uses the WebUI server default profile at run time')}</div>
-        </div>
-        <div class="detail-form-row">
-          <label for="cronFormModel">${esc(t('cron_model_label') || 'Model')}</label>
-          <select id="cronFormModel"${isNoAgent ? ' disabled' : ''}>
-            <option value="">loading...</option>
-          </select>
-          <div class="detail-form-hint">${esc(isNoAgent ? (t('cron_model_no_agent_hint') || 'No-agent jobs run the configured script directly; model is unused.') : (t('cron_model_hint') || 'Use the profile default model at run time, or pin this job to a specific provider/model.'))}</div>
-        </div>
-        <div class="detail-form-row">
-          <label for="cronFormToastNotifications">${esc(t('cron_toast_notifications_label') || 'Completion toasts')}</label>
+          <label for="cronFormToastNotifications" data-i18n-key="cron_toast_notifications_label">Notify me when it finishes</label>
           <label class="detail-form-check" for="cronFormToastNotifications">
             <input type="checkbox" id="cronFormToastNotifications" ${toastNotifications ? 'checked' : ''}>
-            <span>${esc(t('cron_toast_notifications_hint') || 'Show a toast when this cron finishes.')}</span>
+            <span>Show a Hermes notification after this job finishes.</span>
           </label>
         </div>
-        ${skillsBlock}
+        <details class="cron-advanced-options"${advancedCount ? ' open' : ''}>
+          <summary>Advanced options${advancedCount ? ` · ${advancedCount} customized` : ''}</summary>
+          <div class="cron-advanced-options-body">
+            <div class="detail-form-row">
+              <label for="cronFormProfile">Run as</label>
+              <select id="cronFormProfile">
+                ${_cronProfileOptions(profile)}
+              </select>
+              <div class="detail-form-hint">Choose which Hermes profile and saved settings this job uses.</div>
+            </div>
+            <div class="detail-form-row">
+              <label for="cronFormModel" data-i18n-key="cron_model_label">AI model</label>
+              <select id="cronFormModel"${isNoAgent ? ' disabled' : ''}>
+                <option value="">Loading models…</option>
+              </select>
+              <div class="detail-form-hint">${esc(isNoAgent ? 'This script runs directly, so an AI model is not used.' : 'Leave this on Default unless this job needs a specific model.')}</div>
+            </div>
+            ${skillsBlock}
+          </div>
+        </details>
         <div id="cronFormError" class="detail-form-error" style="display:none"></div>
       </form>
     </div>`;
   body.style.display = '';
   if (empty) empty.style.display = 'none';
+  const scheduleInput = $('cronFormSchedule');
+  if (scheduleInput && scheduleInput.dataset) {
+    scheduleInput.dataset.originalValue = scheduleValue;
+    scheduleInput.dataset.dirty = isEdit ? '0' : '1';
+  }
   _setCronHeaderButtons(isEdit ? 'edit' : 'create');
   _populateCronDeliverOptions(deliver, isEdit);
   _populateCronFormModelSelect(model, provider, isNoAgent);
@@ -1931,6 +2047,7 @@ async function saveCronForm(){
   if(!isNoAgent && !promptEl) return;
   const name=(nameEl?nameEl.value:'').trim();
   const schedule=schEl.value.trim();
+  const originalSchedule=schEl.dataset&&typeof schEl.dataset.originalValue==='string'?schEl.dataset.originalValue:schedule;
   const prompt=promptEl ? promptEl.value.trim() : '';
   const deliver=delivEl?delivEl.value:'local';
   const profile=profileEl?profileEl.value:'';
@@ -1943,6 +2060,7 @@ async function saveCronForm(){
     const modelLoaded = !!(modelEl && modelEl.dataset.loaded === '1');
     const selectedModel = modelEl ? (modelEl.value || '').trim() : '';
     if (_editingCronId) {
+      const schedule=_editingCronId&&(!schEl.dataset||schEl.dataset.dirty!=='1')?originalSchedule:schEl.value.trim();
       const updates = {job_id: _editingCronId, schedule, profile: profile, toast_notifications: toastNotifications};
       if (!isNoAgent) updates.prompt = prompt;
       if (name) updates.name = name;

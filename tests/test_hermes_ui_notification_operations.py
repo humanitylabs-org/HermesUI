@@ -40,6 +40,8 @@ def test_scheduled_jobs_keep_actions_quiet_and_edit_in_a_reused_form_modal():
     assert "cronEditMount.appendChild(body);" in RAIL
     assert "parent.insertBefore(body,nextSibling)" in RAIL
     assert "scrollTop:notificationsPanel?notificationsPanel.scrollTop:0" in RAIL
+    assert "cronEditSave.disabled=false" in RAIL
+    assert "cronEditSave.textContent='Save changes'" in RAIL
     assert "openScheduledJobEditor(job,trigger);" in RAIL
     assert "hermesui:cron-form-cancelled" in PANELS
     assert "hermesui:cron-form-saved" in PANELS
@@ -58,6 +60,16 @@ def test_scheduled_jobs_are_grouped_chronologically_without_repeated_status_tags
     assert "tailnet-scheduled-group-head" in RAIL
     assert "tailnet-scheduled-group-count" in RAIL
     assert "tailnet-scheduled-status" not in RAIL
+    assert "scheduledRelativeMeta(job,groupKey)" in RAIL
+    assert "cronRelativeTimeMeta(value" in RAIL
+    assert "data-scheduled-time-kind" in RAIL
+    assert "refreshScheduledRelativeTimes" in RAIL
+    assert "Next':'Last" in RAIL
+    assert ".tailnet-scheduled-group.is-active .tailnet-scheduled-group-head{color:#16803c" in STYLE
+    assert ".tailnet-scheduled-group.is-paused .tailnet-scheduled-group-head{color:#9a6700" in STYLE
+    assert ":root.dark .tailnet-scheduled-group.is-active .tailnet-scheduled-group-head{color:#4ade80" in STYLE
+    assert ":root.dark .tailnet-scheduled-group.is-paused .tailnet-scheduled-group-head{color:#facc15" in STYLE
+    assert ".tailnet-scheduled-group-head::before" in STYLE
 
 
 def test_job_actions_open_from_the_whole_row_on_context_long_press_or_keyboard():
