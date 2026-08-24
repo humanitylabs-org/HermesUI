@@ -109,7 +109,7 @@ def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
     assert "if(jobIds.length)void loadCronNotifications({jobIds});" in JS
 
 
-def test_mode_theme_and_settings_controls_are_fixed_at_the_bottom_of_the_app_rail():
+def test_mode_theme_and_settings_controls_remain_in_the_desktop_app_rail():
     rail = _rail_markup()
     groups = rail.index('id="tailnetAppGroups"')
     mode = rail.index('id="sessionViewToggle"')
@@ -127,6 +127,27 @@ def test_mode_theme_and_settings_controls_are_fixed_at_the_bottom_of_the_app_rai
     assert "window._pickTheme" in JS
     assert "postMessage(" in JS
     assert "{type:'hermesui:theme',theme:resolvedTheme()}" in JS
+
+
+def test_mobile_app_rail_keeps_destinations_while_utilities_move_to_one_menu():
+    rail = _rail_markup()
+    assert 'id="mobileSessionUtilitiesToggle"' not in rail
+    assert 'id="mobileSessionUtilitiesToggle"' in INDEX
+    assert 'aria-label="More options"' in INDEX
+    assert 'aria-haspopup="menu"' in INDEX
+    assert 'id="mobileSessionUtilitiesMenu" role="menu"' in INDEX
+    assert INDEX.count('role="menuitemcheckbox"') == 2
+    assert 'data-mobile-utility="session-view"' in INDEX
+    assert 'data-mobile-utility="theme"' in INDEX
+    assert 'data-mobile-utility="settings"' in INDEX
+    assert '.tailnet-app-controls{display:none;}' in CSS
+    assert '#mobileSessionUtilitiesToggle{display:inline-flex;}' in CSS
+    assert 'width:min(264px,calc(100vw - 72px))' in CSS
+    assert '#panelChat .panel-head-btn{width:44px;height:44px' in CSS
+    assert "activateMobileUtility(document.getElementById('sessionViewToggle'))" in JS
+    assert "activateMobileUtility(document.getElementById('chatSettingsToggle'))" in JS
+    assert "event.key!=='Escape'||!mobileUtilityIsOpen()" in JS
+    assert "window.innerWidth>640" in JS
 
 
 def test_cron_notification_rows_are_compact_full_row_disclosures():
@@ -567,7 +588,7 @@ def test_mobile_hermes_home_becomes_a_session_menu_only_outside_the_session_list
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1"'
         in INDEX
     )
     assert (

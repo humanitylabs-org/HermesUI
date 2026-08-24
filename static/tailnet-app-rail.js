@@ -97,6 +97,11 @@
   const notificationThreadStatus=document.getElementById('tailnetNotificationThreadStatus');
   const home=document.getElementById('tailnetAppHome');
   const themeToggle=document.getElementById('tailnetThemeToggle');
+  const mobileUtilitiesToggle=document.getElementById('mobileSessionUtilitiesToggle');
+  const mobileUtilitiesMenu=document.getElementById('mobileSessionUtilitiesMenu');
+  const mobileSessionViewUtility=document.getElementById('mobileSessionViewUtility');
+  const mobileThemeUtility=document.getElementById('mobileThemeUtility');
+  const mobileSettingsUtility=document.getElementById('mobileSettingsUtility');
   const links=document.getElementById('tailnetAppLinks');
   const companyLinks=document.getElementById('tailnetCompanyAppLinks');
   const publicLinks=document.getElementById('tailnetPublicAppLinks');
@@ -185,6 +190,86 @@
       }
     }catch(_){root.classList.toggle('dark',next==='dark');}
     syncThemeToggle();
+  }
+
+  function mobileUtilityIsOpen(){
+    return !!(mobileUtilitiesMenu&&!mobileUtilitiesMenu.hidden);
+  }
+
+  function syncMobileUtilities(){
+    if(mobileSessionViewUtility){
+      const enabled=root.dataset.sessionView==='dashboard';
+      mobileSessionViewUtility.setAttribute('aria-checked',String(enabled));
+      const state=mobileSessionViewUtility.querySelector('.mobile-session-utility-state');
+      if(state)state.textContent=enabled?'On':'Off';
+    }
+    if(mobileThemeUtility){
+      const enabled=resolvedTheme()==='dark';
+      mobileThemeUtility.setAttribute('aria-checked',String(enabled));
+      const state=mobileThemeUtility.querySelector('.mobile-session-utility-state');
+      if(state)state.textContent=enabled?'On':'Off';
+    }
+  }
+
+  function setMobileUtilitiesOpen(open,{restoreFocus=false}={}){
+    if(!mobileUtilitiesToggle||!mobileUtilitiesMenu)return;
+    const next=!!open&&window.matchMedia('(max-width:640px)').matches;
+    mobileUtilitiesMenu.hidden=!next;
+    mobileUtilitiesToggle.setAttribute('aria-expanded',String(next));
+    if(next){
+      syncMobileUtilities();
+      requestAnimationFrame(()=>{
+        const first=mobileUtilitiesMenu.querySelector('[role^="menuitem"]');
+        if(first&&mobileUtilityIsOpen())first.focus({preventScroll:true});
+      });
+    }else if(restoreFocus&&mobileUtilitiesToggle.isConnected){
+      mobileUtilitiesToggle.focus({preventScroll:true});
+    }
+  }
+
+  function activateMobileUtility(source){
+    if(source&&typeof source.click==='function')source.click();
+    requestAnimationFrame(syncMobileUtilities);
+  }
+
+  function bindMobileUtilities(){
+    if(!mobileUtilitiesToggle||!mobileUtilitiesMenu)return;
+    mobileUtilitiesToggle.addEventListener('click',()=>setMobileUtilitiesOpen(!mobileUtilityIsOpen()));
+    if(mobileSessionViewUtility)mobileSessionViewUtility.addEventListener('click',()=>activateMobileUtility(document.getElementById('sessionViewToggle')));
+    if(mobileThemeUtility)mobileThemeUtility.addEventListener('click',()=>activateMobileUtility(themeToggle));
+    if(mobileSettingsUtility)mobileSettingsUtility.addEventListener('click',()=>{
+      setMobileUtilitiesOpen(false);
+      activateMobileUtility(document.getElementById('chatSettingsToggle'));
+    });
+    mobileUtilitiesMenu.addEventListener('keydown',event=>{
+      const items=Array.from(mobileUtilitiesMenu.querySelectorAll('[role^="menuitem"]'));
+      const index=items.indexOf(document.activeElement);
+      let next=-1;
+      if(event.key==='ArrowDown')next=index<items.length-1?index+1:0;
+      else if(event.key==='ArrowUp')next=index>0?index-1:items.length-1;
+      else if(event.key==='Home')next=0;
+      else if(event.key==='End')next=items.length-1;
+      if(next>=0){event.preventDefault();items[next].focus();}
+    });
+    document.addEventListener('pointerdown',event=>{
+      if(!mobileUtilityIsOpen())return;
+      if(event.target instanceof Node&&(mobileUtilitiesMenu.contains(event.target)||mobileUtilitiesToggle.contains(event.target)))return;
+      setMobileUtilitiesOpen(false);
+    });
+    document.addEventListener('focusin',event=>{
+      if(!mobileUtilityIsOpen())return;
+      if(event.target instanceof Node&&(mobileUtilitiesMenu.contains(event.target)||mobileUtilitiesToggle.contains(event.target)))return;
+      setMobileUtilitiesOpen(false);
+    });
+    document.addEventListener('keydown',event=>{
+      if(event.key!=='Escape'||!mobileUtilityIsOpen())return;
+      event.preventDefault();
+      setMobileUtilitiesOpen(false,{restoreFocus:true});
+    });
+    window.addEventListener('resize',()=>{
+      if(window.innerWidth>640)setMobileUtilitiesOpen(false);
+    },{passive:true});
+    syncMobileUtilities();
   }
 
 
@@ -2471,8 +2556,10 @@
     });
     notificationsButton.addEventListener('click',activateNotifications);
     if(themeToggle)themeToggle.addEventListener('click',toggleShellTheme);
+    bindMobileUtilities();
     if(wizardCanvasFrame)wizardCanvasFrame.addEventListener('load',sendThemeToWizardCanvas);
     new MutationObserver(syncThemeToggle).observe(root,{attributes:true,attributeFilter:['class','data-skin']});
+    new MutationObserver(syncMobileUtilities).observe(root,{attributes:true,attributeFilter:['class','data-session-view']});
     new MutationObserver(syncHermesHomeControl).observe(root,{attributes:true,attributeFilter:['data-tailnet-view','data-mobile-session-view']});
     window.addEventListener('resize',syncHermesHomeControl,{passive:true});
     syncThemeToggle();

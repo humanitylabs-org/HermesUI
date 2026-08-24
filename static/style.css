@@ -2201,6 +2201,8 @@
   .tailnet-app-groups{width:100%;min-height:0;flex:1 1 auto;display:flex;flex-direction:column;align-items:center;gap:6px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;padding-bottom:4px;box-sizing:border-box;}
   .tailnet-app-groups::-webkit-scrollbar{display:none;}
   .tailnet-app-controls{width:100%;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 0 0;border-top:1px solid var(--border);box-sizing:border-box;}
+  #mobileSessionUtilitiesToggle,.mobile-session-utilities-menu{display:none;}
+  .mobile-session-utilities-menu[hidden]{display:none!important;}
   .tailnet-rail-control{flex:0 0 auto;}
   .tailnet-session-view-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
   .tailnet-session-view-icon svg{display:block;width:20px;height:20px;}
@@ -2518,6 +2520,7 @@
     html,body{overscroll-behavior-y:none;}
     .rail.tailnet-app-rail{position:fixed;left:auto;right:0;top:0;bottom:0;width:48px;height:100%;height:100dvh;box-sizing:border-box;padding-top:max(10px,env(safe-area-inset-top,0px));padding-bottom:max(8px,env(safe-area-inset-bottom,0px));}
     .rail.tailnet-app-rail{border-right:0;border-left:1px solid var(--border);}
+    .tailnet-app-controls{display:none;}
     .layout{margin-left:0;margin-right:48px;width:calc(100% - 48px);}
     html:not([data-tailnet-view="external"]) .app-titlebar{margin-left:0;margin-right:48px;width:calc(100% - 48px);box-sizing:border-box;}
     html:not([data-tailnet-view="external"]) .sidebar{left:0;right:auto;width:calc(100vw - 48px);transform:translateX(-100%);}
@@ -2529,6 +2532,23 @@
     .sidebar.mobile-session-page .mobile-sidebar-close{display:none!important;}
     .sidebar.mobile-session-page .panel-view{margin-left:0;}
     .sidebar.mobile-session-page .panel-head{padding-right:12px;}
+    #panelChat{position:relative;}
+    #panelChat>.panel-head{min-height:61px;box-sizing:border-box;}
+    #panelChat>.panel-head>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    #panelChat .panel-head-actions{flex:0 0 auto;gap:0;}
+    #panelChat .panel-head-btn{width:44px;height:44px;border-radius:10px;}
+    #panelChat .panel-head-btn svg{width:18px;height:18px;}
+    #mobileSessionUtilitiesToggle{display:inline-flex;}
+    .mobile-session-utilities-menu:not([hidden]){position:absolute;z-index:230;top:61px;right:12px;display:flex;flex-direction:column;width:min(264px,calc(100vw - 72px));padding:6px;box-sizing:border-box;border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:0 18px 54px rgba(0,0,0,.34);}
+    .mobile-session-utility{appearance:none;display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;min-height:48px;padding:8px 10px;border:0;border-radius:9px;background:transparent;color:var(--text);font:650 13px/1.3 Inter,system-ui,sans-serif;text-align:left;cursor:pointer;}
+    .mobile-session-utility:hover,.mobile-session-utility:focus-visible{background:var(--hover-bg);outline:none;}
+    .mobile-session-utility:focus-visible{box-shadow:inset 0 0 0 2px var(--accent);}
+    .mobile-session-utility-icon{display:flex;align-items:center;justify-content:center;width:24px;height:24px;color:var(--muted);}
+    .mobile-session-utility-icon svg{display:block;width:20px;height:20px;}
+    .mobile-session-utility-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .mobile-session-utility-state{min-width:28px;padding:3px 7px;border-radius:999px;background:var(--hover-bg);color:var(--muted);font-size:10px;font-weight:800;line-height:1.2;text-align:center;}
+    .mobile-session-utility[aria-checked="true"] .mobile-session-utility-icon{color:var(--accent);}
+    .mobile-session-utility[aria-checked="true"] .mobile-session-utility-state{background:var(--accent-bg);color:var(--text);}
     html[data-tailnet-view="wizard-home"] .tailnet-app-workspace{display:none!important;}
   }
   /* HermesUI: remove the workspace browser from the simplified shell. */
