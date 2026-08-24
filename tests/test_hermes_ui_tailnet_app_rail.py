@@ -536,8 +536,10 @@ def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page(
     assert '.sidebar.mobile-session-page .mobile-sidebar-close{display:none!important;}' in CSS
     assert '.sidebar.mobile-session-page .panel-view{margin-left:0;}' in CSS
     assert '.rail.tailnet-app-rail{border-right:0;border-left:1px solid var(--border);}' in CSS
-    assert '.rail.tailnet-app-rail .rail-btn.active::before' in CSS
-    assert 'left:auto;right:-6px' in CSS
+    assert '.rail.tailnet-app-rail .rail-btn.active{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 55%,transparent);}' in CSS
+    assert '.rail.tailnet-app-rail .rail-btn.active::before' not in CSS
+    assert '.rail .nav-tab.active::before' not in CSS
+    assert '.rail.tailnet-app-rail .rail-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}' in CSS
     assert '.tailnet-scheduled-job-menu{position:fixed;z-index:100;top:auto;right:60px;' in CSS
     assert '.toast{right:60px;left:12px;' in CSS
 

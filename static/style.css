@@ -2125,10 +2125,9 @@
   .clarify-card.collapsed .clarify-question,.clarify-card.collapsed .clarify-choices,.clarify-card.collapsed .clarify-response,.clarify-card.collapsed .clarify-hint{display:none;}
   /* Left rail (desktop primary navigation) */
   .rail{display:none;width:48px;flex-shrink:0;flex-direction:column;align-items:center;gap:4px;padding:8px 0;background:var(--sidebar);border-right:1px solid var(--border);}
-  .rail-btn{width:36px;height:36px;border-radius:8px;border:none;background:none;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;transition:color .15s,background .15s;flex-shrink:0;padding:0;}
+  .rail-btn{width:36px;height:36px;border-radius:8px;border:none;background:none;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;transition:color .15s,background-color .12s ease-out,box-shadow .12s ease-out;flex-shrink:0;padding:0;}
   .rail-btn:hover{color:var(--text);background:var(--hover-bg);}
   .rail-btn.active{color:var(--accent-text);background:var(--accent-bg);}
-.rail-btn.active::before{content:'';position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:3px;height:16px;background:var(--accent);border-radius:0 2px 2px 0;}
   /* Custom tooltip — replaces native title="" for faster, more polished display.
      Native browser tooltips have a ~1.5s hover delay that reads as "no tooltip
      exists" (#1775). Our custom tooltip appears at ~150ms hover, dismisses
@@ -2166,7 +2165,6 @@
    removes the pseudo-element entirely. Solution: scope the legacy
    `.nav-tab:hover::after` data-label tooltip to `.sidebar-nav` (mobile) only
    (see line ~681). The rail rule is no longer needed. */
-  .rail .nav-tab.active::before{content:'';position:absolute;left:-6px;top:50%;bottom:auto;transform:translateY(-50%);width:3px;height:16px;background:var(--accent);border-radius:0 2px 2px 0;}
   .dashboard-link{position:relative;}
   .dashboard-link-visible,.nav-action-visible{display:flex!important;}
   .dashboard-external-badge{position:absolute;right:5px;top:5px;width:9px;height:9px;border-radius:2px;border:1px solid var(--accent);background:var(--sidebar);box-shadow:0 0 0 2px var(--sidebar);opacity:.95;}
@@ -2175,6 +2173,13 @@
   @media(min-width:641px){.rail{display:flex;}.sidebar > .sidebar-nav{display:none;}}
   /* HermesUI: a persistent private-app selector replaces the old WebUI panel rail. */
   .rail.tailnet-app-rail{display:flex!important;order:1;position:relative;z-index:240;overflow:hidden;}
+  .rail.tailnet-app-rail .rail-btn{width:40px;height:40px;border-radius:12px;}
+  .rail.tailnet-app-rail .rail-btn.active{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 55%,transparent);}
+  @media(hover:hover){.rail.tailnet-app-rail .rail-btn.active:hover{background:color-mix(in srgb,var(--accent) 14%,transparent);}}
+  .rail.tailnet-app-rail .rail-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  :root.dark .rail.tailnet-app-rail .rail-btn.active{background:color-mix(in srgb,var(--accent) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 65%,transparent);}
+  @media(hover:hover){:root.dark .rail.tailnet-app-rail .rail-btn.active:hover{background:color-mix(in srgb,var(--accent) 18%,transparent);}}
+  @media(forced-colors:active){.rail.tailnet-app-rail .rail-btn.active{background:transparent;box-shadow:inset 0 0 0 1px Highlight;color:Highlight;}}
   .layout > .sidebar{order:2;}
   .layout > .main{order:3;}
   .layout > .rightpanel{order:4;}
@@ -2452,7 +2457,6 @@
     html,body{overscroll-behavior-y:none;}
     .rail.tailnet-app-rail{position:fixed;left:auto;right:0;top:0;bottom:0;width:48px;height:100%;height:100dvh;box-sizing:border-box;padding-top:max(10px,env(safe-area-inset-top,0px));padding-bottom:max(8px,env(safe-area-inset-bottom,0px));}
     .rail.tailnet-app-rail{border-right:0;border-left:1px solid var(--border);}
-    .rail.tailnet-app-rail .rail-btn.active::before,.rail.tailnet-app-rail .nav-tab.active::before{left:auto;right:-6px;border-radius:2px 0 0 2px;}
     .layout{margin-left:0;margin-right:48px;width:calc(100% - 48px);}
     html:not([data-tailnet-view="external"]) .app-titlebar{margin-left:0;margin-right:48px;width:calc(100% - 48px);box-sizing:border-box;}
     html:not([data-tailnet-view="external"]) .sidebar{left:0;right:auto;width:calc(100vw - 48px);transform:translateX(-100%);}
