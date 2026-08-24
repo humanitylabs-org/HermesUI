@@ -46,6 +46,7 @@ async function api(path,opts={}){
           // re-authenticate. This is especially important for iOS PWA (standalone mode)
           // and for subpath mounts like /hermes/, where /login escapes to the site root.
           if(res.status===401){
+            try{if(typeof _clearSessionMessageCache==='function')_clearSessionMessageCache();}catch(_e){}
             // #5578: if we're ALREADY on the login page, appending
             // window.location.pathname+search (which contains ?next=…) into a
             // fresh next= wraps the login URL into itself and re-encodes it —

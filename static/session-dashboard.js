@@ -19,6 +19,11 @@
   const OPENING_EVIDENCE_LIMIT=30;
   const PROMPT_EVIDENCE_LIMIT=30;
   const PROMPT_EVIDENCE_MAX_PAGES=4;
+  const PROMPT_EVIDENCE_STORAGE_KEY='hermesui.high-signal-prompt-cache.v1';
+  const PROMPT_EVIDENCE_STORAGE_TTL_MS=5*60*1000;
+  const PROMPT_EVIDENCE_STORAGE_MAX=5;
+  let promptEvidenceCacheEpoch=0;
+  let promptEvidenceCacheWritesEnabled=true;
   const GROK_SUMMARY_ENDPOINT='/apps/api/high-signal-summary';
   const SUMMARY_MODEL_TASK='high_signal_summary';
   let summaryModelConfig={provider:'',model:'',label:'AI model'};
@@ -29,6 +34,78 @@
   let summaryModelDropdown=null;
   let summaryModelAnchor=null;
   let summaryModelError='';
+
+  function promptEvidenceScopeKey(sid,profile){
+    sid=String(sid||'');
+    profile=String(profile||'default');
+    return sid?`${profile}\u0000${sid}`:'';
+  }
+
+  function activePromptEvidenceScopeKey(){
+    const current=state();
+    const sid=current.session&&String(current.session.session_id||current.session.id||'');
+    return promptEvidenceScopeKey(sid,current.activeProfile||'default');
+  }
+
+  function readPromptEvidenceStorage(){
+    try{
+      const parsed=JSON.parse(sessionStorage.getItem(PROMPT_EVIDENCE_STORAGE_KEY)||'{}');
+      const entries=parsed&&parsed.version===1&&Array.isArray(parsed.entries)?parsed.entries:[];
+      const now=Date.now();
+      const fresh=entries.filter(pair=>{
+        const key=String(pair&&pair[0]||'');
+        const entry=pair&&pair[1];
+        const storedAt=Number(entry&&entry.storedAt);
+        return Boolean(
+          key&&entry&&entry.text&&entry.anchor&&entry.sid&&entry.profile&&
+          key===promptEvidenceScopeKey(entry.sid,entry.profile)&&
+          Number.isFinite(storedAt)&&storedAt>0&&storedAt<=now&&
+          (now-storedAt)<=PROMPT_EVIDENCE_STORAGE_TTL_MS
+        );
+      });
+      if(fresh.length!==entries.length){
+        if(fresh.length&&promptEvidenceCacheWritesEnabled){
+          sessionStorage.setItem(PROMPT_EVIDENCE_STORAGE_KEY,JSON.stringify({version:1,entries:fresh}));
+        }else{
+          sessionStorage.removeItem(PROMPT_EVIDENCE_STORAGE_KEY);
+        }
+      }
+      return fresh;
+    }catch(_e){
+      try{sessionStorage.removeItem(PROMPT_EVIDENCE_STORAGE_KEY);}catch(_ignore){}
+      return [];
+    }
+  }
+
+  function persistedPromptEvidence(key,anchor){
+    const entries=readPromptEvidenceStorage();
+    const match=entries.find(pair=>pair&&pair[0]===key&&pair[1]&&pair[1].anchor===anchor);
+    const entry=match&&match[1];
+    if(!entry||!entry.text) return null;
+    return {anchor,text:String(entry.text),pending:false,error:''};
+  }
+
+  function persistPromptEvidence(key,sid,profile,anchor,text,expectedEpoch){
+    text=String(text||'');
+    if(!promptEvidenceCacheWritesEnabled||expectedEpoch!==promptEvidenceCacheEpoch) return;
+    if(!key||!sid||!anchor||!text||text.length>150000) return;
+    try{
+      const entries=readPromptEvidenceStorage().filter(pair=>pair&&pair[0]!==key);
+      entries.push([key,{sid:String(sid),anchor,text,profile:String(profile||'default'),storedAt:Date.now()}]);
+      while(entries.length>PROMPT_EVIDENCE_STORAGE_MAX) entries.shift();
+      sessionStorage.setItem(PROMPT_EVIDENCE_STORAGE_KEY,JSON.stringify({version:1,entries}));
+    }catch(_e){}
+  }
+
+  function clearSessionDashboardPrivateCache(){
+    promptEvidenceCacheEpoch+=1;
+    promptEvidenceCacheWritesEnabled=false;
+    promptEvidenceCache.clear();
+    promptEvidenceRequests.clear();
+    try{sessionStorage.removeItem(PROMPT_EVIDENCE_STORAGE_KEY);}catch(_e){}
+  }
+  window._clearSessionDashboardPrivateCache=clearSessionDashboardPrivateCache;
+
   const structuredContentText=value=>{
     if(Array.isArray(value)){
       let recognized=false;
@@ -350,7 +427,12 @@
     let text=runUsers.length?cleanUserText(runUsers[runUsers.length-1].message):'';
     let pending=false;
     if(!text&&resultAnchor){
-      const evidence=promptEvidenceCache.get(sessionKey());
+      const key=activePromptEvidenceScopeKey();
+      let evidence=promptEvidenceCache.get(key);
+      if(!evidence){
+        evidence=persistedPromptEvidence(key,resultAnchor);
+        if(evidence) promptEvidenceCache.set(key,evidence);
+      }
       if(evidence&&evidence.anchor===resultAnchor){
         if(evidence.text) text=evidence.text;
         else if(evidence.pending) pending=true;
@@ -448,10 +530,19 @@
   }
 
   async function hydrateDashboardPromptEvidence(resultAnchor){
-    const key=sessionKey();
-    if(!key||!resultAnchor||typeof api!=='function') return;
+    const sid=sessionKey();
+    const profile=String(state().activeProfile||'default');
+    const key=promptEvidenceScopeKey(sid,profile);
+    const cacheEpoch=promptEvidenceCacheEpoch;
+    if(!promptEvidenceCacheWritesEnabled||!key||!resultAnchor||typeof api!=='function') return;
     const cached=promptEvidenceCache.get(key);
     if(cached&&cached.anchor===resultAnchor) return;
+    const persisted=persistedPromptEvidence(key,resultAnchor);
+    if(persisted){
+      promptEvidenceCache.set(key,persisted);
+      if(key===activePromptEvidenceScopeKey()) scheduleSessionDashboardSync();
+      return;
+    }
     if(promptEvidenceRequests.has(key)) return promptEvidenceRequests.get(key);
     let before=typeof _oldestIdx!=='undefined'?Number(_oldestIdx):0;
     if(!Number.isFinite(before)||before<=0){
@@ -459,7 +550,7 @@
       return;
     }
     promptEvidenceCache.set(key,{anchor:resultAnchor,pending:true,text:'',error:''});
-    if(key===sessionKey()) scheduleSessionDashboardSync();
+    if(key===activePromptEvidenceScopeKey()) scheduleSessionDashboardSync();
     const request=(async()=>{
       let text='';
       let error='missing';
@@ -467,7 +558,7 @@
       try{
         while(before>0&&!text&&pages<PROMPT_EVIDENCE_MAX_PAGES){
           pages+=1;
-          const data=await api(`/api/session?session_id=${encodeURIComponent(key)}&messages=1&resolve_model=0&msg_before=${before}&msg_limit=${PROMPT_EVIDENCE_LIMIT}`,{timeoutMs:120000});
+          const data=await api(`/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_before=${before}&msg_limit=${PROMPT_EVIDENCE_LIMIT}`,{timeoutMs:120000});
           const session=data&&data.session?data.session:data;
           const messages=session&&Array.isArray(session.messages)?session.messages:[];
           const projection=rebuildProjection(messages);
@@ -481,10 +572,13 @@
       }catch(fetchError){
         error=String(fetchError&&fetchError.message||fetchError||'unavailable');
       }finally{
-        promptEvidenceCache.set(key,{anchor:resultAnchor,pending:false,text,error:text?'':error});
-        while(promptEvidenceCache.size>20) promptEvidenceCache.delete(promptEvidenceCache.keys().next().value);
+        if(promptEvidenceCacheWritesEnabled&&cacheEpoch===promptEvidenceCacheEpoch){
+          promptEvidenceCache.set(key,{anchor:resultAnchor,pending:false,text,error:text?'':error});
+          if(text) persistPromptEvidence(key,sid,profile,resultAnchor,text,cacheEpoch);
+          while(promptEvidenceCache.size>20) promptEvidenceCache.delete(promptEvidenceCache.keys().next().value);
+        }
         promptEvidenceRequests.delete(key);
-        if(key===sessionKey()) scheduleSessionDashboardSync();
+        if(key===activePromptEvidenceScopeKey()) scheduleSessionDashboardSync();
       }
     })();
     promptEvidenceRequests.set(key,request);
@@ -1042,7 +1136,7 @@
     const current=state();
     const projection=sessionProjection();
     const entries=projection.entries;
-    const hasSession=!!(current.session&&entries.length);
+    const hasSession=!!current.session;
     dashboard.hidden=!hasSession;
     if(!hasSession) return;
 

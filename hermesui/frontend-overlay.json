@@ -6,7 +6,7 @@
       "upstream_sha256": "049445ab220cb4a564ab226420337f7995826bba623ccdd6b83020515204dcf1"
     },
     {
-      "hermesui_sha256": "518605782de77f2ed0599156c011f7c941452791390457d0ecaa7cd06722f4d9",
+      "hermesui_sha256": "df88482cdbac570a832ea4e62c256329fac8c920cb35a09c06922b108c6aef69",
       "path": "static/boot.js",
       "upstream_sha256": "258ccc7b8a3be5c07f1081f0a50961c27ec0fdd0f7bb3eaed2b0a6a1ec8954f0"
     },
@@ -71,22 +71,22 @@
       "upstream_sha256": "1a08cc3440228a7fd048d75a82efee6260a9d331400a757f592ea23d300621e1"
     },
     {
-      "hermesui_sha256": "a715b188022dd61a62d0d497f2447b22363385e309df55d436c489b80c57db56",
+      "hermesui_sha256": "07a32d7ef2234ff4e94a11d92a68b53a293b173edc719f367dfcac026f5084c7",
       "path": "static/panels.js",
       "upstream_sha256": "5eb65e2ee84e757f426cf1aa2b45a51104c3551f1651c75d6573ba8076401a69"
     },
     {
-      "hermesui_sha256": "db486dc029e2c4a82be7c2a00e8de9513368bf0944dfcafd9810520df23684bf",
+      "hermesui_sha256": "d0f35926a934d5b282dafadeffe57689137941ae31baadd97fdb0aae5fa23966",
       "path": "static/session-dashboard.js",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "e43f89458b900399290f1031f4a7933447b5e51e90e67e0f7451852ee01569f9",
+      "hermesui_sha256": "63acae62a8d95a8f9dc69574115b2e906f626263a461e9cd53ea996a8b4bf371",
       "path": "static/session-swipe-navigation.js",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "ff5a96dad7498b43652200a84ea15b32ee29bd4c1da2f4d2e563a7de6a2fff9c",
+      "hermesui_sha256": "780b98cf9a065b7294af925ed36ccefc5bcfef0a1973bfaf6dbdf1c2e6b90b46",
       "path": "static/sessions.js",
       "upstream_sha256": "82fcbe004f5df8de94cf89614cf2a7ba40a324deeec5edd054db7dd6c1505233"
     },
@@ -121,7 +121,7 @@
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "1b76177ad24d8644a735874ea8a8b39f98e6cae249bb49debbc32dcc2fbbb4b7",
+      "hermesui_sha256": "afa1e690eb0ce2f765e4a3349a07d392d82896db15bd72dbb439e34d3654a3b2",
       "path": "static/ui.js",
       "upstream_sha256": "d03404c70ada963b353c36ca6a0215f1786f150d854d3aa36a19ac071d718ec4"
     },
@@ -2299,6 +2299,11 @@
       "hermesui_sha256": "505c29f47fc20e495726762f0f721983ea94f92bbd0932ea71cf422d557dbadf",
       "path": "static/wizard-hat.svg",
       "upstream_sha256": null
+    },
+    {
+      "hermesui_sha256": "674e1832ad7e07c5d132822e56c9d0465c0047ff08d7ad7e2f785a639d38c6d7",
+      "path": "static/workspace.js",
+      "upstream_sha256": "f42a2f3f58663abddfad2df660ef94e08f5aaa3349db9376299bbc162498a68a"
     }
   ],
   "schema": 1,

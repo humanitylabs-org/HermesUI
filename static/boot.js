@@ -115,7 +115,7 @@ async function _savedSessionSidebarOnlyState(sid){
     const session = data&&data.session;
     const archived = !!(session&&session.archived);
     const running = !!(session&&(session.active_stream_id||session.pending_user_message));
-    return {sidebarOnly:archived||running, archived};
+    return {sidebarOnly:archived||running, archived, session};
   }catch(e){
     return null;
   }
@@ -3617,6 +3617,7 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
   const _redirectBootModelDropdownIfUnauth=(res)=>{
     if(!res||res.status!==401) return false;
     window._modelDropdownReady=null;
+    try{if(typeof _clearSessionMessageCache==='function')_clearSessionMessageCache();}catch(_e){}
     if(_bootActiveProfileUnauthRedirectBudget.isConsumed()) return true;
     if(_bootActiveProfileUnauthRedirectBudget.spendOnRedirect(sessionStorage)){
       _bootActiveProfileUnauthRedirectBudget.redirectToLogin(window.location.pathname+window.location.search);
@@ -3740,6 +3741,21 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
       const savedSidebarOnlyState=(!urlSession&&savedLocal)
         ? await _savedSessionSidebarOnlyState(savedLocal)
         : null;
+      // Any user-established navigation owns the UI after this awaited metadata
+      // preflight, even when the user clicked the same saved SID. Otherwise boot
+      // can start a second load with older prefetched metadata and steal the
+      // latest-navigation generation.
+      const newerSessionOwnsBoot=!urlSession&&Boolean(
+        S.session||(typeof _loadingSessionId!=='undefined'&&_loadingSessionId)
+      );
+      if(newerSessionOwnsBoot){
+        S._bootReady=true;
+        // The user navigation already owns and renders the sidebar. Avoid a
+        // second boot render that could reorder or repaint it mid-load.
+        syncTopbar();syncWorkspacePanelState();
+        if(typeof startGatewaySSE==='function')startGatewaySSE();
+        return undefined;
+      }
       if(savedSidebarOnlyState&&savedSidebarOnlyState.sidebarOnly){
         if(savedSidebarOnlyState.archived){
           try{localStorage.removeItem('hermes-webui-session');}catch(_){}
@@ -3763,6 +3779,11 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
         await renderSessionList();await _finalizeComposerPrefillOnBoot(prefillIntent);if(typeof startGatewaySSE==='function')startGatewaySSE();
         return;
       }
+      window._pendingBootSessionMetadata={
+        sid:String(saved),
+        bootRestoreMetadata:!!(!urlSession&&savedSidebarOnlyState&&savedSidebarOnlyState.session),
+        prefetchedSession:(!urlSession&&savedSidebarOnlyState&&savedSidebarOnlyState.session)||null,
+      };
       await loadSession(saved, {preserveActiveInput:true});
       // Hard refresh starts from the static HTML model list. Hydrate the live
       // catalog after the saved session is known, then re-apply that session's

@@ -432,9 +432,6 @@
     navigationSid=targetSid;
     const loadingToken=beginNavigationLoading();
     syncTabs(true);
-    if(typeof _prioritizeMobileSessionWarmCache==='function'){
-      _prioritizeMobileSessionWarmCache(visibleSessionIds(),targetSid);
-    }
     try{
       await openTarget(target,source);
       if(generation!==navigationGeneration) return;

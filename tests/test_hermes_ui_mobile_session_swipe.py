@@ -89,13 +89,11 @@ def test_mobile_navigation_remains_available_while_a_prior_tab_is_loading():
     assert "if(token!==activeNavigationLoadingToken) return" in SWIPE
 
 
-def test_mobile_tab_switch_reprioritizes_the_bounded_warm_cache():
-    assert "_prioritizeMobileSessionWarmCache(visibleSessionIds(),targetSid)" in SWIPE
-    assert "function _prioritizeMobileSessionWarmCache(visibleIds,selectedSid)" in SESSIONS
-    assert "priority.length<_SESSION_MESSAGE_CACHE_MAX" in SESSIONS
-    assert "_sessionMessagePrefetchQueue=_sessionMessagePrefetchTargets().map" in SESSIONS
-    assert "_pumpSessionMessagePrefetchQueue();" in SESSIONS
-    assert "const _SESSION_MESSAGE_PREFETCH_CONCURRENCY = 2" in SESSIONS
+def test_mobile_tab_switch_does_not_speculatively_fetch_neighbor_transcripts():
+    assert "_prioritizeMobileSessionWarmCache" not in SWIPE
+    assert "_prioritizeSessionWarmCache" not in SESSIONS
+    assert "_sessionMessagePrefetchQueue" not in SESSIONS
+    assert "_SESSION_MESSAGE_PREFETCH_CONCURRENCY" not in SESSIONS
 
 
 def test_mobile_tabs_are_a_coupled_pager_and_share_switch_loading():
