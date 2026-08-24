@@ -4413,6 +4413,11 @@ async function _ensureAllMessagesLoaded() {
 const SESSION_ARCHIVED_PAGE_SIZE = 100;
 const SESSION_ARCHIVED_MAX_LOADED_LIMIT = 2000;
 let _allSessions = [];  // cached for search filter
+let _containedCronReplySessions = [];  // persisted reply threads owned by Notifications
+const _CONTAINED_CRON_REPLY_TITLE_PREFIX = '[cron-reply:';
+function _isContainedCronReplySession(session){
+  return !!(session&&String(session.title||'').startsWith(_CONTAINED_CRON_REPLY_TITLE_PREFIX));
+}
 let _sidebarReferenceSessions = [];  // hidden archived ancestor rows used only for nesting/suppression
 let _allSessionsScope = null;  // {profile, allProfiles} the cache was loaded under (#4167)
 let _sessionAttentionSoundPrimed = false;
@@ -5930,11 +5935,17 @@ function _applySessionListPayload(sessData, projData, opts){
   if (typeof sessData.server_tz === 'string') {
     _serverTz = sessData.server_tz;
   }
-  const serverSessions=_optimisticallyRemovedSessionIds.size
+  const receivedSessions=_optimisticallyRemovedSessionIds.size
     ? (sessData.sessions||[]).filter(s=>s&&!_optimisticallyRemovedSessionIds.has(s.session_id))
     : (sessData.sessions||[]);
+  _containedCronReplySessions=receivedSessions.filter(_isContainedCronReplySession);
+  const serverSessions=receivedSessions.filter(session=>!_isContainedCronReplySession(session));
+  if(_serverWebuiSessionCount!==null&&_containedCronReplySessions.length){
+    const hiddenActiveCount=_containedCronReplySessions.filter(session=>!session.archived).length;
+    _serverWebuiSessionCount=Math.max(0,_serverWebuiSessionCount-hiddenActiveCount);
+  }
   _sidebarReferenceSessions = Array.isArray(sessData.sidebar_reference_sessions)
-    ? sessData.sidebar_reference_sessions
+    ? sessData.sidebar_reference_sessions.filter(session=>!_isContainedCronReplySession(session))
     : [];
   _reconcileActiveSessionIdleStateFromList(serverSessions);
   _allSessions = _mergeOptimisticFirstTurnSessions(serverSessions);

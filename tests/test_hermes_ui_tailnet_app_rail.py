@@ -91,7 +91,8 @@ def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
     assert ".tailnet-notifications-badge" in CSS
     assert ".tailnet-notification-response" in CSS
     assert "notificationPreviewText" not in JS
-    assert "response.textContent=item.status==='error'?'Failed run · Open to read':'Open to read'" in JS
+    assert "response.textContent=notificationPreview(item.response)" in JS
+    assert "Open to read" not in JS
     assert "if(open&&notificationIsUnread(item))" in JS
     assert "notificationState.readItems[item.key]" in JS
     assert "return (Number(notificationState.readItems[item.key])||0)<item.modified" in JS
@@ -101,7 +102,8 @@ def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
     assert "renderMd(item.response)" in JS
     assert "postProcessRenderedMessages(body)" in JS
     assert "loadPdfInline(body)" in JS
-    assert 'className=\'tailnet-notification-rich msg-body\'' in JS
+    assert "rich.className='tailnet-notification-rich'" in JS
+    assert "richBody.className='tailnet-notification-rich-body msg-body'" in JS
     assert "refreshCronNotificationBadge" not in JS
     assert "setNotificationsBadge(0);\n    void loadCronNotifications();" in JS
     assert "if(jobIds.length)void loadCronNotifications({jobIds});" in JS
@@ -134,8 +136,8 @@ def test_cron_notification_rows_are_compact_full_row_disclosures():
     assert "article.append(button,rich)" in JS
     assert ".tailnet-notification{position:relative;padding:0" in CSS
     assert "grid-template-columns:minmax(0,1fr) auto" in CSS
-    assert "min-height:56px" in CSS
-    assert ".tailnet-notifications-filter,.tailnet-notifications-read-all{min-height:44px;}" in CSS
+    assert "min-height:62px" in CSS
+    assert ".tailnet-notifications-mode-button,.tailnet-notifications-filter,.tailnet-notifications-read-all,.tailnet-notifications-action,.tailnet-scheduled-action,.tailnet-notification-thread-back,.tailnet-notification-thread-send,.tailnet-notification-thread-stop{min-height:44px;}" in CSS
     assert ".tailnet-notification-toggle{min-height:64px" in CSS
 
 
@@ -552,7 +554,7 @@ def test_mobile_hermes_home_becomes_a_session_menu_only_outside_the_session_list
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v1"'
         in INDEX
     )
     assert (

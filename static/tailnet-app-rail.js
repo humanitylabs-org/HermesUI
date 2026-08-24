@@ -43,8 +43,24 @@
   const notificationsBadge=document.getElementById('tailnetNotificationsBadge');
   const notificationsStatus=document.getElementById('tailnetNotificationsStatus');
   const notificationsList=document.getElementById('tailnetNotificationsList');
+  const scheduledList=document.getElementById('tailnetScheduledList');
   const notificationsReadAll=document.getElementById('tailnetNotificationsReadAll');
+  const notificationActions=document.getElementById('tailnetNotificationActions');
+  const scheduledActions=document.getElementById('tailnetScheduledActions');
+  const scheduledNew=document.getElementById('tailnetScheduledNew');
+  const scheduledRefresh=document.getElementById('tailnetScheduledRefresh');
+  const notificationsModeButtons=Array.from(document.querySelectorAll('[data-notifications-mode]'));
   const notificationFilterButtons=Array.from(document.querySelectorAll('[data-notification-filter]'));
+  const notificationThread=document.getElementById('tailnetNotificationThread');
+  const notificationThreadBack=document.getElementById('tailnetNotificationThreadBack');
+  const notificationThreadTitle=document.getElementById('tailnetNotificationThreadTitle');
+  const notificationThreadContext=document.getElementById('tailnetNotificationThreadContext');
+  const notificationThreadPinned=document.getElementById('tailnetNotificationThreadPinned');
+  const notificationThreadMessages=document.getElementById('tailnetNotificationThreadMessages');
+  const notificationThreadComposer=document.getElementById('tailnetNotificationThreadComposer');
+  const notificationThreadInput=document.getElementById('tailnetNotificationThreadInput');
+  const notificationThreadSend=document.getElementById('tailnetNotificationThreadSend');
+  const notificationThreadStop=document.getElementById('tailnetNotificationThreadStop');
   const home=document.getElementById('tailnetAppHome');
   const themeToggle=document.getElementById('tailnetThemeToggle');
   const links=document.getElementById('tailnetAppLinks');
@@ -80,6 +96,19 @@
   let notificationItems=new Map();
   let notificationsLoading=false;
   let notificationFilter='unread';
+  let notificationsMode='notifications';
+  let scheduledJobs=[];
+  let scheduledRunning={};
+  let scheduledLoading=false;
+  let notificationThreadItem=null;
+  let notificationThreadSession=null;
+  let notificationThreadBaseMessages=[];
+  let notificationThreadSource=null;
+  let notificationThreadStream=null;
+  let notificationThreadStreamId='';
+  let notificationThreadDraft='';
+  const notificationReplySessions=new Map();
+  const CRON_REPLY_TITLE_PREFIX='[cron-reply:';
 
   function resolvedTheme(){
     return root.classList.contains('dark')?'dark':'light';
@@ -499,49 +528,6 @@
     return body.slice(0,8000);
   }
 
-  function cronJobsFromPayload(payload){
-    return Array.isArray(payload&&payload.jobs)
-      ?payload.jobs.filter(job=>job&&job.id&&!job.read_only)
-      :[];
-  }
-
-  async function fetchCronNotificationJobs(){
-    const payload=await api('/api/crons');
-    return cronJobsFromPayload(payload);
-  }
-
-  async function fetchCronNotificationOutputs(job){
-    const payload=await api(`/api/crons/output?job_id=${encodeURIComponent(job.id)}&limit=${NOTIFICATION_OUTPUT_LIMIT}`);
-    const outputs=Array.isArray(payload&&payload.outputs)?payload.outputs:[];
-    const fallback=Date.parse(job.last_run_at||'')/1000;
-    const items=outputs.map((output,index)=>{
-      const filename=String(output.filename||'');
-      const modified=parseCronFilenameTimestamp(filename,fallback,index);
-      return {
-        key:`${job.id}:${filename||modified}`,
-        jobId:String(job.id),
-        name:String(job.name||job.id),
-        filename,
-        modified,
-        status:index===0?String(job.last_status||'ok'):'ok',
-        response:cronResponseText(output.content)
-      };
-    }).filter(item=>item.response);
-    if(!items.length&&job.last_status==='error'&&job.last_error){
-      const modified=Number.isFinite(fallback)?fallback:Date.now()/1000;
-      items.push({
-        key:`${job.id}:error:${modified}`,
-        jobId:String(job.id),
-        name:String(job.name||job.id),
-        filename:'',
-        modified,
-        status:'error',
-        response:`Run failed\n${String(job.last_error).slice(0,8000)}`
-      });
-    }
-    return items;
-  }
-
   async function mapWithConcurrency(items,limit,mapper){
     const results=new Array(items.length);
     let cursor=0;
@@ -606,6 +592,139 @@
     renderCronNotifications();
   }
 
+  function stableNotificationToken(value){
+    const source=String(value||'');
+    let left=0x811c9dc5;
+    let right=0x9e3779b9;
+    for(let index=0;index<source.length;index+=1){
+      const code=source.charCodeAt(index);
+      left=Math.imul(left^code,0x01000193)>>>0;
+      right=Math.imul(right^(code+index),0x85ebca6b)>>>0;
+    }
+    return left.toString(16).padStart(8,'0')+right.toString(16).padStart(8,'0');
+  }
+
+  function notificationReplyMarker(item){
+    return `${CRON_REPLY_TITLE_PREFIX}${stableNotificationToken(item&&item.key)}]`;
+  }
+
+  function notificationReplyTitle(item){
+    const marker=notificationReplyMarker(item);
+    return `${marker} ${String(item&&item.name||'Scheduled job')}`.slice(0,80);
+  }
+
+  function notificationPreview(value){
+    return String(value||'')
+      .replace(/[`*_>#\[\]]/g,' ')
+      .replace(/\s+/g,' ')
+      .trim()
+      .slice(0,180);
+  }
+
+  function syncNotificationsModeControls(){
+    const inThread=!!notificationThreadItem;
+    notificationsModeButtons.forEach(button=>{
+      const active=button.dataset.notificationsMode===notificationsMode&&!inThread;
+      button.classList.toggle('is-active',active);
+      button.setAttribute('aria-selected',String(active));
+      button.tabIndex=active?0:-1;
+    });
+    if(notificationActions)notificationActions.hidden=inThread||notificationsMode!=='notifications';
+    if(scheduledActions)scheduledActions.hidden=inThread||notificationsMode!=='scheduled';
+    if(notificationsList)notificationsList.hidden=inThread||notificationsMode!=='notifications';
+    if(scheduledList)scheduledList.hidden=inThread||notificationsMode!=='scheduled';
+    if(notificationThread)notificationThread.hidden=!inThread;
+  }
+
+  function closeNotificationThread(){
+    if(notificationThreadStream){
+      notificationThreadStream.close();
+      notificationThreadStream=null;
+    }
+    notificationThreadStreamId='';
+    notificationThreadDraft='';
+    notificationThreadItem=null;
+    notificationThreadSession=null;
+    notificationThreadBaseMessages=[];
+    notificationThreadSource=null;
+    if(notificationThreadInput)notificationThreadInput.value='';
+    syncNotificationsModeControls();
+    if(notificationsStatus){
+      const items=Array.from(notificationItems.values()).slice(0,NOTIFICATION_LIST_LIMIT);
+      notificationsStatus.hidden=false;
+      notificationsStatus.textContent=notificationStatusText(items.filter(notificationIsUnread).length,items.length);
+    }
+  }
+
+  function setNotificationsMode(value){
+    if(notificationThreadItem)closeNotificationThread();
+    notificationsMode=value==='scheduled'?'scheduled':'notifications';
+    syncNotificationsModeControls();
+    if(notificationsMode==='scheduled')void loadScheduledJobs();
+    else renderCronNotifications();
+  }
+
+  function cronJobsFromPayload(payload,{includeReadOnly=false}={}){
+    return Array.isArray(payload&&payload.jobs)
+      ?payload.jobs.filter(job=>job&&job.id&&(includeReadOnly||!job.read_only))
+      :[];
+  }
+
+  async function fetchCronNotificationJobs(){
+    const payload=await api('/api/crons');
+    return cronJobsFromPayload(payload);
+  }
+
+  async function fetchLatestCronSessions(){
+    try{
+      const payload=await api('/api/crons/recent?since=0');
+      const entries=Array.isArray(payload&&payload.completions)?payload.completions:[];
+      return new Map(entries.map(entry=>[String(entry.job_id||''),entry]));
+    }catch(_){return new Map();}
+  }
+
+  async function fetchCronNotificationOutputs(job,latestSessions=new Map()){
+    const payload=await api(`/api/crons/output?job_id=${encodeURIComponent(job.id)}&limit=${NOTIFICATION_OUTPUT_LIMIT}`);
+    const outputs=Array.isArray(payload&&payload.outputs)?payload.outputs:[];
+    const fallback=Date.parse(job.last_run_at||'')/1000;
+    const latest=latestSessions.get(String(job.id))||null;
+    const items=outputs.map((output,index)=>{
+      const filename=String(output.filename||'');
+      const modified=parseCronFilenameTimestamp(filename,fallback,index);
+      const completedAt=Number(latest&&latest.completed_at)||0;
+      const exactLatest=index===0&&latest&&latest.session_id&&!job.no_agent
+        &&Number(latest.message_count)>0&&Number(latest.message_count)<=12&&(
+        !completedAt||!modified||Math.abs(modified-completedAt)<300
+      );
+      return {
+        key:`${job.id}:${filename||modified}`,
+        jobId:String(job.id),
+        name:String(job.name||job.id),
+        filename,
+        modified,
+        status:index===0?String(job.last_status||'ok'):'ok',
+        response:cronResponseText(output.content),
+        sourceSessionId:exactLatest?String(latest.session_id):'',
+        contextMode:exactLatest?'full':'output'
+      };
+    }).filter(item=>item.response);
+    if(!items.length&&job.last_status==='error'&&job.last_error){
+      const modified=Number.isFinite(fallback)?fallback:Date.now()/1000;
+      items.push({
+        key:`${job.id}:error:${modified}`,
+        jobId:String(job.id),
+        name:String(job.name||job.id),
+        filename:'',
+        modified,
+        status:'error',
+        response:`Run failed\n${String(job.last_error).slice(0,8000)}`,
+        sourceSessionId:'',
+        contextMode:'output'
+      });
+    }
+    return items;
+  }
+
   function renderCronNotifications(){
     if(!notificationsList||!notificationsStatus)return;
     const items=Array.from(notificationItems.values())
@@ -615,8 +734,10 @@
     const visibleItems=notificationFilter==='unread'?items.filter(notificationIsUnread):items;
     setNotificationsBadge(unreadCount);
     syncNotificationFilterControls();
+    syncNotificationsModeControls();
     if(notificationsReadAll)notificationsReadAll.disabled=unreadCount===0;
     notificationsList.replaceChildren();
+    notificationsStatus.hidden=false;
     if(!items.length){
       notificationsStatus.textContent=notificationsLoading?'Loading…':'No scheduled-job responses yet.';
       return;
@@ -650,19 +771,29 @@
       button.setAttribute('aria-label',`Open notification from ${item.name}`);
       const response=document.createElement('span');
       response.className='tailnet-notification-response';
-      response.textContent=item.status==='error'?'Failed run · Open to read':'Open to read';
+      response.textContent=notificationPreview(item.response)||(item.status==='error'?'Failed run':'Scheduled-job response');
       button.append(role,response);
       const rich=document.createElement('div');
       rich.id=richId;
-      rich.className='tailnet-notification-rich msg-body';
+      rich.className='tailnet-notification-rich';
       rich.hidden=true;
+      const richBody=document.createElement('div');
+      richBody.className='tailnet-notification-rich-body msg-body';
+      const reply=document.createElement('button');
+      reply.type='button';
+      reply.className='tailnet-notification-reply';
+      reply.textContent='Reply';
+      reply.addEventListener('click',event=>{
+        event.stopPropagation();
+        void openNotificationThread(item);
+      });
+      rich.append(richBody,reply);
       button.addEventListener('click',()=>{
         const open=article.classList.toggle('is-open');
         button.setAttribute('aria-expanded',String(open));
         button.setAttribute('aria-label',`${open?'Close':'Open'} notification from ${item.name}`);
-        response.textContent=open?'Close notification':item.status==='error'?'Failed run · Open to read':'Open to read';
         rich.hidden=!open;
-        if(open)hydrateNotificationRich(rich,item);
+        if(open)hydrateNotificationRich(richBody,item);
         if(open&&notificationIsUnread(item)){
           markNotificationRead(item);
           article.classList.remove('is-unread');
@@ -679,11 +810,11 @@
     notificationsLoading=true;
     if(notificationsStatus&&!notificationItems.size)notificationsStatus.textContent='Loading…';
     try{
-      const jobs=await fetchCronNotificationJobs();
+      const [jobs,latestSessions]=await Promise.all([fetchCronNotificationJobs(),fetchLatestCronSessions()]);
       const ids=jobIds?new Set(jobIds.map(String)):null;
       const selected=ids?jobs.filter(job=>ids.has(String(job.id))):jobs;
       if(!ids)notificationItems.clear();
-      const batches=await mapWithConcurrency(selected,4,fetchCronNotificationOutputs);
+      const batches=await mapWithConcurrency(selected,4,job=>fetchCronNotificationOutputs(job,latestSessions));
       selected.forEach(job=>{
         const prefix=`${job.id}:`;
         Array.from(notificationItems.keys()).forEach(key=>{if(key.startsWith(prefix))notificationItems.delete(key);});
@@ -694,6 +825,445 @@
     }finally{
       notificationsLoading=false;
       renderCronNotifications();
+    }
+  }
+
+  function scheduledStatusMeta(job){
+    if(scheduledRunning&&Object.prototype.hasOwnProperty.call(scheduledRunning,String(job.id))){
+      return {label:'Running',className:'is-running'};
+    }
+    if(job.paused||job.state==='paused')return {label:'Paused',className:'is-paused'};
+    if(job.disabled||job.state==='disabled')return {label:'Disabled',className:'is-disabled'};
+    if(String(job.last_status||'').toLowerCase()==='error')return {label:'Failed',className:'is-error'};
+    if(job.read_only)return {label:'Read-only',className:'is-readonly'};
+    return {label:'Active',className:'is-active'};
+  }
+
+  function conciseSchedule(job){
+    return String(job.schedule_display||(job.schedule&&job.schedule.expression)||job.schedule||'Schedule unavailable');
+  }
+
+  function conciseNextRun(job){
+    const stamp=Date.parse(job.next_run_at||'');
+    if(!Number.isFinite(stamp))return '';
+    return `Next ${new Date(stamp).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`;
+  }
+
+  function scheduledJobButton(label,action,{danger=false}={}){
+    const button=document.createElement('button');
+    button.type='button';
+    button.className=`tailnet-scheduled-action${danger?' is-danger':''}`;
+    button.textContent=label;
+    button.dataset.jobAction=action;
+    return button;
+  }
+
+  function renderScheduledJobs(){
+    if(!scheduledList||!notificationsStatus)return;
+    scheduledList.replaceChildren();
+    syncNotificationsModeControls();
+    notificationsStatus.hidden=false;
+    if(scheduledLoading&&!scheduledJobs.length){
+      notificationsStatus.textContent='Loading scheduled jobs…';
+      return;
+    }
+    notificationsStatus.textContent=scheduledJobs.length
+      ?`${scheduledJobs.length} scheduled job${scheduledJobs.length===1?'':'s'}`
+      :'No scheduled jobs.';
+    scheduledJobs.forEach(job=>{
+      const row=document.createElement('article');
+      row.className='tailnet-scheduled-job';
+      const status=scheduledStatusMeta(job);
+      const main=document.createElement('div');
+      main.className='tailnet-scheduled-job-main';
+      const top=document.createElement('div');
+      top.className='tailnet-scheduled-job-top';
+      const name=document.createElement('strong');
+      name.textContent=String(job.name||job.id);
+      const badge=document.createElement('span');
+      badge.className=`tailnet-scheduled-status ${status.className}`;
+      badge.textContent=status.label;
+      top.append(name,badge);
+      const detail=document.createElement('div');
+      detail.className='tailnet-scheduled-job-detail';
+      const schedule=document.createElement('span');
+      schedule.textContent=conciseSchedule(job);
+      const next=document.createElement('span');
+      next.textContent=conciseNextRun(job);
+      const mode=document.createElement('span');
+      mode.textContent=job.no_agent?'Script':'Agent';
+      detail.append(schedule);
+      if(next.textContent)detail.append(next);
+      detail.append(mode);
+      if(job.read_only){
+        const owner=document.createElement('span');
+        owner.textContent=String(job.owner_profile||job.profile||'Other profile');
+        detail.append(owner);
+      }
+      main.append(top,detail);
+      const actions=document.createElement('div');
+      actions.className='tailnet-scheduled-job-actions';
+      if(!job.read_only){
+        actions.append(scheduledJobButton('Run now','run'));
+        actions.append(scheduledJobButton(job.paused||job.state==='paused'?'Resume':'Pause',job.paused||job.state==='paused'?'resume':'pause'));
+        actions.append(scheduledJobButton('Edit','edit'));
+        actions.append(scheduledJobButton('Delete','delete',{danger:true}));
+      }
+      actions.addEventListener('click',event=>{
+        const button=event.target.closest('[data-job-action]');
+        if(!button)return;
+        void runScheduledJobAction(job,button.dataset.jobAction,row);
+      });
+      row.append(main,actions);
+      scheduledList.appendChild(row);
+    });
+  }
+
+  async function loadScheduledJobs(){
+    if(scheduledLoading)return;
+    scheduledLoading=true;
+    if(notificationsMode==='scheduled')renderScheduledJobs();
+    try{
+      const [jobsPayload,statusPayload]=await Promise.all([
+        api('/api/crons?all_profiles=1'),
+        api('/api/crons/status').catch(()=>({running:{}}))
+      ]);
+      scheduledJobs=cronJobsFromPayload(jobsPayload,{includeReadOnly:true});
+      scheduledRunning=statusPayload&&statusPayload.running&&typeof statusPayload.running==='object'?statusPayload.running:{};
+    }catch(_){
+      scheduledJobs=[];
+      if(notificationsStatus)notificationsStatus.textContent='Scheduled jobs are unavailable right now.';
+    }finally{
+      scheduledLoading=false;
+      if(notificationsMode==='scheduled')renderScheduledJobs();
+    }
+  }
+
+  async function runScheduledJobAction(job,action,row){
+    if(!job||job.read_only)return;
+    if(action==='edit'){
+      activateHermes({remember:false});
+      if(typeof switchPanel==='function')await switchPanel('tasks');
+      if(typeof openCronEdit==='function')openCronEdit(job);
+      return;
+    }
+    if(action==='delete'){
+      const confirmed=typeof showConfirmDialog==='function'
+        ?await showConfirmDialog({title:'Delete scheduled job?',message:`Delete “${job.name||job.id}”? Its notification history and reply threads will stay available.`,confirmLabel:'Delete',danger:true,focusCancel:true})
+        :false;
+      if(!confirmed)return;
+    }
+    row.classList.add('is-busy');
+    row.querySelectorAll('button').forEach(button=>{button.disabled=true;});
+    try{
+      const path={run:'/api/crons/run',pause:'/api/crons/pause',resume:'/api/crons/resume',delete:'/api/crons/delete'}[action];
+      if(!path)return;
+      await api(path,{method:'POST',body:JSON.stringify({job_id:job.id})});
+      if(typeof showToast==='function')showToast(action==='delete'?'Scheduled job deleted':action==='run'?'Scheduled job started':action==='pause'?'Scheduled job paused':'Scheduled job resumed');
+      await loadScheduledJobs();
+    }catch(error){
+      if(typeof showToast==='function')showToast(`Scheduled job action failed: ${error.message||error}`,4000);
+    }finally{
+      row.classList.remove('is-busy');
+      row.querySelectorAll('button').forEach(button=>{button.disabled=false;});
+    }
+  }
+
+  function knownReplySessions(){
+    const rows=[];
+    notificationReplySessions.forEach(session=>rows.push(session));
+    try{
+      if(typeof _containedCronReplySessions!=='undefined'&&Array.isArray(_containedCronReplySessions))rows.push(..._containedCronReplySessions);
+      if(typeof _allSessions!=='undefined'&&Array.isArray(_allSessions))rows.push(..._allSessions);
+    }catch(_){}
+    const deduped=new Map();
+    rows.forEach(session=>{if(session&&session.session_id)deduped.set(session.session_id,session);});
+    return Array.from(deduped.values());
+  }
+
+  async function findReplySession(item){
+    const marker=notificationReplyMarker(item);
+    const local=knownReplySessions().find(session=>String(session.title||'').startsWith(marker));
+    if(local)return local;
+    try{
+      const payload=await api('/api/sessions');
+      const rows=Array.isArray(payload&&payload.sessions)?payload.sessions:[];
+      const match=rows.find(session=>String(session.title||'').startsWith(marker));
+      if(match)return match;
+    }catch(_){}
+    return null;
+  }
+
+  async function createReplySession(item){
+    const title=notificationReplyTitle(item);
+    let created=null;
+    let contextMode='output';
+    if(item.sourceSessionId){
+      try{
+        const branched=await api('/api/session/branch',{
+          method:'POST',
+          body:JSON.stringify({session_id:item.sourceSessionId,title})
+        });
+        if(branched&&branched.session_id){
+          created={session_id:branched.session_id,title,parent_session_id:branched.parent_session_id||item.sourceSessionId};
+          contextMode='full';
+        }
+      }catch(_){}
+    }
+    if(!created){
+      const body={worktree:false,project_id:null};
+      try{
+        if(typeof S!=='undefined'&&S.activeProfile)body.profile=S.activeProfile;
+        if(typeof S!=='undefined'&&S.session&&S.session.workspace)body.workspace=S.session.workspace;
+      }catch(_){}
+      const payload=await api('/api/session/new',{method:'POST',body:JSON.stringify(body)});
+      created=payload&&payload.session?payload.session:null;
+      if(!created||!created.session_id)throw new Error('Could not create reply thread');
+    }
+    await api('/api/session/rename',{
+      method:'POST',
+      body:JSON.stringify({session_id:created.session_id,title})
+    });
+    try{
+      await api('/api/session/move',{
+        method:'POST',
+        body:JSON.stringify({session_id:created.session_id,project_id:null})
+      });
+    }catch(_){}
+    created={...created,title,contextMode};
+    notificationReplySessions.set(item.key,created);
+    return created;
+  }
+
+  async function resolveReplySession(item){
+    const existing=await findReplySession(item);
+    if(existing){
+      notificationReplySessions.set(item.key,existing);
+      return existing;
+    }
+    return createReplySession(item);
+  }
+
+  function threadMessageText(message){
+    const content=message&&message.content;
+    if(typeof content==='string')return content;
+    if(Array.isArray(content))return content.map(part=>typeof part==='string'?part:String(part&&part.text||'')).join('\n');
+    return String(content||'');
+  }
+
+  function stripNotificationContext(value){
+    const source=String(value||'');
+    const marker='[End notification context]';
+    const index=source.indexOf(marker);
+    return index>=0?source.slice(index+marker.length).trim():source;
+  }
+
+  function commonThreadPrefix(messages,parentMessages){
+    const limit=Math.min(messages.length,parentMessages.length);
+    let count=0;
+    while(count<limit){
+      const left=messages[count]||{};
+      const right=parentMessages[count]||{};
+      if(left.role!==right.role||threadMessageText(left)!==threadMessageText(right))break;
+      count+=1;
+    }
+    return count;
+  }
+
+  function renderThreadMessages(){
+    if(!notificationThreadMessages)return;
+    notificationThreadMessages.replaceChildren();
+    const allMessages=Array.isArray(notificationThreadSession&&notificationThreadSession.messages)?notificationThreadSession.messages:[];
+    const messages=allMessages.slice(notificationThreadBaseMessages.length).filter(message=>message&&['user','assistant'].includes(message.role));
+    if(!messages.length&&!notificationThreadDraft){
+      const empty=document.createElement('p');
+      empty.className='tailnet-notification-thread-empty';
+      empty.textContent='Reply here without leaving Notifications.';
+      notificationThreadMessages.appendChild(empty);
+    }
+    messages.forEach(message=>{
+      const row=document.createElement('article');
+      row.className=`tailnet-notification-thread-message is-${message.role}`;
+      const label=document.createElement('span');
+      label.textContent=message.role==='user'?'You':'Wizard';
+      const body=document.createElement('div');
+      body.className='msg-body';
+      const text=message.role==='user'?stripNotificationContext(threadMessageText(message)):threadMessageText(message);
+      try{body.innerHTML=typeof renderMd==='function'?renderMd(text):text;}catch(_){body.textContent=text;}
+      row.append(label,body);
+      notificationThreadMessages.appendChild(row);
+    });
+    if(notificationThreadDraft){
+      const row=document.createElement('article');
+      row.className='tailnet-notification-thread-message is-assistant is-live';
+      const label=document.createElement('span');
+      label.textContent='Wizard';
+      const body=document.createElement('div');
+      body.className='msg-body';
+      try{body.innerHTML=typeof renderMd==='function'?renderMd(notificationThreadDraft):notificationThreadDraft;}catch(_){body.textContent=notificationThreadDraft;}
+      row.append(label,body);
+      notificationThreadMessages.appendChild(row);
+    }
+    notificationThreadMessages.scrollTop=notificationThreadMessages.scrollHeight;
+    if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>{
+      if(typeof postProcessRenderedMessages==='function')postProcessRenderedMessages(notificationThreadMessages);
+    });
+  }
+
+  function setThreadBusy(busy,status=''){
+    if(notificationThreadInput)notificationThreadInput.disabled=!!busy;
+    if(notificationThreadSend)notificationThreadSend.hidden=!!busy;
+    if(notificationThreadStop)notificationThreadStop.hidden=!busy;
+    if(status&&notificationThreadContext)notificationThreadContext.textContent=status;
+  }
+
+  async function loadReplySessionTranscript(sessionId,{attach=true}={}){
+    const payload=await api(`/api/session?session_id=${encodeURIComponent(sessionId)}&messages=1&resolve_model=0&msg_limit=1000`,{timeoutMs:120000});
+    const session=payload&&payload.session?payload.session:payload;
+    if(!session||!session.session_id)throw new Error('Reply thread is unavailable');
+    notificationThreadSession=session;
+    notificationThreadBaseMessages=[];
+    notificationThreadSource=null;
+    if(session.parent_session_id){
+      try{
+        const parentPayload=await api(`/api/session?session_id=${encodeURIComponent(session.parent_session_id)}&messages=1&resolve_model=0&msg_limit=1000`,{timeoutMs:120000});
+        const parent=parentPayload&&parentPayload.session?parentPayload.session:parentPayload;
+        const parentMessages=Array.isArray(parent&&parent.messages)?parent.messages:[];
+        const messages=Array.isArray(session.messages)?session.messages:[];
+        const count=commonThreadPrefix(messages,parentMessages);
+        notificationThreadBaseMessages=messages.slice(0,count);
+        notificationThreadSource=parent;
+      }catch(_){}
+    }
+    renderThreadMessages();
+    const fullContext=!!session.parent_session_id;
+    if(notificationThreadContext)notificationThreadContext.textContent=fullContext?'Full run context':'Notification output context';
+    const activeStream=String(session.active_stream_id||'');
+    setThreadBusy(!!activeStream,activeStream?'Working…':fullContext?'Full run context':'Notification output context');
+    if(attach&&activeStream)attachNotificationThreadStream(activeStream);
+    return session;
+  }
+
+  async function openNotificationThread(item){
+    notificationThreadItem=item;
+    notificationThreadSession=null;
+    notificationThreadBaseMessages=[];
+    notificationThreadSource=null;
+    notificationThreadDraft='';
+    notificationsMode='notifications';
+    syncNotificationsModeControls();
+    if(notificationsPanel)notificationsPanel.scrollTop=0;
+    if(notificationThreadBack)notificationThreadBack.focus({preventScroll:true});
+    if(notificationsStatus)notificationsStatus.hidden=true;
+    if(notificationThreadTitle)notificationThreadTitle.textContent=item.name;
+    if(notificationThreadContext)notificationThreadContext.textContent=item.sourceSessionId?'Full run context available':'Notification output context';
+    if(notificationThreadPinned){
+      notificationThreadPinned.dataset.richReady='';
+      notificationThreadPinned.replaceChildren();
+      hydrateNotificationRich(notificationThreadPinned,item);
+    }
+    if(notificationIsUnread(item))markNotificationRead(item);
+    renderThreadMessages();
+    setThreadBusy(false,item.sourceSessionId?'Full run context available':'Notification output context');
+    try{
+      const session=await findReplySession(item);
+      if(session)await loadReplySessionTranscript(session.session_id);
+    }catch(error){
+      if(notificationThreadContext)notificationThreadContext.textContent=item.sourceSessionId?'Full run context available':'Notification output context';
+    }
+  }
+
+  function attachNotificationThreadStream(streamId){
+    const id=String(streamId||'');
+    if(!id)return;
+    if(notificationThreadStream&&notificationThreadStreamId===id)return;
+    if(notificationThreadStream)notificationThreadStream.close();
+    notificationThreadStreamId=id;
+    notificationThreadDraft='';
+    setThreadBusy(true,'Working…');
+    const source=new EventSource(new URL(`api/chat/stream?stream_id=${encodeURIComponent(id)}`,document.baseURI||location.href).href,{withCredentials:true});
+    notificationThreadStream=source;
+    let terminal=false;
+    const settle=async label=>{
+      if(terminal)return;
+      terminal=true;
+      source.close();
+      if(notificationThreadStream===source)notificationThreadStream=null;
+      notificationThreadStreamId='';
+      notificationThreadDraft='';
+      if(notificationThreadSession&&notificationThreadItem){
+        try{await loadReplySessionTranscript(notificationThreadSession.session_id,{attach:false});}
+        catch(_){setThreadBusy(false,label||'Reply saved');}
+      }
+    };
+    source.addEventListener('token',event=>{
+      try{notificationThreadDraft+=JSON.parse(event.data).text||'';}catch(_){}
+      renderThreadMessages();
+    });
+    source.addEventListener('tool_start',()=>setThreadBusy(true,'Working…'));
+    source.addEventListener('done',()=>{void settle('Reply saved');});
+    source.addEventListener('cancel',()=>{void settle('Stopped');});
+    source.addEventListener('stream_end',()=>{void settle('Reply saved');});
+    source.addEventListener('error',event=>{
+      if(event&&event.data){
+        try{
+          const payload=JSON.parse(event.data);
+          if(typeof showToast==='function')showToast(payload.error||'Reply failed',4000);
+        }catch(_){}
+        void settle('Reply failed');
+      }else if(!terminal){
+        setThreadBusy(true,'Reconnecting…');
+      }
+    });
+  }
+
+  function notificationContextMessage(item,reply){
+    return `[Notification context]\nJob: ${item.name}\nRun: ${new Date(item.modified*1000).toLocaleString()}\nOutput:\n${item.response}\n[End notification context]\n\n${reply}`;
+  }
+
+  async function sendNotificationThreadReply(event){
+    if(event)event.preventDefault();
+    if(!notificationThreadItem||notificationThreadStreamId)return;
+    const reply=String(notificationThreadInput&&notificationThreadInput.value||'').trim();
+    if(!reply)return;
+    try{
+      if(!notificationThreadSession){
+        setThreadBusy(true,notificationThreadItem.sourceSessionId?'Preparing full context…':'Preparing output context…');
+        const resolved=await resolveReplySession(notificationThreadItem);
+        await loadReplySessionTranscript(resolved.session_id,{attach:false});
+      }
+      const visibleMessages=(notificationThreadSession.messages||[]).slice(notificationThreadBaseMessages.length);
+      const firstFallbackTurn=!notificationThreadSession.parent_session_id&&!visibleMessages.some(message=>message&&message.role==='user');
+      const wireMessage=firstFallbackTurn?notificationContextMessage(notificationThreadItem,reply):reply;
+      notificationThreadSession.messages=Array.isArray(notificationThreadSession.messages)?notificationThreadSession.messages:[];
+      notificationThreadSession.messages.push({role:'user',content:wireMessage});
+      if(notificationThreadInput)notificationThreadInput.value='';
+      renderThreadMessages();
+      setThreadBusy(true,'Starting…');
+      const body={
+        session_id:notificationThreadSession.session_id,
+        message:wireMessage,
+        attachments:[],
+        profile:notificationThreadSession.profile||undefined,
+        source:'webui'
+      };
+      const payload=await api('/api/chat/start',{method:'POST',body:JSON.stringify(body),timeoutMs:120000});
+      if(!payload||!payload.stream_id)throw new Error(payload&&payload.error||'Reply did not start');
+      attachNotificationThreadStream(payload.stream_id);
+    }catch(error){
+      setThreadBusy(false,notificationThreadSession&&notificationThreadSession.parent_session_id?'Full run context':'Notification output context');
+      if(typeof showToast==='function')showToast(`Reply failed: ${error.message||error}`,4000);
+      if(notificationThreadSession)void loadReplySessionTranscript(notificationThreadSession.session_id,{attach:false}).catch(()=>{});
+    }
+  }
+
+  async function stopNotificationThreadReply(){
+    if(!notificationThreadStreamId)return;
+    try{
+      await api(`/api/chat/cancel?stream_id=${encodeURIComponent(notificationThreadStreamId)}`);
+      setThreadBusy(true,'Stopping…');
+    }catch(error){
+      if(typeof showToast==='function')showToast(`Stop failed: ${error.message||error}`,4000);
     }
   }
 
@@ -714,6 +1284,9 @@
     markSelected(NOTIFICATIONS_ID);
     closeSessionsOverlay();
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:NOTIFICATIONS_ID,label:'Notifications'}}));
+    if(notificationThreadItem)closeNotificationThread();
+    notificationsMode='notifications';
+    syncNotificationsModeControls();
     setNotificationFilter('unread');
     void loadCronNotifications();
   }
@@ -1303,10 +1876,27 @@
     syncHermesHomeControl();
     if(notificationsReadAll)notificationsReadAll.addEventListener('click',markAllNotificationsRead);
     notificationFilterButtons.forEach(button=>button.addEventListener('click',()=>setNotificationFilter(button.dataset.notificationFilter)));
+    notificationsModeButtons.forEach(button=>button.addEventListener('click',()=>setNotificationsMode(button.dataset.notificationsMode)));
+    if(scheduledRefresh)scheduledRefresh.addEventListener('click',()=>void loadScheduledJobs());
+    if(scheduledNew)scheduledNew.addEventListener('click',async()=>{
+      activateHermes({remember:false});
+      if(typeof switchPanel==='function')await switchPanel('tasks');
+      if(typeof openCronCreate==='function')openCronCreate();
+    });
+    if(notificationThreadBack)notificationThreadBack.addEventListener('click',closeNotificationThread);
+    if(notificationThreadComposer)notificationThreadComposer.addEventListener('submit',sendNotificationThreadReply);
+    if(notificationThreadStop)notificationThreadStop.addEventListener('click',()=>void stopNotificationThreadReply());
+    if(notificationThreadInput)notificationThreadInput.addEventListener('keydown',event=>{
+      if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){
+        event.preventDefault();
+        void sendNotificationThreadReply(event);
+      }
+    });
     appsById.set(privateMarketplace.id,privateMarketplace);
     privateAdd.addEventListener('click',()=>activateApp(privateMarketplace));
     document.addEventListener('hermesui:tailnet-app-selected',event=>{
       const id=event&&event.detail&&event.detail.id;
+      if(id&&id!==NOTIFICATIONS_ID&&notificationThreadItem)closeNotificationThread();
       if(!id||id==='hermes-ui')return;
       activeId=id;
       if(wizardHome)wizardHome.hidden=true;
