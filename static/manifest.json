@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Hermes",
-  "short_name": "Hermes",
+  "name": "HermesUI",
+  "short_name": "HermesUI",
   "description": "A focused, mobile-first interface for Hermes Agent",
   "start_url": "./?source=pwa",
   "scope": "./",

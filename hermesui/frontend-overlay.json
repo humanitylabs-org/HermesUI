@@ -61,7 +61,7 @@
       "upstream_sha256": "6b96bb1b4124bbc46158efc9d45bf5278b4ea6219ddf946ee3160123255da6b9"
     },
     {
-      "hermesui_sha256": "bf3b6cef9e506be4b372869956e3b3cd23d10a50e4d006f06ccd05ba682b64d6",
+      "hermesui_sha256": "a122b9fed348d7629faa034cc791e91fb9b110d06b4f6e36e1f0ed5912ec7035",
       "path": "static/manifest.json",
       "upstream_sha256": "da3e24d84ae91fba3f8ba51f48d51d277b4f6d443506e888a178ac7d1fed1c6a"
     },
