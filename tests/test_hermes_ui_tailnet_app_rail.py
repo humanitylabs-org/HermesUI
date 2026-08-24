@@ -501,21 +501,21 @@ def test_external_app_is_the_only_mobile_content_beside_the_persistent_selector(
     assert 'html[data-tailnet-view="external"] .tailnet-app-rail' in CSS
 
 
-def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
+def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page():
     assert (
-        '.rail.tailnet-app-rail{position:fixed;left:0;top:0;bottom:0;width:48px;'
+        '.rail.tailnet-app-rail{position:fixed;left:auto;right:0;top:0;bottom:0;width:48px;'
         'height:100%;height:100dvh;box-sizing:border-box;'
         in CSS
     )
-    assert '.layout{margin-left:48px;width:calc(100% - 48px);}' in CSS
+    assert '.layout{margin-left:0;margin-right:48px;width:calc(100% - 48px);}' in CSS
     assert (
         'html:not([data-tailnet-view="external"]) .app-titlebar{'
-        'margin-left:48px;width:calc(100% - 48px);box-sizing:border-box;}'
+        'margin-left:0;margin-right:48px;width:calc(100% - 48px);box-sizing:border-box;}'
         in CSS
     )
     assert (
-        'html:not([data-tailnet-view="external"]) .sidebar{left:48px;'
-        'width:calc(100vw - 48px);transform:translateX(calc(-100% - 48px));}'
+        'html:not([data-tailnet-view="external"]) .sidebar{left:0;right:auto;'
+        'width:calc(100vw - 48px);transform:translateX(-100%);}'
         in CSS
     )
     assert (
@@ -535,6 +535,17 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
     assert 'html[data-mobile-session-view="sessions"] .app-titlebar{display:none!important;}' in CSS
     assert '.sidebar.mobile-session-page .mobile-sidebar-close{display:none!important;}' in CSS
     assert '.sidebar.mobile-session-page .panel-view{margin-left:0;}' in CSS
+    assert '.rail.tailnet-app-rail{border-right:0;border-left:1px solid var(--border);}' in CSS
+    assert '.rail.tailnet-app-rail .rail-btn.active::before' in CSS
+    assert 'left:auto;right:-6px' in CSS
+    assert '.tailnet-scheduled-job-menu{position:fixed;z-index:100;top:auto;right:60px;' in CSS
+    assert '.toast{right:60px;left:12px;' in CSS
+
+
+def test_rail_tooltips_and_bookmark_actions_flip_away_from_the_right_edge():
+    assert "const placeLeft=rect.left>window.innerWidth/2;" in JS
+    assert "placeLeft?rect.left-width-8:rect.right+8" in JS
+    assert "anchorX>window.innerWidth/2" in JS
 
 
 def test_mobile_hermes_home_becomes_a_session_menu_only_outside_the_session_list():
@@ -554,7 +565,7 @@ def test_mobile_hermes_home_becomes_a_session_menu_only_outside_the_session_list
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v2"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v2&mobile-rail-right=v1"'
         in INDEX
     )
     assert (

@@ -101,7 +101,7 @@ def test_notifications_layout_is_compact_responsive_and_thread_composer_is_stick
     assert ".tailnet-scheduled-job{grid-template-columns:minmax(0,1fr) 44px" in STYLE
     assert ".tailnet-notification-thread-pinned{height:190px;max-height:190px;}" in STYLE
     assert ".tailnet-scheduled-job-more{" in STYLE
-    assert "left:60px" in STYLE
+    assert "right:60px" in STYLE
 
 
 def test_dark_mode_send_controls_use_light_fill_and_dark_foreground():

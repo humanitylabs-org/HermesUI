@@ -1670,7 +1670,9 @@
     const rect=target.getBoundingClientRect();
     const width=node.offsetWidth;
     const height=node.offsetHeight;
-    node.style.left=`${Math.max(8,Math.min(window.innerWidth-width-8,rect.right+8))}px`;
+    const placeLeft=rect.left>window.innerWidth/2;
+    const desiredLeft=placeLeft?rect.left-width-8:rect.right+8;
+    node.style.left=`${Math.max(8,Math.min(window.innerWidth-width-8,desiredLeft))}px`;
     node.style.top=`${Math.max(8,Math.min(window.innerHeight-height-8,rect.top+(rect.height-height)/2))}px`;
   }
 
@@ -1766,10 +1768,11 @@
     menuBookmark={group,id,button};
     menu.hidden=false;
     const rect=button.getBoundingClientRect();
-    const x=Number.isFinite(clientX)?clientX:rect.right+8;
-    const y=Number.isFinite(clientY)?clientY:rect.top;
     const width=menu.offsetWidth;
     const height=menu.offsetHeight;
+    const anchorX=Number.isFinite(clientX)?clientX:(rect.left>window.innerWidth/2?rect.left:rect.right);
+    const x=anchorX>window.innerWidth/2?Math.min(rect.left,anchorX)-width-8:Math.max(rect.right,anchorX)+8;
+    const y=Number.isFinite(clientY)?clientY:rect.top;
     menu.style.left=`${Math.max(8,Math.min(window.innerWidth-width-8,x))}px`;
     menu.style.top=`${Math.max(8,Math.min(window.innerHeight-height-8,y))}px`;
     const first=menu.querySelector('button');
