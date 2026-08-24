@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 JS = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
+SW = (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
 MANAGER = (ROOT / "static" / "tailnet-app-manager.js").read_text(encoding="utf-8")
 BOOT = (ROOT / "static" / "boot.js").read_text(encoding="utf-8")
 SWIPE = (ROOT / "static" / "session-swipe-navigation.js").read_text(encoding="utf-8")
@@ -148,6 +149,10 @@ def test_mobile_app_rail_keeps_destinations_while_utilities_move_to_one_menu():
     assert "activateMobileUtility(document.getElementById('chatSettingsToggle'))" in JS
     assert "event.key!=='Escape'||!mobileUtilityIsOpen()" in JS
     assert "window.innerWidth>640" in JS
+    sw_style = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
+    sw_rail = next(line for line in SW.splitlines() if "'./static/tailnet-app-rail.js' + VQ" in line)
+    assert '&mobile-utility-menu=v1' in sw_style
+    assert '&mobile-utility-menu=v1' in sw_rail
 
 
 def test_cron_notification_rows_are_compact_full_row_disclosures():
