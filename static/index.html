@@ -70,7 +70,7 @@
     };
   }
 })()</script>
-<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1&high-signal-toggle=v1&mobile-session-home=v1&notification-operations=v1">
+<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1&high-signal-toggle=v1&mobile-session-home=v1&notification-operations=v2">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
@@ -210,6 +210,24 @@
         </form>
       </section>
     </section>
+    <dialog class="tailnet-cron-edit-dialog" id="tailnetCronEditDialog" aria-labelledby="tailnetCronEditTitle">
+      <div class="tailnet-cron-edit-shell">
+        <header class="tailnet-cron-edit-head">
+          <div>
+            <span>Scheduled job</span>
+            <h2 id="tailnetCronEditTitle">Edit job</h2>
+          </div>
+          <button class="tailnet-cron-edit-close" id="tailnetCronEditClose" type="button" aria-label="Close editor">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
+        </header>
+        <div class="tailnet-cron-edit-body" id="tailnetCronEditMount"></div>
+        <footer class="tailnet-cron-edit-foot">
+          <button class="tailnet-cron-edit-cancel" id="tailnetCronEditCancel" type="button">Cancel</button>
+          <button class="tailnet-cron-edit-save" id="tailnetCronEditSave" type="button">Save changes</button>
+        </footer>
+      </div>
+    </dialog>
   </section>
   <nav class="rail tailnet-app-rail" aria-label="Wizard OS apps">
     <a class="rail-btn tailnet-app-link active has-tooltip" id="tailnetAppHome" href="./" data-tooltip="Hermes UI" aria-label="Hermes UI" title="Hermes UI" aria-current="page">
@@ -1948,10 +1966,10 @@
 <script src="static/commands.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/messages.js?v=__WEBUI_VERSION__&tab-polish=v1&recovery-filter=v2" defer></script>
 <script src="static/extension_settings.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/panels.js?v=__WEBUI_VERSION__&cron-notifications=v3&high-signal-model=v1" defer></script>
+<script src="static/panels.js?v=__WEBUI_VERSION__&cron-notifications=v3&high-signal-model=v1&cron-modal=v1" defer></script>
 <script src="static/session-dashboard.js?v=__WEBUI_VERSION__&tab-polish=v1&high-signal-model=v6&high-signal-history=v1&background-resume=v1&mode-rail=v1&summary-trust=v1&high-signal-toggle=v1" defer></script>
 <script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__&labeled-adjacent-tabs=v1" defer></script>
-<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v1" defer></script>
+<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v2" defer></script>
 <script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3&semantic-icons=v1" defer></script>
 <script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/boot.js?v=__WEBUI_VERSION__&tab-polish=v1" defer></script>

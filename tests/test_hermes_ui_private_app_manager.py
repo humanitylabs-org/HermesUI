@@ -74,7 +74,7 @@ def test_approved_routes_keep_stable_detector_identity():
 
 
 def test_service_worker_delivers_both_private_app_scripts_without_caching_apis():
-    assert "'./static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v1'" in SW
+    assert "'./static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v2'" in SW
     assert "'./static/tailnet-app-manager.js' + VQ + '&cron-notifications=v3&semantic-icons=v1'" in SW
     assert "url.pathname.includes('/api/')" in SW
     assert "return; // let browser handle normally" in SW

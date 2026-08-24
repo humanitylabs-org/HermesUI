@@ -6,6 +6,7 @@ INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 RAIL = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
 SESSIONS = (ROOT / "static" / "sessions.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
+PANELS = (ROOT / "static" / "panels.js").read_text(encoding="utf-8")
 
 
 def test_notifications_default_and_scheduled_jobs_mode_contract():
@@ -17,9 +18,31 @@ def test_notifications_default_and_scheduled_jobs_mode_contract():
     assert "api('/api/crons/status')" in RAIL
     for action in ("run", "pause", "resume", "delete"):
         assert f"{action}:'/api/crons/{action}'" in RAIL
+    assert "openScheduledJobEditor(job,trigger)" in RAIL
     assert "openCronEdit(job)" in RAIL
     assert "openCronCreate()" in RAIL
     assert "focusCancel:true" in RAIL
+
+
+def test_scheduled_jobs_keep_actions_quiet_and_edit_in_a_reused_form_modal():
+    for element_id in (
+        "tailnetCronEditDialog",
+        "tailnetCronEditMount",
+        "tailnetCronEditCancel",
+        "tailnetCronEditSave",
+    ):
+        assert f'id="{element_id}"' in INDEX
+    assert "tailnet-scheduled-job-more" in RAIL
+    assert "menu.hidden=true" in RAIL
+    assert "detail.append(schedule)" not in RAIL
+    assert "detail.append(mode)" not in RAIL
+    assert "const body=document.getElementById('taskDetailBody');" in RAIL
+    assert "cronEditMount.appendChild(body);" in RAIL
+    assert "parent.insertBefore(body,nextSibling)" in RAIL
+    assert "scrollTop:notificationsPanel?notificationsPanel.scrollTop:0" in RAIL
+    assert "openScheduledJobEditor(job,trigger);" in RAIL
+    assert "hermesui:cron-form-cancelled" in PANELS
+    assert "hermesui:cron-form-saved" in PANELS
 
 
 def test_notification_rows_preview_real_output_and_offer_reply():
@@ -69,10 +92,20 @@ def test_contained_reply_sessions_are_removed_before_every_sidebar_render_path()
 def test_notifications_layout_is_compact_responsive_and_thread_composer_is_sticky():
     assert ".tailnet-notifications-mode-button.is-active" in STYLE
     assert ".tailnet-scheduled-job{" in STYLE
-    assert ".tailnet-scheduled-job-actions{" in STYLE
+    assert ".tailnet-scheduled-job-controls{" in STYLE
+    assert ".tailnet-scheduled-job-menu{" in STYLE
+    assert ".tailnet-cron-edit-dialog{" in STYLE
     assert ".tailnet-notification-thread-pinned{box-sizing:border-box;flex:0 0 auto;height:clamp(150px,30vh,260px);max-height:260px;overflow-y:auto" in STYLE
     assert ".tailnet-notification-thread-composer{position:sticky" in STYLE
     assert "@media(max-width:640px)" in STYLE
-    assert ".tailnet-scheduled-job{grid-template-columns:1fr" in STYLE
+    assert ".tailnet-scheduled-job{grid-template-columns:minmax(0,1fr) 44px" in STYLE
     assert ".tailnet-notification-thread-pinned{height:190px;max-height:190px;}" in STYLE
-    assert ".tailnet-notifications-mode-button,.tailnet-notifications-filter,.tailnet-notifications-read-all,.tailnet-notifications-action,.tailnet-scheduled-action,.tailnet-notification-thread-back,.tailnet-notification-thread-send,.tailnet-notification-thread-stop{min-height:44px;}" in STYLE
+    assert ".tailnet-scheduled-job-more{" in STYLE
+    assert "left:60px" in STYLE
+
+
+def test_dark_mode_send_controls_use_light_fill_and_dark_foreground():
+    assert ":root.dark button.send-btn:not(.stop):not(.interrupt):not(.steer){background:#f8fafc!important" in STYLE
+    assert "color:#111827!important" in STYLE
+    assert ":root.dark .tailnet-notification-thread-send{background:#f8fafc;color:#111827" in STYLE
+    assert "background:rgba(255,255,255,.24)!important" in STYLE

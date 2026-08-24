@@ -1899,10 +1899,12 @@ function cancelCronForm(){
     const snap = _cronPreFormDetail;
     _cronPreFormDetail = null;
     _renderCronDetail(snap);
+    document.dispatchEvent(new CustomEvent('hermesui:cron-form-cancelled'));
     return;
   }
   _cronPreFormDetail = null;
   _clearCronDetail();
+  document.dispatchEvent(new CustomEvent('hermesui:cron-form-cancelled'));
 }
 
 function _cronModelBareName(model, provider) {
@@ -1966,6 +1968,7 @@ async function saveCronForm(){
       await loadCrons();
       const job = _cronList && _cronList.find(j => j.id === editedId);
       if (job) openCronDetail(job);
+      document.dispatchEvent(new CustomEvent('hermesui:cron-form-saved',{detail:{jobId:editedId}}));
       return;
     }
     const body={schedule,prompt,deliver,profile: profile, toast_notifications: toastNotifications};

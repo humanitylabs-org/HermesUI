@@ -49,6 +49,12 @@
   const scheduledActions=document.getElementById('tailnetScheduledActions');
   const scheduledNew=document.getElementById('tailnetScheduledNew');
   const scheduledRefresh=document.getElementById('tailnetScheduledRefresh');
+  const cronEditDialog=document.getElementById('tailnetCronEditDialog');
+  const cronEditMount=document.getElementById('tailnetCronEditMount');
+  const cronEditTitle=document.getElementById('tailnetCronEditTitle');
+  const cronEditClose=document.getElementById('tailnetCronEditClose');
+  const cronEditCancel=document.getElementById('tailnetCronEditCancel');
+  const cronEditSave=document.getElementById('tailnetCronEditSave');
   const notificationsModeButtons=Array.from(document.querySelectorAll('[data-notifications-mode]'));
   const notificationFilterButtons=Array.from(document.querySelectorAll('[data-notification-filter]'));
   const notificationThread=document.getElementById('tailnetNotificationThread');
@@ -100,6 +106,7 @@
   let scheduledJobs=[];
   let scheduledRunning={};
   let scheduledLoading=false;
+  let scheduledEditorState=null;
   let notificationThreadItem=null;
   let notificationThreadSession=null;
   let notificationThreadBaseMessages=[];
@@ -736,6 +743,7 @@
     syncNotificationFilterControls();
     syncNotificationsModeControls();
     if(notificationsReadAll)notificationsReadAll.disabled=unreadCount===0;
+    if(notificationsMode!=='notifications')return;
     notificationsList.replaceChildren();
     notificationsStatus.hidden=false;
     if(!items.length){
@@ -839,10 +847,6 @@
     return {label:'Active',className:'is-active'};
   }
 
-  function conciseSchedule(job){
-    return String(job.schedule_display||(job.schedule&&job.schedule.expression)||job.schedule||'Schedule unavailable');
-  }
-
   function conciseNextRun(job){
     const stamp=Date.parse(job.next_run_at||'');
     if(!Number.isFinite(stamp))return '';
@@ -855,7 +859,21 @@
     button.className=`tailnet-scheduled-action${danger?' is-danger':''}`;
     button.textContent=label;
     button.dataset.jobAction=action;
+    button.setAttribute('role','menuitem');
     return button;
+  }
+
+  function closeScheduledJobMenus({except=null,restoreFocus=false}={}){
+    if(!scheduledList)return;
+    scheduledList.querySelectorAll('.tailnet-scheduled-job-menu:not([hidden])').forEach(menu=>{
+      if(menu===except)return;
+      menu.hidden=true;
+      const button=menu.parentElement&&menu.parentElement.querySelector('.tailnet-scheduled-job-more');
+      if(button){
+        button.setAttribute('aria-expanded','false');
+        if(restoreFocus)button.focus({preventScroll:true});
+      }
+    });
   }
 
   function renderScheduledJobs(){
@@ -870,9 +888,10 @@
     notificationsStatus.textContent=scheduledJobs.length
       ?`${scheduledJobs.length} scheduled job${scheduledJobs.length===1?'':'s'}`
       :'No scheduled jobs.';
-    scheduledJobs.forEach(job=>{
+    scheduledJobs.forEach((job,index)=>{
       const row=document.createElement('article');
       row.className='tailnet-scheduled-job';
+      row.dataset.jobId=String(job.id||'');
       const status=scheduledStatusMeta(job);
       const main=document.createElement('div');
       main.className='tailnet-scheduled-job-main';
@@ -886,35 +905,51 @@
       top.append(name,badge);
       const detail=document.createElement('div');
       detail.className='tailnet-scheduled-job-detail';
-      const schedule=document.createElement('span');
-      schedule.textContent=conciseSchedule(job);
       const next=document.createElement('span');
       next.textContent=conciseNextRun(job);
-      const mode=document.createElement('span');
-      mode.textContent=job.no_agent?'Script':'Agent';
-      detail.append(schedule);
       if(next.textContent)detail.append(next);
-      detail.append(mode);
-      if(job.read_only){
-        const owner=document.createElement('span');
-        owner.textContent=String(job.owner_profile||job.profile||'Other profile');
-        detail.append(owner);
-      }
+      detail.hidden=!next.textContent;
       main.append(top,detail);
-      const actions=document.createElement('div');
-      actions.className='tailnet-scheduled-job-actions';
+      const controls=document.createElement('div');
+      controls.className='tailnet-scheduled-job-controls';
       if(!job.read_only){
-        actions.append(scheduledJobButton('Run now','run'));
-        actions.append(scheduledJobButton(job.paused||job.state==='paused'?'Resume':'Pause',job.paused||job.state==='paused'?'resume':'pause'));
-        actions.append(scheduledJobButton('Edit','edit'));
-        actions.append(scheduledJobButton('Delete','delete',{danger:true}));
+        const menuId=`tailnet-scheduled-job-menu-${index}`;
+        const more=document.createElement('button');
+        more.type='button';
+        more.className='tailnet-scheduled-job-more';
+        more.dataset.jobMenuId=String(job.id||'');
+        more.setAttribute('aria-label',`Actions for ${job.name||job.id}`);
+        more.setAttribute('aria-haspopup','menu');
+        more.setAttribute('aria-expanded','false');
+        more.setAttribute('aria-controls',menuId);
+        more.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>';
+        const menu=document.createElement('div');
+        menu.className='tailnet-scheduled-job-menu';
+        menu.id=menuId;
+        menu.setAttribute('role','menu');
+        menu.hidden=true;
+        menu.append(scheduledJobButton('Edit','edit'));
+        menu.append(scheduledJobButton('Run now','run'));
+        menu.append(scheduledJobButton(job.paused||job.state==='paused'?'Resume':'Pause',job.paused||job.state==='paused'?'resume':'pause'));
+        menu.append(scheduledJobButton('Delete','delete',{danger:true}));
+        more.addEventListener('click',event=>{
+          event.stopPropagation();
+          const opening=menu.hidden;
+          closeScheduledJobMenus({except:menu});
+          menu.hidden=!opening;
+          more.setAttribute('aria-expanded',String(opening));
+        });
+        menu.addEventListener('click',event=>{
+          const button=event.target.closest('[data-job-action]');
+          if(!button)return;
+          event.stopPropagation();
+          menu.hidden=true;
+          more.setAttribute('aria-expanded','false');
+          void runScheduledJobAction(job,button.dataset.jobAction,row,more);
+        });
+        controls.append(more,menu);
       }
-      actions.addEventListener('click',event=>{
-        const button=event.target.closest('[data-job-action]');
-        if(!button)return;
-        void runScheduledJobAction(job,button.dataset.jobAction,row);
-      });
-      row.append(main,actions);
+      row.append(main,controls);
       scheduledList.appendChild(row);
     });
   }
@@ -939,12 +974,61 @@
     }
   }
 
-  async function runScheduledJobAction(job,action,row){
+  function openScheduledJobEditor(job,trigger){
+    if(!job||job.read_only||!cronEditDialog||!cronEditMount||typeof openCronEdit!=='function')return;
+    const body=document.getElementById('taskDetailBody');
+    if(!body||scheduledEditorState)return;
+    closeScheduledJobMenus();
+    scheduledEditorState={
+      body,
+      parent:body.parentNode,
+      nextSibling:body.nextSibling,
+      jobId:String(job.id||''),
+      scrollTop:notificationsPanel?notificationsPanel.scrollTop:0,
+      trigger,
+      saved:false
+    };
+    body.classList.add('is-cron-modal-body');
+    cronEditMount.appendChild(body);
+    if(cronEditTitle)cronEditTitle.textContent=String(job.name||job.id||'Edit job');
+    openCronEdit(job);
+    cronEditDialog.showModal();
+    requestAnimationFrame(()=>{
+      body.scrollTop=0;
+      const first=document.getElementById('cronFormName')||body.querySelector('input,select,textarea,button');
+      if(first)first.focus({preventScroll:true});
+    });
+  }
+
+  function cancelScheduledJobEditor(){
+    if(!cronEditDialog||!cronEditDialog.open)return;
+    if(typeof cancelCronForm==='function')cancelCronForm();
+    else cronEditDialog.close();
+  }
+
+  async function finishScheduledJobEditor(){
+    const state=scheduledEditorState;
+    if(!state)return;
+    scheduledEditorState=null;
+    const {body,parent,nextSibling,jobId,scrollTop,saved,trigger}=state;
+    body.classList.remove('is-cron-modal-body');
+    if(parent){
+      if(nextSibling&&nextSibling.parentNode===parent)parent.insertBefore(body,nextSibling);
+      else parent.appendChild(body);
+    }
+    if(saved)await loadScheduledJobs();
+    requestAnimationFrame(()=>{
+      if(notificationsPanel)notificationsPanel.scrollTop=scrollTop;
+      const replacement=scheduledList&&Array.from(scheduledList.querySelectorAll('.tailnet-scheduled-job-more')).find(button=>button.dataset.jobMenuId===jobId);
+      const focusTarget=replacement||(trigger&&trigger.isConnected?trigger:null);
+      if(focusTarget)focusTarget.focus({preventScroll:true});
+    });
+  }
+
+  async function runScheduledJobAction(job,action,row,trigger){
     if(!job||job.read_only)return;
     if(action==='edit'){
-      activateHermes({remember:false});
-      if(typeof switchPanel==='function')await switchPanel('tasks');
-      if(typeof openCronEdit==='function')openCronEdit(job);
+      openScheduledJobEditor(job,trigger);
       return;
     }
     if(action==='delete'){
@@ -1883,6 +1967,48 @@
       if(typeof switchPanel==='function')await switchPanel('tasks');
       if(typeof openCronCreate==='function')openCronCreate();
     });
+    document.addEventListener('pointerdown',event=>{
+      if(!(event.target instanceof Element)||!event.target.closest('.tailnet-scheduled-job-controls'))closeScheduledJobMenus();
+    });
+    document.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&scheduledList&&scheduledList.querySelector('.tailnet-scheduled-job-menu:not([hidden])')){
+        event.preventDefault();
+        closeScheduledJobMenus({restoreFocus:true});
+      }
+    });
+    if(cronEditDialog){
+      if(cronEditClose)cronEditClose.addEventListener('click',cancelScheduledJobEditor);
+      if(cronEditCancel)cronEditCancel.addEventListener('click',cancelScheduledJobEditor);
+      if(cronEditSave)cronEditSave.addEventListener('click',async()=>{
+        if(typeof saveCronForm!=='function')return;
+        cronEditSave.disabled=true;
+        cronEditSave.textContent='Saving…';
+        try{await saveCronForm();}
+        finally{
+          if(cronEditDialog.open){
+            cronEditSave.disabled=false;
+            cronEditSave.textContent='Save changes';
+          }
+        }
+      });
+      cronEditDialog.addEventListener('cancel',event=>{
+        event.preventDefault();
+        cancelScheduledJobEditor();
+      });
+      cronEditDialog.addEventListener('click',event=>{
+        if(event.target===cronEditDialog)cancelScheduledJobEditor();
+      });
+      cronEditDialog.addEventListener('close',()=>void finishScheduledJobEditor());
+      document.addEventListener('hermesui:cron-form-cancelled',()=>{
+        if(cronEditDialog.open)cronEditDialog.close();
+      });
+      document.addEventListener('hermesui:cron-form-saved',event=>{
+        if(!cronEditDialog.open||!scheduledEditorState)return;
+        scheduledEditorState.saved=true;
+        scheduledEditorState.jobId=String(event&&event.detail&&event.detail.jobId||scheduledEditorState.jobId);
+        cronEditDialog.close();
+      });
+    }
     if(notificationThreadBack)notificationThreadBack.addEventListener('click',closeNotificationThread);
     if(notificationThreadComposer)notificationThreadComposer.addEventListener('submit',sendNotificationThreadReply);
     if(notificationThreadStop)notificationThreadStop.addEventListener('click',()=>void stopNotificationThreadReply());
