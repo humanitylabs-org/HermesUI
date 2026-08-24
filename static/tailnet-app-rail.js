@@ -564,6 +564,11 @@
       :dividerIndex>=0
         ?lines.slice(dividerIndex+1)
         :lines).join('\n').trim();
+    const silentSentinel=body
+      .replace(/^[-*_`#>\[\]()\s]+|[-*_`#>\[\]()\s]+$/g,'')
+      .replace(/\s+/g,' ')
+      .toLowerCase();
+    if(silentSentinel==='silent'||silentSentinel==='no reply'||silentSentinel==='no_reply')return '';
     return body.slice(0,8000);
   }
 
@@ -662,6 +667,7 @@
 
   function syncNotificationsModeControls(){
     const inThread=!!notificationThreadItem;
+    if(notificationsPanel)notificationsPanel.dataset.notificationsMode=inThread?'thread':notificationsMode;
     notificationsModeButtons.forEach(button=>{
       const active=button.dataset.notificationsMode===notificationsMode&&!inThread;
       button.classList.toggle('is-active',active);
@@ -719,7 +725,7 @@
 
   async function fetchCronNotificationJobs(){
     const payload=await api('/api/crons');
-    return cronJobsFromPayload(payload);
+    return cronJobsFromPayload(payload).filter(job=>job.toast_notifications!==false);
   }
 
   async function fetchLatestCronSessions(){
@@ -970,17 +976,29 @@
     return grouped;
   }
 
+  function scheduledRelativeText(groupKey,relative,future){
+    if(groupKey==='active')return relative.text;
+    if(groupKey==='failed')return `failed ${relative.text}`;
+    if(groupKey==='paused'&&relative.state==='late')return `was due ${relative.text.slice(5)} ago`;
+    return `${future?'Next':'Last'} ${relative.text}`;
+  }
+
   function scheduledRelativeMeta(job,groupKey){
     const future=groupKey==='active'||groupKey==='paused';
     const value=future?job.next_run_at:job.last_run_at;
     const relative=typeof cronRelativeTimeMeta==='function'
       ?cronRelativeTimeMeta(value,future?'next':'last')
-      :{text:future?'Not scheduled':'Never run',absolute:'',stamp:null};
+      :{text:future?'Not scheduled':'Never run',absolute:'',stamp:null,state:'unknown'};
+    const active=groupKey==='active';
+    const text=relative.stamp==null
+      ?(active?'next run pending':relative.text)
+      :scheduledRelativeText(groupKey,relative,future);
     return {
-      text:relative.stamp==null?relative.text:`${future?'Next':'Last'} ${relative.text}`,
+      text,
       absolute:relative.absolute||'',
       value:value==null?'':String(value),
-      kind:future?'next':'last'
+      kind:future?'next':'last',
+      state:relative.state||'unknown'
     };
   }
 
@@ -989,12 +1007,20 @@
     scheduledList.querySelectorAll('[data-scheduled-time-kind]').forEach(node=>{
       const kind=node.dataset.scheduledTimeKind;
       const value=node.dataset.scheduledTimeValue;
+      const row=node.closest('.tailnet-scheduled-job');
+      const groupKey=row&&row.dataset.jobStatusGroup||'';
       const relative=typeof cronRelativeTimeMeta==='function'
         ?cronRelativeTimeMeta(value,kind)
-        :{text:kind==='next'?'Not scheduled':'Never run',absolute:'',stamp:null};
-      node.textContent=relative.stamp==null?relative.text:`${kind==='next'?'Next':'Last'} ${relative.text}`;
+        :{text:kind==='next'?'Not scheduled':'Never run',absolute:'',stamp:null,state:'unknown'};
+      node.textContent=relative.stamp==null
+        ?(groupKey==='active'?'next run pending':relative.text)
+        :scheduledRelativeText(groupKey,relative,kind==='next');
       node.title=relative.absolute||'';
-      const row=node.closest('.tailnet-scheduled-job');
+      node.dataset.scheduledTimeState=relative.state||'unknown';
+      if(row){
+        row.classList.toggle('is-timing-late',relative.state==='late');
+        row.classList.toggle('is-timing-due',relative.state==='due');
+      }
       if(row&&row.hasAttribute('aria-label')){
         row.setAttribute('aria-label',`${row.dataset.jobName}. ${row.dataset.jobGroup}. ${node.textContent}. Press Enter, right-click, or hold for actions.`);
       }
@@ -1111,15 +1137,16 @@
       notificationsStatus.textContent='Loading scheduled jobs…';
       return;
     }
-    notificationsStatus.textContent=scheduledJobs.length
-      ?`${scheduledJobs.length} scheduled job${scheduledJobs.length===1?'':'s'} · Right-click or hold a job for actions`
+    if(notificationsStatus)notificationsStatus.textContent=scheduledJobs.length
+      ?`${scheduledJobs.length} job${scheduledJobs.length===1?'':'s'} · ${window.matchMedia('(max-width:640px)').matches?'Hold':'Right-click or hold'} for actions`
       :'No scheduled jobs.';
     const grouped=scheduledJobsByGroup();
     let menuIndex=0;
-    const appendJobRow=(rows,job,groupMeta,frequencyMeta=null)=>{
+    const appendJobRow=(rows,job,groupMeta,frequencyMeta=null,{nextUp=false}={})=>{
       const row=document.createElement('article');
-      row.className='tailnet-scheduled-job';
+      row.className=`tailnet-scheduled-job${nextUp?' is-next-up':''}`;
       row.dataset.jobId=String(job.id||'');
+      row.dataset.jobStatusGroup=groupMeta.key;
       const main=document.createElement('div');
       main.className='tailnet-scheduled-job-main';
       const top=document.createElement('div');
@@ -1135,6 +1162,9 @@
       next.title=timing.absolute;
       next.dataset.scheduledTimeKind=timing.kind;
       next.dataset.scheduledTimeValue=timing.value;
+      next.dataset.scheduledTimeState=timing.state;
+      row.classList.toggle('is-timing-late',timing.state==='late');
+      row.classList.toggle('is-timing-due',timing.state==='due');
       detail.append(next);
       main.append(top,detail);
       const accessibleGroup=frequencyMeta?`${groupMeta.label}, ${frequencyMeta.label}`:groupMeta.label;
@@ -1164,6 +1194,26 @@
       }
       rows.appendChild(row);
     };
+    const activeJobs=grouped.get('active')||[];
+    const nextUpJobs=activeJobs.filter(job=>Number.isFinite(scheduledJobTime(job,['next_run_at']))).slice(0,6);
+    if(nextUpJobs.length){
+      const nextUp=document.createElement('nav');
+      nextUp.className='tailnet-scheduled-next-up';
+      nextUp.setAttribute('aria-label','Next up');
+      const nextUpLabel=document.createElement('strong');
+      nextUpLabel.className='tailnet-scheduled-next-up-label';
+      nextUpLabel.textContent='Next up';
+      const nextUpCards=document.createElement('div');
+      nextUpCards.className='tailnet-scheduled-next-up-cards';
+      const activeMeta=SCHEDULED_JOB_GROUPS.find(group=>group.key==='active');
+      nextUpJobs.forEach(job=>{
+        const frequencyKey=scheduledActiveFrequencyKey(job);
+        const frequencyMeta=ACTIVE_FREQUENCY_GROUPS.find(group=>group.key===frequencyKey)||ACTIVE_FREQUENCY_GROUPS.at(-1);
+        appendJobRow(nextUpCards,job,activeMeta,frequencyMeta,{nextUp:true});
+      });
+      nextUp.append(nextUpLabel,nextUpCards);
+      scheduledList.appendChild(nextUp);
+    }
     SCHEDULED_JOB_GROUPS.forEach(groupMeta=>{
       const jobs=grouped.get(groupMeta.key)||[];
       if(!jobs.length)return;
@@ -1194,7 +1244,7 @@
           frequencyLabel.textContent=frequencyMeta.label;
           const frequencyCount=document.createElement('span');
           frequencyCount.className='tailnet-scheduled-frequency-count';
-          frequencyCount.textContent=`· ${frequencyJobs.length}`;
+          frequencyCount.textContent=String(frequencyJobs.length);
           frequencyHeading.append(frequencyLabel,frequencyCount);
           const frequencyRows=document.createElement('div');
           frequencyRows.className='tailnet-scheduled-frequency-rows';

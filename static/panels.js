@@ -544,7 +544,7 @@ function _cronScheduleHumanSummaryForInput(value) {
 function cronRelativeTimeMeta(value, kind = 'next', now = Date.now()) {
   const stamp = typeof value === 'number' ? value * 1000 : Date.parse(value || '');
   const unknown = kind === 'next' ? 'Not scheduled' : 'Never run';
-  if (!Number.isFinite(stamp)) return { text: unknown, absolute: '', stamp: null };
+  if (!Number.isFinite(stamp)) return { text: unknown, absolute: '', stamp: null, state: 'unknown' };
   const delta = stamp - now;
   const magnitude = Math.abs(delta);
   let compact = '<1m';
@@ -557,10 +557,24 @@ function cronRelativeTimeMeta(value, kind = 'next', now = Date.now()) {
       : [31536000000, 'y'];
     compact = `${Math.max(1, Math.round(magnitude / units[0]))}${units[1]}`;
   }
-  const text = kind === 'next'
-    ? (delta >= 0 ? `in ${compact}` : `${compact} overdue`)
-    : (delta <= 0 ? `${compact} ago` : `in ${compact}`);
-  return { text, absolute: new Date(stamp).toLocaleString(), stamp };
+  let text;
+  let state;
+  if (kind === 'next') {
+    if (delta >= 0) {
+      text = `in ${compact}`;
+      state = 'future';
+    } else if (magnitude <= 300000) {
+      text = 'due now';
+      state = 'due';
+    } else {
+      text = `late ${compact}`;
+      state = 'late';
+    }
+  } else {
+    text = delta <= 0 ? `${compact} ago` : `in ${compact}`;
+    state = delta <= 0 ? 'past' : 'future';
+  }
+  return { text, absolute: new Date(stamp).toLocaleString(), stamp, state };
 }
 
 function _markCronScheduleDirty() {
