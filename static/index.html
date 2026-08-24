@@ -70,7 +70,7 @@
     };
   }
 })()</script>
-<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1&high-signal-toggle=v1&mobile-session-home=v1&notification-operations=v3&mobile-rail-right=v1&rail-selection-ring=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1">
+<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1&high-signal-toggle=v1&mobile-session-home=v1&notification-operations=v3&mobile-rail-right=v1&rail-selection-ring=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
@@ -263,7 +263,6 @@
   <nav class="rail tailnet-app-rail" aria-label="Wizard OS apps">
     <a class="rail-btn tailnet-app-link active has-tooltip" id="tailnetAppHome" href="./" data-tooltip="Hermes UI" aria-label="Hermes UI" title="Hermes UI" aria-current="page">
       <img class="tailnet-app-home-icon" src="static/wizard-hat.svg" alt="" width="34" height="34">
-      <span class="tailnet-app-home-menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>
     </a>
     <button class="rail-btn tailnet-app-link tailnet-notifications-link has-tooltip" id="tailnetNotificationsButton" type="button" data-tailnet-app-id="cron-notifications" aria-label="Notifications" data-tooltip="Notifications">
       <span class="tailnet-app-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg></span>
@@ -336,29 +335,10 @@
           <button class="panel-head-btn has-tooltip has-tooltip--bottom" id="btnSessionSearch" type="button" data-tooltip="Filter sessions" aria-label="Filter sessions" aria-expanded="false" aria-controls="sessionSearchWrap" onclick="toggleSessionSearchPanel()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           </button>
-          <button class="panel-head-btn mobile-session-utilities-toggle" id="mobileSessionUtilitiesToggle" type="button" aria-label="More options" aria-haspopup="menu" aria-expanded="false" aria-controls="mobileSessionUtilitiesMenu">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
-          </button>
         </div>
         <!-- Canonical creation proxy. boot.js owns its proven session-creation
              handler; the visible launcher is projected between Working and Done. -->
         <button class="session-new-session-proxy" id="btnNewChat" type="button" aria-label="New session" tabindex="-1" hidden></button>
-      </div>
-      <div class="mobile-session-utilities-menu" id="mobileSessionUtilitiesMenu" role="menu" aria-label="Session and app options" hidden>
-        <button class="mobile-session-utility" id="mobileSessionViewUtility" type="button" role="menuitemcheckbox" aria-checked="false" data-mobile-utility="session-view">
-          <span class="mobile-session-utility-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-5 4 10 2.5-5H21"/></svg></span>
-          <span class="mobile-session-utility-label">High Signal mode</span>
-          <span class="mobile-session-utility-state" aria-hidden="true">Off</span>
-        </button>
-        <button class="mobile-session-utility" id="mobileThemeUtility" type="button" role="menuitemcheckbox" aria-checked="false" data-mobile-utility="theme">
-          <span class="mobile-session-utility-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.6 6.6 0 0 0 21 12.8z"/></svg></span>
-          <span class="mobile-session-utility-label">Dark mode</span>
-          <span class="mobile-session-utility-state" aria-hidden="true">Off</span>
-        </button>
-        <button class="mobile-session-utility" id="mobileSettingsUtility" type="button" role="menuitem" data-mobile-utility="settings">
-          <span class="mobile-session-utility-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-          <span class="mobile-session-utility-label">Settings</span>
-        </button>
       </div>
       <div class="session-search sidebar-search" id="sessionSearchWrap" hidden><div class="session-search-field"><svg class="sidebar-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input id="sessionSearch" type="search" placeholder="Filter sessions..." oninput="filterSessions()" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other"><button type="button" id="sessionSearchClear" class="session-search-clear has-tooltip has-tooltip--bottom-right" aria-label="Clear session filter" data-tooltip="Clear session filter" onclick="clearSessionSearch()" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>
       <div class="session-list" id="sessionList"></div>
@@ -1988,6 +1968,37 @@
     </div>
   </div>
 </div>
+<nav class="mobile-primary-menu" id="mobilePrimaryMenu" aria-label="Mobile navigation">
+  <button class="mobile-primary-action" id="mobileSessionsButton" type="button" aria-label="Sessions">
+    <span class="mobile-primary-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>
+    <span class="mobile-primary-action-label">Sessions</span>
+  </button>
+  <button class="mobile-primary-action" id="mobileNotificationsButton" type="button" data-tailnet-app-id="cron-notifications" aria-label="Notifications">
+    <span class="mobile-primary-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg></span>
+    <span class="mobile-primary-action-label">Notifications</span>
+    <span class="mobile-primary-notifications-badge" id="mobileNotificationsBadge" hidden aria-hidden="true">0</span>
+  </button>
+  <button class="mobile-primary-action" id="mobileSessionUtilitiesToggle" type="button" aria-label="More options" aria-haspopup="menu" aria-expanded="false" aria-controls="mobileSessionUtilitiesMenu">
+    <span class="mobile-primary-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span>
+    <span class="mobile-primary-action-label">More</span>
+  </button>
+</nav>
+<div class="mobile-session-utilities-menu" id="mobileSessionUtilitiesMenu" role="menu" aria-label="Session and app options" hidden>
+  <button class="mobile-session-utility" id="mobileSessionViewUtility" type="button" role="menuitemcheckbox" aria-checked="false" data-mobile-utility="session-view">
+    <span class="mobile-session-utility-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-5 4 10 2.5-5H21"/></svg></span>
+    <span class="mobile-session-utility-label">High Signal mode</span>
+    <span class="mobile-session-utility-state" aria-hidden="true">Off</span>
+  </button>
+  <button class="mobile-session-utility" id="mobileThemeUtility" type="button" role="menuitemcheckbox" aria-checked="false" data-mobile-utility="theme">
+    <span class="mobile-session-utility-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.6 6.6 0 0 0 21 12.8z"/></svg></span>
+    <span class="mobile-session-utility-label">Dark mode</span>
+    <span class="mobile-session-utility-state" aria-hidden="true">Off</span>
+  </button>
+  <button class="mobile-session-utility" id="mobileSettingsUtility" type="button" role="menuitem" data-mobile-utility="settings">
+    <span class="mobile-session-utility-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+    <span class="mobile-session-utility-label">Settings</span>
+  </button>
+</div>
 <div class="mobile-overlay" id="mobileOverlay" onclick="closeMobileSidebar()"></div>
 <div class="app-dialog-overlay" id="appDialogOverlay" style="display:none" aria-hidden="true">
   <div class="app-dialog" id="appDialog" role="dialog" aria-modal="true" aria-labelledby="appDialogTitle" aria-describedby="appDialogDesc">
@@ -2019,7 +2030,7 @@
 <script src="static/panels.js?v=__WEBUI_VERSION__&cron-notifications=v3&high-signal-model=v1&cron-modal=v1&human-cron=v1&scheduled-dashboard=v1" defer></script>
 <script src="static/session-dashboard.js?v=__WEBUI_VERSION__&tab-polish=v1&high-signal-model=v6&high-signal-history=v1&background-resume=v1&mode-rail=v1&summary-trust=v1&high-signal-toggle=v1" defer></script>
 <script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__&labeled-adjacent-tabs=v1" defer></script>
-<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1" defer></script>
+<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1" defer></script>
 <script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3&semantic-icons=v1" defer></script>
 <script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/boot.js?v=__WEBUI_VERSION__&tab-polish=v1" defer></script>

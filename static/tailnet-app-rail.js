@@ -97,6 +97,9 @@
   const notificationThreadStatus=document.getElementById('tailnetNotificationThreadStatus');
   const home=document.getElementById('tailnetAppHome');
   const themeToggle=document.getElementById('tailnetThemeToggle');
+  const mobileSessionsButton=document.getElementById('mobileSessionsButton');
+  const mobileNotificationsButton=document.getElementById('mobileNotificationsButton');
+  const mobileNotificationsBadge=document.getElementById('mobileNotificationsBadge');
   const mobileUtilitiesToggle=document.getElementById('mobileSessionUtilitiesToggle');
   const mobileUtilitiesMenu=document.getElementById('mobileSessionUtilitiesMenu');
   const mobileSessionViewUtility=document.getElementById('mobileSessionViewUtility');
@@ -211,6 +214,19 @@
     }
   }
 
+  function syncMobilePrimaryMenu(){
+    if(mobileSessionsButton){
+      const selected=isPhoneWidth()&&root.dataset.mobileSessionView==='sessions';
+      if(selected)mobileSessionsButton.setAttribute('aria-current','page');
+      else mobileSessionsButton.removeAttribute('aria-current');
+    }
+    if(mobileNotificationsButton){
+      const selected=isPhoneWidth()&&activeId===NOTIFICATIONS_ID;
+      if(selected)mobileNotificationsButton.setAttribute('aria-current','page');
+      else mobileNotificationsButton.removeAttribute('aria-current');
+    }
+  }
+
   function setMobileUtilitiesOpen(open,{restoreFocus=false}={}){
     if(!mobileUtilitiesToggle||!mobileUtilitiesMenu)return;
     const next=!!open&&window.matchMedia('(max-width:640px)').matches;
@@ -270,6 +286,20 @@
       if(window.innerWidth>640)setMobileUtilitiesOpen(false);
     },{passive:true});
     syncMobileUtilities();
+  }
+
+  function bindMobilePrimaryMenu(){
+    if(mobileSessionsButton)mobileSessionsButton.addEventListener('click',()=>{
+      setMobileUtilitiesOpen(false);
+      activateHermes();
+      if(typeof window.openMobileSessionPage==='function')window.openMobileSessionPage();
+      syncMobilePrimaryMenu();
+    });
+    if(mobileNotificationsButton)mobileNotificationsButton.addEventListener('click',()=>{
+      setMobileUtilitiesOpen(false);
+      activateNotifications();
+    });
+    syncMobilePrimaryMenu();
   }
 
 
@@ -621,12 +651,15 @@
   }
 
   function setNotificationsBadge(count){
-    if(!notificationsBadge||!notificationsButton)return;
     const unread=Math.max(0,Number(count)||0);
-    notificationsBadge.textContent=unread>9?'9+':String(unread);
-    notificationsBadge.hidden=unread===0;
-    notificationsButton.classList.toggle('has-unread',unread>0);
-    notificationsButton.setAttribute('aria-label',unread>0?`Notifications, ${unread} unread`:'Notifications');
+    const label=unread>0?`Notifications, ${unread} unread`:'Notifications';
+    [[notificationsButton,notificationsBadge],[mobileNotificationsButton,mobileNotificationsBadge]].forEach(([button,badge])=>{
+      if(!button||!badge)return;
+      badge.textContent=unread>9?'9+':String(unread);
+      badge.hidden=unread===0;
+      button.classList.toggle('has-unread',unread>0);
+      button.setAttribute('aria-label',label);
+    });
   }
 
   function parseCronFilenameTimestamp(filename,fallback=0,index=0){
@@ -1954,6 +1987,7 @@
 
   function activateNotifications(){
     if(!workspace||!notificationsPanel)return;
+    setMobileUtilitiesOpen(false);
     cancelBrowserFallback();
     hideTooltip();
     closeBookmarkMenu();
@@ -1989,7 +2023,7 @@
   }
 
   function markSelected(id){
-    const externalLinks=document.querySelectorAll('.tailnet-app-rail [data-tailnet-app-id]');
+    const externalLinks=document.querySelectorAll('.tailnet-app-rail [data-tailnet-app-id],.mobile-primary-menu [data-tailnet-app-id]');
     const hermesSelected=!id;
     if(home){
       home.classList.toggle('active',hermesSelected);
@@ -2002,23 +2036,10 @@
       if(selected)link.setAttribute('aria-current','page');
       else link.removeAttribute('aria-current');
     });
-    syncHermesHomeControl();
+    syncMobilePrimaryMenu();
   }
 
-  function syncHermesHomeControl(){
-    if(!home)return;
-    const opensSessions=isPhoneWidth()
-      &&root.dataset.tailnetView==='hermes'
-      &&root.dataset.mobileSessionView!=='sessions'
-      &&home.classList.contains('active');
-    home.classList.toggle('is-session-menu',opensSessions);
-    const label=opensSessions?'Open sessions':'Hermes UI';
-    home.setAttribute('aria-label',label);
-    home.setAttribute('data-tooltip',label);
-    home.title=label;
-  }
-
-  function activateHermes({remember=true,openMobileMenu=false}={}){
+  function activateHermes({remember=true}={}){
     cancelBrowserFallback();
     hideTooltip();
     closeBookmarkMenu();
@@ -2035,8 +2056,8 @@
       workspace.setAttribute('aria-label',showWizardHome?'Wizard Canvas':'Selected Tailnet app');
     }
     markSelected('');
-    if(openMobileMenu&&isPhoneWidth()&&typeof window.toggleMobileSidebar==='function')window.toggleMobileSidebar();
-    else closeSessionsOverlay();
+    setMobileUtilitiesOpen(false);
+    closeSessionsOverlay();
     if(remember){
       try{sessionStorage.removeItem(STORAGE_KEY);}catch(_){}
     }
@@ -2045,6 +2066,7 @@
 
   function activateApp(app,{bookmarkGeneration=''}={}){
     if(!workspace||!frame)return;
+    setMobileUtilitiesOpen(false);
     cancelBrowserFallback();
     const token=bookmarkToken(app);
     hideTooltip();
@@ -2552,18 +2574,19 @@
     bindOverlayInteractions();
     home.addEventListener('click',event=>{
       event.preventDefault();
-      activateHermes({openMobileMenu:true});
+      activateHermes();
     });
     notificationsButton.addEventListener('click',activateNotifications);
+    bindMobilePrimaryMenu();
     if(themeToggle)themeToggle.addEventListener('click',toggleShellTheme);
     bindMobileUtilities();
     if(wizardCanvasFrame)wizardCanvasFrame.addEventListener('load',sendThemeToWizardCanvas);
     new MutationObserver(syncThemeToggle).observe(root,{attributes:true,attributeFilter:['class','data-skin']});
     new MutationObserver(syncMobileUtilities).observe(root,{attributes:true,attributeFilter:['class','data-session-view']});
-    new MutationObserver(syncHermesHomeControl).observe(root,{attributes:true,attributeFilter:['data-tailnet-view','data-mobile-session-view']});
-    window.addEventListener('resize',syncHermesHomeControl,{passive:true});
+    new MutationObserver(syncMobilePrimaryMenu).observe(root,{attributes:true,attributeFilter:['data-tailnet-view','data-mobile-session-view']});
+    window.addEventListener('resize',syncMobilePrimaryMenu,{passive:true});
     syncThemeToggle();
-    syncHermesHomeControl();
+    syncMobilePrimaryMenu();
     if(notificationsReadAll)notificationsReadAll.addEventListener('click',markAllNotificationsRead);
     notificationFilterButtons.forEach(button=>button.addEventListener('click',()=>setNotificationFilter(button.dataset.notificationFilter)));
     notificationsModeButtons.forEach(button=>button.addEventListener('click',()=>setNotificationsMode(button.dataset.notificationsMode)));

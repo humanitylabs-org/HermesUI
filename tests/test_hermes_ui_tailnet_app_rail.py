@@ -130,11 +130,17 @@ def test_mode_theme_and_settings_controls_remain_in_the_desktop_app_rail():
     assert "{type:'hermesui:theme',theme:resolvedTheme()}" in JS
 
 
-def test_mobile_app_rail_keeps_destinations_while_utilities_move_to_one_menu():
+def test_mobile_bottom_menu_owns_sessions_notifications_and_utilities():
     rail = _rail_markup()
+    bottom = INDEX.index('id="mobilePrimaryMenu"')
+    sessions = INDEX.index('id="mobileSessionsButton"')
+    notifications = INDEX.index('id="mobileNotificationsButton"')
+    utilities = INDEX.index('id="mobileSessionUtilitiesToggle"')
+    assert bottom < sessions < notifications < utilities
+    assert INDEX.count('class="mobile-primary-action"') == 3
+    assert 'aria-label="Mobile navigation"' in INDEX
     assert 'id="mobileSessionUtilitiesToggle"' not in rail
-    assert 'id="mobileSessionUtilitiesToggle"' in INDEX
-    assert 'aria-label="More options"' in INDEX
+    assert 'id="mobileNotificationsButton"' not in rail
     assert 'aria-haspopup="menu"' in INDEX
     assert 'id="mobileSessionUtilitiesMenu" role="menu"' in INDEX
     assert INDEX.count('role="menuitemcheckbox"') == 2
@@ -142,17 +148,20 @@ def test_mobile_app_rail_keeps_destinations_while_utilities_move_to_one_menu():
     assert 'data-mobile-utility="theme"' in INDEX
     assert 'data-mobile-utility="settings"' in INDEX
     assert '.tailnet-app-controls{display:none;}' in CSS
-    assert '#mobileSessionUtilitiesToggle{display:inline-flex;}' in CSS
-    assert 'width:min(264px,calc(100vw - 72px))' in CSS
-    assert '#panelChat .panel-head-btn{width:44px;height:44px' in CSS
+    assert '#tailnetNotificationsButton{display:none;}' in CSS
+    assert '.mobile-primary-menu{position:fixed;z-index:220;left:0;right:48px;bottom:0;display:grid;' in CSS
+    assert 'grid-template-columns:repeat(3,minmax(0,1fr))' in CSS
+    assert 'bottom:calc(64px + env(safe-area-inset-bottom,0px))' in CSS
+    assert "activateHermes();\n      if(typeof window.openMobileSessionPage==='function')window.openMobileSessionPage();" in JS
+    assert "mobileNotificationsButton.addEventListener('click'" in JS
     assert "activateMobileUtility(document.getElementById('sessionViewToggle'))" in JS
     assert "activateMobileUtility(document.getElementById('chatSettingsToggle'))" in JS
     assert "event.key!=='Escape'||!mobileUtilityIsOpen()" in JS
     assert "window.innerWidth>640" in JS
     sw_style = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     sw_rail = next(line for line in SW.splitlines() if "'./static/tailnet-app-rail.js' + VQ" in line)
-    assert '&mobile-utility-menu=v1' in sw_style
-    assert '&mobile-utility-menu=v1' in sw_rail
+    assert '&mobile-bottom-menu=v1' in sw_style
+    assert '&mobile-bottom-menu=v1' in sw_rail
 
 
 def test_cron_notification_rows_are_compact_full_row_disclosures():
@@ -541,6 +550,7 @@ def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page(
     )
     assert (
         'html:not([data-tailnet-view="external"]) .sidebar{left:0;right:auto;'
+        'bottom:calc(58px + env(safe-area-inset-bottom,0px));'
         'width:calc(100vw - 48px);transform:translateX(-100%);}'
         in CSS
     )
@@ -551,7 +561,8 @@ def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page(
     )
     assert 'id="btnHamburger"' not in INDEX
     assert 'id="mobileSessionTabs"' in INDEX
-    assert "activateHermes({openMobileMenu:true})" in JS
+    assert 'id="mobilePrimaryMenu"' in INDEX
+    assert "activateHermes({openMobileMenu:true})" not in JS
     assert "function openMobileSessionPage()" in BOOT
     assert "openMobileSessionPage();" in BOOT
     assert "document.documentElement.dataset.mobileSessionView='sessions';" in BOOT
@@ -566,7 +577,7 @@ def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page(
     assert '.rail.tailnet-app-rail .rail-btn.active::before' not in CSS
     assert '.rail .nav-tab.active::before' not in CSS
     assert '.rail.tailnet-app-rail .rail-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}' in CSS
-    assert '.tailnet-scheduled-job-menu{position:fixed;z-index:100;top:auto;right:60px;' in CSS
+    assert '.tailnet-scheduled-job-menu{position:fixed;z-index:100;top:auto;right:60px;bottom:calc(70px + env(safe-area-inset-bottom));' in CSS
     assert '.toast{right:60px;left:12px;' in CSS
 
 
@@ -576,24 +587,22 @@ def test_rail_tooltips_and_bookmark_actions_flip_away_from_the_right_edge():
     assert "anchorX>window.innerWidth/2" in JS
 
 
-def test_mobile_hermes_home_becomes_a_session_menu_only_outside_the_session_list():
+def test_mobile_right_rail_home_remains_a_destination_without_menu_redundancy():
     rail = _rail_markup()
     assert 'class="tailnet-app-home-icon"' in rail
-    assert 'class="tailnet-app-home-menu-icon"' in rail
-    assert '<path d="M4 7h16M4 12h16M4 17h16"/>' in rail
-    assert "function syncHermesHomeControl()" in JS
-    assert "root.dataset.mobileSessionView!=='sessions'" in JS
-    assert "home.classList.toggle('is-session-menu',opensSessions)" in JS
-    assert "const label=opensSessions?'Open sessions':'Hermes UI'" in JS
-    assert "attributeFilter:['data-tailnet-view','data-mobile-session-view']" in JS
-    assert '#tailnetAppHome.is-session-menu .tailnet-app-home-icon{display:none;}' in CSS
-    assert '#tailnetAppHome.is-session-menu .tailnet-app-home-menu-icon{display:flex;}' in CSS
+    assert 'class="tailnet-app-home-menu-icon"' not in rail
+    assert "function syncHermesHomeControl()" not in JS
+    assert "home.classList.toggle('is-session-menu'" not in JS
+    assert '#tailnetAppHome.is-session-menu' not in CSS
+    assert "home.addEventListener('click',event=>{\n      event.preventDefault();\n      activateHermes();" in JS
+    assert 'id="mobileSessionsButton"' not in rail
+    assert 'id="mobileNotificationsButton"' not in rail
 
 
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1"'
         in INDEX
     )
     assert (
