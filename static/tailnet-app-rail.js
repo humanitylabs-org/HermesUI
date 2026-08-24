@@ -15,6 +15,15 @@
   const THEME_STORAGE_KEY='hermes-theme';
   const NOTIFICATION_OUTPUT_LIMIT=4;
   const NOTIFICATION_LIST_LIMIT=40;
+  const SCHEDULED_JOB_LONG_PRESS_MS=450;
+  const SCHEDULED_JOB_GROUPS=[
+    {key:'running',label:'Running'},
+    {key:'failed',label:'Failed'},
+    {key:'active',label:'Active'},
+    {key:'paused',label:'Paused'},
+    {key:'disabled',label:'Disabled'},
+    {key:'readonly',label:'Read-only'}
+  ];
   const URL_SCHEME_RE=/^[a-z][a-z0-9+.-]*:/i;
   const GROUPS={
     company:{label:'work app',plural:'work apps',icon:'company'},
@@ -67,6 +76,16 @@
   const notificationThreadInput=document.getElementById('tailnetNotificationThreadInput');
   const notificationThreadSend=document.getElementById('tailnetNotificationThreadSend');
   const notificationThreadStop=document.getElementById('tailnetNotificationThreadStop');
+  const notificationThreadAttach=document.getElementById('tailnetNotificationThreadAttach');
+  const notificationThreadFileInput=document.getElementById('tailnetNotificationThreadFileInput');
+  const notificationThreadAttachTray=document.getElementById('tailnetNotificationThreadAttachTray');
+  const notificationThreadPrompts=document.getElementById('tailnetNotificationThreadPrompts');
+  const notificationThreadPromptsPopup=document.getElementById('tailnetNotificationThreadPromptsPopup');
+  const notificationThreadModelChip=document.getElementById('tailnetNotificationThreadModelChip');
+  const notificationThreadModelLabel=document.getElementById('tailnetNotificationThreadModelLabel');
+  const notificationThreadModelSelect=document.getElementById('tailnetNotificationThreadModelSelect');
+  const notificationThreadModelDropdown=document.getElementById('tailnetNotificationThreadModelDropdown');
+  const notificationThreadStatus=document.getElementById('tailnetNotificationThreadStatus');
   const home=document.getElementById('tailnetAppHome');
   const themeToggle=document.getElementById('tailnetThemeToggle');
   const links=document.getElementById('tailnetAppLinks');
@@ -107,6 +126,7 @@
   let scheduledRunning={};
   let scheduledLoading=false;
   let scheduledEditorState=null;
+  let scheduledJobLongPress=null;
   let notificationThreadItem=null;
   let notificationThreadSession=null;
   let notificationThreadBaseMessages=[];
@@ -114,6 +134,9 @@
   let notificationThreadStream=null;
   let notificationThreadStreamId='';
   let notificationThreadDraft='';
+  let notificationThreadFiles=[];
+  let notificationThreadModel={model:'',model_provider:null};
+  let notificationThreadModelExplicit=false;
   const notificationReplySessions=new Map();
   const CRON_REPLY_TITLE_PREFIX='[cron-reply:';
 
@@ -654,7 +677,15 @@
     notificationThreadSession=null;
     notificationThreadBaseMessages=[];
     notificationThreadSource=null;
-    if(notificationThreadInput)notificationThreadInput.value='';
+    notificationThreadFiles=[];
+    notificationThreadModel={model:'',model_provider:null};
+    notificationThreadModelExplicit=false;
+    if(notificationThreadInput){notificationThreadInput.value='';notificationThreadInput.style.height='';}
+    if(notificationThreadFileInput)notificationThreadFileInput.value='';
+    renderNotificationThreadFiles();
+    closeNotificationThreadPrompts();
+    closeNotificationThreadModelDropdown();
+    if(notificationThreadStatus){notificationThreadStatus.textContent='';notificationThreadStatus.style.display='none';}
     syncNotificationsModeControls();
     if(notificationsStatus){
       const items=Array.from(notificationItems.values()).slice(0,NOTIFICATION_LIST_LIMIT);
@@ -838,19 +869,57 @@
 
   function scheduledStatusMeta(job){
     if(scheduledRunning&&Object.prototype.hasOwnProperty.call(scheduledRunning,String(job.id))){
-      return {label:'Running',className:'is-running'};
+      return {key:'running',label:'Running',className:'is-running'};
     }
-    if(job.paused||job.state==='paused')return {label:'Paused',className:'is-paused'};
-    if(job.disabled||job.state==='disabled')return {label:'Disabled',className:'is-disabled'};
-    if(String(job.last_status||'').toLowerCase()==='error')return {label:'Failed',className:'is-error'};
-    if(job.read_only)return {label:'Read-only',className:'is-readonly'};
-    return {label:'Active',className:'is-active'};
+    if(job.paused||job.state==='paused')return {key:'paused',label:'Paused',className:'is-paused'};
+    if(job.disabled||job.state==='disabled')return {key:'disabled',label:'Disabled',className:'is-disabled'};
+    if(String(job.last_status||'').toLowerCase()==='error')return {key:'failed',label:'Failed',className:'is-error'};
+    if(job.read_only)return {key:'readonly',label:'Read-only',className:'is-readonly'};
+    return {key:'active',label:'Active',className:'is-active'};
   }
 
-  function conciseNextRun(job){
-    const stamp=Date.parse(job.next_run_at||'');
+  function scheduledJobTime(job,fields,{fallback=Number.POSITIVE_INFINITY}={}){
+    for(const field of fields){
+      const value=job&&job[field];
+      const stamp=typeof value==='number'?value*1000:Date.parse(value||'');
+      if(Number.isFinite(stamp))return stamp;
+    }
+    return fallback;
+  }
+
+  function scheduledJobSort(job,groupKey){
+    if(groupKey==='active'||groupKey==='paused'){
+      return {stamp:scheduledJobTime(job,['next_run_at']),direction:1};
+    }
+    return {stamp:scheduledJobTime(job,['last_run_at','updated_at','created_at'],{fallback:Number.NEGATIVE_INFINITY}),direction:-1};
+  }
+
+  function scheduledJobsByGroup(){
+    const grouped=new Map(SCHEDULED_JOB_GROUPS.map(group=>[group.key,[]]));
+    scheduledJobs.forEach(job=>{
+      const status=scheduledStatusMeta(job);
+      if(!grouped.has(status.key))grouped.set(status.key,[]);
+      grouped.get(status.key).push(job);
+    });
+    grouped.forEach((jobs,groupKey)=>jobs.sort((left,right)=>{
+      const leftSort=scheduledJobSort(left,groupKey);
+      const rightSort=scheduledJobSort(right,groupKey);
+      const leftMissing=!Number.isFinite(leftSort.stamp);
+      const rightMissing=!Number.isFinite(rightSort.stamp);
+      if(leftMissing&&rightMissing)return String(left.name||left.id).localeCompare(String(right.name||right.id));
+      if(leftMissing!==rightMissing)return leftMissing?1:-1;
+      const byTime=(leftSort.stamp-rightSort.stamp)*leftSort.direction;
+      return byTime!==0?byTime:String(left.name||left.id).localeCompare(String(right.name||right.id));
+    }));
+    return grouped;
+  }
+
+  function conciseScheduledTime(job,groupKey){
+    const future=groupKey==='active'||groupKey==='paused';
+    const value=future?job.next_run_at:job.last_run_at;
+    const stamp=typeof value==='number'?value*1000:Date.parse(value||'');
     if(!Number.isFinite(stamp))return '';
-    return `Next ${new Date(stamp).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`;
+    return `${future?'Next':'Last'} ${new Date(stamp).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}`;
   }
 
   function scheduledJobButton(label,action,{danger=false}={}){
@@ -868,11 +937,89 @@
     scheduledList.querySelectorAll('.tailnet-scheduled-job-menu:not([hidden])').forEach(menu=>{
       if(menu===except)return;
       menu.hidden=true;
-      const button=menu.parentElement&&menu.parentElement.querySelector('.tailnet-scheduled-job-more');
-      if(button){
-        button.setAttribute('aria-expanded','false');
-        if(restoreFocus)button.focus({preventScroll:true});
+      menu.style.left='';
+      menu.style.top='';
+      const row=menu.closest('.tailnet-scheduled-job');
+      if(row){
+        row.setAttribute('aria-expanded','false');
+        row.classList.remove('is-menu-open');
+        if(restoreFocus)row.focus({preventScroll:true});
       }
+    });
+  }
+
+  function cancelScheduledJobLongPress(){
+    if(!scheduledJobLongPress)return;
+    clearTimeout(scheduledJobLongPress.timer);
+    if(scheduledJobLongPress.row)scheduledJobLongPress.row.classList.remove('is-pressing');
+    scheduledJobLongPress=null;
+  }
+
+  function openScheduledJobMenu(row,menu,{clientX,clientY,focusFirst=false}={}){
+    if(!row||!menu)return;
+    closeScheduledJobMenus({except:menu});
+    menu.hidden=false;
+    row.setAttribute('aria-expanded','true');
+    row.classList.add('is-menu-open');
+    const mobile=window.matchMedia&&window.matchMedia('(max-width:640px)').matches;
+    if(!mobile){
+      const rect=row.getBoundingClientRect();
+      const width=menu.offsetWidth;
+      const height=menu.offsetHeight;
+      const anchorX=Number.isFinite(clientX)?clientX:rect.right;
+      const anchorY=Number.isFinite(clientY)?clientY:rect.top+rect.height/2;
+      menu.style.left=`${Math.max(8,Math.min(window.innerWidth-width-8,anchorX))}px`;
+      menu.style.top=`${Math.max(8,Math.min(window.innerHeight-height-8,anchorY))}px`;
+    }
+    if(focusFirst){
+      requestAnimationFrame(()=>menu.querySelector('[role="menuitem"]')?.focus({preventScroll:true}));
+    }
+  }
+
+  function bindScheduledJobActions(row,menu,job){
+    row.addEventListener('contextmenu',event=>{
+      event.preventDefault();
+      cancelScheduledJobLongPress();
+      openScheduledJobMenu(row,menu,{clientX:event.clientX,clientY:event.clientY,focusFirst:true});
+    });
+    row.addEventListener('pointerdown',event=>{
+      if(event.pointerType==='mouse'||event.button!==0)return;
+      cancelScheduledJobLongPress();
+      const startX=event.clientX;
+      const startY=event.clientY;
+      row.classList.add('is-pressing');
+      scheduledJobLongPress={
+        row,
+        pointerId:event.pointerId,
+        startX,
+        startY,
+        timer:setTimeout(()=>{
+          row.classList.remove('is-pressing');
+          scheduledJobLongPress=null;
+          if(navigator.vibrate)navigator.vibrate(10);
+          openScheduledJobMenu(row,menu,{clientX:startX,clientY:startY,focusFirst:true});
+        },SCHEDULED_JOB_LONG_PRESS_MS)
+      };
+    });
+    row.addEventListener('pointermove',event=>{
+      if(!scheduledJobLongPress||scheduledJobLongPress.pointerId!==event.pointerId)return;
+      if(Math.hypot(event.clientX-scheduledJobLongPress.startX,event.clientY-scheduledJobLongPress.startY)>10)cancelScheduledJobLongPress();
+    });
+    ['pointerup','pointercancel','lostpointercapture'].forEach(type=>row.addEventListener(type,cancelScheduledJobLongPress));
+    row.addEventListener('keydown',event=>{
+      if(event.key==='ContextMenu'||(event.shiftKey&&event.key==='F10')||event.key==='Enter'||event.key===' '){
+        event.preventDefault();
+        openScheduledJobMenu(row,menu,{focusFirst:true});
+      }
+    });
+    menu.addEventListener('click',event=>{
+      const button=event.target.closest('[data-job-action]');
+      if(!button)return;
+      event.stopPropagation();
+      menu.hidden=true;
+      row.setAttribute('aria-expanded','false');
+      row.classList.remove('is-menu-open');
+      void runScheduledJobAction(job,button.dataset.jobAction,row,row);
     });
   }
 
@@ -886,43 +1033,51 @@
       return;
     }
     notificationsStatus.textContent=scheduledJobs.length
-      ?`${scheduledJobs.length} scheduled job${scheduledJobs.length===1?'':'s'}`
+      ?`${scheduledJobs.length} scheduled job${scheduledJobs.length===1?'':'s'} · Right-click or hold a job for actions`
       :'No scheduled jobs.';
-    scheduledJobs.forEach((job,index)=>{
+    const grouped=scheduledJobsByGroup();
+    let menuIndex=0;
+    SCHEDULED_JOB_GROUPS.forEach(groupMeta=>{
+      const jobs=grouped.get(groupMeta.key)||[];
+      if(!jobs.length)return;
+      const group=document.createElement('section');
+      group.className=`tailnet-scheduled-group is-${groupMeta.key}`;
+      group.dataset.scheduledGroup=groupMeta.key;
+      const heading=document.createElement('h3');
+      heading.className='tailnet-scheduled-group-head';
+      const headingLabel=document.createElement('strong');
+      headingLabel.textContent=groupMeta.label;
+      const count=document.createElement('span');
+      count.className='tailnet-scheduled-group-count';
+      count.textContent=`· ${jobs.length}`;
+      heading.append(headingLabel,count);
+      const rows=document.createElement('div');
+      rows.className='tailnet-scheduled-group-rows';
+      jobs.forEach(job=>{
       const row=document.createElement('article');
       row.className='tailnet-scheduled-job';
       row.dataset.jobId=String(job.id||'');
-      const status=scheduledStatusMeta(job);
       const main=document.createElement('div');
       main.className='tailnet-scheduled-job-main';
       const top=document.createElement('div');
       top.className='tailnet-scheduled-job-top';
       const name=document.createElement('strong');
       name.textContent=String(job.name||job.id);
-      const badge=document.createElement('span');
-      badge.className=`tailnet-scheduled-status ${status.className}`;
-      badge.textContent=status.label;
-      top.append(name,badge);
+      top.append(name);
       const detail=document.createElement('div');
       detail.className='tailnet-scheduled-job-detail';
       const next=document.createElement('span');
-      next.textContent=conciseNextRun(job);
+      next.textContent=conciseScheduledTime(job,groupMeta.key);
       if(next.textContent)detail.append(next);
       detail.hidden=!next.textContent;
       main.append(top,detail);
-      const controls=document.createElement('div');
-      controls.className='tailnet-scheduled-job-controls';
       if(!job.read_only){
-        const menuId=`tailnet-scheduled-job-menu-${index}`;
-        const more=document.createElement('button');
-        more.type='button';
-        more.className='tailnet-scheduled-job-more';
-        more.dataset.jobMenuId=String(job.id||'');
-        more.setAttribute('aria-label',`Actions for ${job.name||job.id}`);
-        more.setAttribute('aria-haspopup','menu');
-        more.setAttribute('aria-expanded','false');
-        more.setAttribute('aria-controls',menuId);
-        more.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>';
+        const menuId=`tailnet-scheduled-job-menu-${menuIndex++}`;
+        row.tabIndex=0;
+        row.setAttribute('aria-label',`${job.name||job.id}. ${groupMeta.label}. ${next.textContent||'No run time available'}. Press Enter, right-click, or hold for actions.`);
+        row.setAttribute('aria-haspopup','menu');
+        row.setAttribute('aria-expanded','false');
+        row.setAttribute('aria-controls',menuId);
         const menu=document.createElement('div');
         menu.className='tailnet-scheduled-job-menu';
         menu.id=menuId;
@@ -932,25 +1087,15 @@
         menu.append(scheduledJobButton('Run now','run'));
         menu.append(scheduledJobButton(job.paused||job.state==='paused'?'Resume':'Pause',job.paused||job.state==='paused'?'resume':'pause'));
         menu.append(scheduledJobButton('Delete','delete',{danger:true}));
-        more.addEventListener('click',event=>{
-          event.stopPropagation();
-          const opening=menu.hidden;
-          closeScheduledJobMenus({except:menu});
-          menu.hidden=!opening;
-          more.setAttribute('aria-expanded',String(opening));
-        });
-        menu.addEventListener('click',event=>{
-          const button=event.target.closest('[data-job-action]');
-          if(!button)return;
-          event.stopPropagation();
-          menu.hidden=true;
-          more.setAttribute('aria-expanded','false');
-          void runScheduledJobAction(job,button.dataset.jobAction,row,more);
-        });
-        controls.append(more,menu);
+        row.append(main,menu);
+        bindScheduledJobActions(row,menu,job);
+      }else{
+        row.append(main);
       }
-      row.append(main,controls);
-      scheduledList.appendChild(row);
+      rows.appendChild(row);
+      });
+      group.append(heading,rows);
+      scheduledList.appendChild(group);
     });
   }
 
@@ -1019,7 +1164,7 @@
     if(saved)await loadScheduledJobs();
     requestAnimationFrame(()=>{
       if(notificationsPanel)notificationsPanel.scrollTop=scrollTop;
-      const replacement=scheduledList&&Array.from(scheduledList.querySelectorAll('.tailnet-scheduled-job-more')).find(button=>button.dataset.jobMenuId===jobId);
+      const replacement=scheduledList&&scheduledList.querySelector(`.tailnet-scheduled-job[data-job-id="${typeof CSS!=='undefined'&&CSS.escape?CSS.escape(jobId):jobId}"]`);
       const focusTarget=replacement||(trigger&&trigger.isConnected?trigger:null);
       if(focusTarget)focusTarget.focus({preventScroll:true});
     });
@@ -1194,11 +1339,193 @@
     });
   }
 
+  function threadModelLabel(){
+    const model=String(notificationThreadModel.model||'');
+    if(!model)return 'Default';
+    try{return typeof getModelLabel==='function'?getModelLabel(model):model.split('/').pop();}catch(_){return model.split('/').pop();}
+  }
+
+  function syncNotificationThreadModel(){
+    if(notificationThreadModelLabel)notificationThreadModelLabel.textContent=threadModelLabel();
+    if(notificationThreadModelChip){
+      notificationThreadModelChip.title=`Reply thread model: ${threadModelLabel()} · does not change the main chat`;
+      notificationThreadModelChip.setAttribute('aria-label',`Reply thread model: ${threadModelLabel()}; does not change the main chat`);
+    }
+  }
+
+  async function hydrateNotificationThreadModels(session=null){
+    try{
+      if(typeof window._ensureModelDropdownReady==='function')await window._ensureModelDropdownReady();
+    }catch(_){}
+    const source=document.getElementById('modelSelect');
+    if(source&&notificationThreadModelSelect){
+      notificationThreadModelSelect.replaceChildren(...Array.from(source.children).map(child=>child.cloneNode(true)));
+    }
+    const model=String(
+      notificationThreadModelExplicit&&notificationThreadModel.model
+        ?notificationThreadModel.model
+        :(session&&session.model)||notificationThreadModel.model||(source&&source.value)||window._defaultModel||''
+    );
+    const provider=notificationThreadModelExplicit
+      ?notificationThreadModel.model_provider
+      :(session&&session.model_provider)||notificationThreadModel.model_provider||null;
+    notificationThreadModel={model,model_provider:provider};
+    if(notificationThreadModelSelect&&model){
+      if(typeof _ensureModelOptionInDropdown==='function')_ensureModelOptionInDropdown(model,notificationThreadModelSelect,provider);
+      else notificationThreadModelSelect.value=model;
+    }
+    syncNotificationThreadModel();
+  }
+
+  function closeNotificationThreadModelDropdown(){
+    if(notificationThreadModelDropdown)notificationThreadModelDropdown.classList.remove('open');
+    if(notificationThreadModelChip){
+      notificationThreadModelChip.classList.remove('active');
+      notificationThreadModelChip.setAttribute('aria-expanded','false');
+    }
+  }
+
+  async function selectNotificationThreadModel(value,provider){
+    const model=String(value||'');
+    const modelProvider=String(provider||'').trim()||null;
+    if(notificationThreadModelSelect){
+      if(typeof _ensureModelOptionInDropdown==='function')_ensureModelOptionInDropdown(model,notificationThreadModelSelect,modelProvider);
+      else notificationThreadModelSelect.value=model;
+    }
+    notificationThreadModel={model,model_provider:modelProvider};
+    notificationThreadModelExplicit=true;
+    syncNotificationThreadModel();
+    closeNotificationThreadModelDropdown();
+    if(notificationThreadSession&&notificationThreadSession.session_id){
+      try{
+        const payload=await api('/api/session/update',{
+          method:'POST',
+          body:JSON.stringify({session_id:notificationThreadSession.session_id,model,model_provider:modelProvider})
+        });
+        if(payload&&payload.session)notificationThreadSession={...notificationThreadSession,...payload.session};
+      }catch(error){
+        if(typeof showToast==='function')showToast(`Model update failed: ${error.message||error}`,3500);
+      }
+    }
+  }
+
+  async function toggleNotificationThreadModelDropdown(){
+    if(!notificationThreadModelDropdown||!notificationThreadModelChip||!notificationThreadModelSelect)return;
+    if(notificationThreadModelDropdown.classList.contains('open')){
+      closeNotificationThreadModelDropdown();
+      return;
+    }
+    closeNotificationThreadPrompts();
+    await hydrateNotificationThreadModels(notificationThreadSession);
+    if(typeof renderModelDropdown==='function'){
+      renderModelDropdown({
+        dropdownId:'tailnetNotificationThreadModelDropdown',
+        selectId:'tailnetNotificationThreadModelSelect',
+        selectModel:selectNotificationThreadModel,
+        closeDropdown:closeNotificationThreadModelDropdown,
+        forceOpenKey:'notification-thread',
+        autoFocusSearch:!isPhoneWidth(),
+        scopeNoteText:'Applies only to this notification reply thread.'
+      });
+    }
+    notificationThreadModelDropdown.classList.add('open');
+    notificationThreadModelChip.classList.add('active');
+    notificationThreadModelChip.setAttribute('aria-expanded','true');
+  }
+
+  function renderNotificationThreadFiles(){
+    if(!notificationThreadAttachTray)return;
+    notificationThreadAttachTray.replaceChildren();
+    notificationThreadAttachTray.hidden=!notificationThreadFiles.length;
+    notificationThreadFiles.forEach((file,index)=>{
+      const chip=document.createElement('span');
+      chip.className='attach-chip';
+      const label=document.createElement('span');
+      label.className='attach-name';
+      label.textContent=file.name;
+      const remove=document.createElement('button');
+      remove.type='button';
+      remove.className='attach-remove';
+      remove.setAttribute('aria-label',`Remove ${file.name}`);
+      remove.textContent='×';
+      remove.addEventListener('click',()=>{
+        notificationThreadFiles.splice(index,1);
+        renderNotificationThreadFiles();
+        updateNotificationThreadSend();
+      });
+      chip.append(label,remove);
+      notificationThreadAttachTray.appendChild(chip);
+    });
+  }
+
+  function closeNotificationThreadPrompts(){
+    if(notificationThreadPromptsPopup)notificationThreadPromptsPopup.hidden=true;
+    if(notificationThreadPrompts)notificationThreadPrompts.setAttribute('aria-expanded','false');
+  }
+
+  async function toggleNotificationThreadPrompts(){
+    if(!notificationThreadPromptsPopup||!notificationThreadPrompts)return;
+    if(!notificationThreadPromptsPopup.hidden){closeNotificationThreadPrompts();return;}
+    closeNotificationThreadModelDropdown();
+    notificationThreadPromptsPopup.hidden=false;
+    notificationThreadPrompts.setAttribute('aria-expanded','true');
+    notificationThreadPromptsPopup.innerHTML='<div class="saved-prompts-loading">Loading…</div>';
+    let prompts=[];
+    try{
+      const data=await api('/api/prompts');
+      prompts=Array.isArray(data&&data.prompts)?data.prompts:[];
+    }catch(_){}
+    notificationThreadPromptsPopup.replaceChildren();
+    if(!prompts.length){
+      const empty=document.createElement('div');
+      empty.className='saved-prompts-empty';
+      empty.textContent='No saved prompts yet.';
+      notificationThreadPromptsPopup.appendChild(empty);
+      return;
+    }
+    prompts.forEach(prompt=>{
+      const row=document.createElement('button');
+      row.type='button';
+      row.className='saved-prompt-row tailnet-notification-thread-prompt';
+      row.setAttribute('role','menuitem');
+      row.textContent=prompt.label||prompt.text;
+      row.title=prompt.text;
+      row.addEventListener('click',()=>{
+        if(notificationThreadInput){
+          const prefix=notificationThreadInput.value.trim()?notificationThreadInput.value.replace(/\s*$/,'\n\n'):'';
+          notificationThreadInput.value=prefix+String(prompt.text||'');
+          autoResizeNotificationThreadInput();
+          updateNotificationThreadSend();
+          notificationThreadInput.focus();
+        }
+        closeNotificationThreadPrompts();
+      });
+      notificationThreadPromptsPopup.appendChild(row);
+    });
+  }
+
+  function autoResizeNotificationThreadInput(){
+    if(!notificationThreadInput)return;
+    notificationThreadInput.style.height='auto';
+    notificationThreadInput.style.height=`${Math.min(160,Math.max(24,notificationThreadInput.scrollHeight))}px`;
+  }
+
+  function updateNotificationThreadSend(){
+    if(!notificationThreadSend)return;
+    const hasContent=!!String(notificationThreadInput&&notificationThreadInput.value||'').trim()||notificationThreadFiles.length>0;
+    notificationThreadSend.disabled=!!notificationThreadStreamId||!hasContent;
+  }
+
   function setThreadBusy(busy,status=''){
     if(notificationThreadInput)notificationThreadInput.disabled=!!busy;
     if(notificationThreadSend)notificationThreadSend.hidden=!!busy;
     if(notificationThreadStop)notificationThreadStop.hidden=!busy;
-    if(status&&notificationThreadContext)notificationThreadContext.textContent=status;
+    [notificationThreadAttach,notificationThreadPrompts,notificationThreadModelChip].forEach(control=>{if(control)control.disabled=!!busy;});
+    if(notificationThreadStatus){
+      notificationThreadStatus.textContent=status;
+      notificationThreadStatus.style.display=status?'':'none';
+    }
+    updateNotificationThreadSend();
   }
 
   async function loadReplySessionTranscript(sessionId,{attach=true}={}){
@@ -1206,6 +1533,7 @@
     const session=payload&&payload.session?payload.session:payload;
     if(!session||!session.session_id)throw new Error('Reply thread is unavailable');
     notificationThreadSession=session;
+    await hydrateNotificationThreadModels(session);
     notificationThreadBaseMessages=[];
     notificationThreadSource=null;
     if(session.parent_session_id){
@@ -1223,7 +1551,7 @@
     const fullContext=!!session.parent_session_id;
     if(notificationThreadContext)notificationThreadContext.textContent=fullContext?'Full run context':'Notification output context';
     const activeStream=String(session.active_stream_id||'');
-    setThreadBusy(!!activeStream,activeStream?'Working…':fullContext?'Full run context':'Notification output context');
+    setThreadBusy(!!activeStream,activeStream?'Working…':'');
     if(attach&&activeStream)attachNotificationThreadStream(activeStream);
     return session;
   }
@@ -1234,6 +1562,9 @@
     notificationThreadBaseMessages=[];
     notificationThreadSource=null;
     notificationThreadDraft='';
+    notificationThreadFiles=[];
+    notificationThreadModel={model:'',model_provider:null};
+    notificationThreadModelExplicit=false;
     notificationsMode='notifications';
     syncNotificationsModeControls();
     if(notificationsPanel)notificationsPanel.scrollTop=0;
@@ -1247,13 +1578,16 @@
       hydrateNotificationRich(notificationThreadPinned,item);
     }
     if(notificationIsUnread(item))markNotificationRead(item);
+    renderNotificationThreadFiles();
+    void hydrateNotificationThreadModels();
     renderThreadMessages();
-    setThreadBusy(false,item.sourceSessionId?'Full run context available':'Notification output context');
+    setThreadBusy(false,'');
     try{
       const session=await findReplySession(item);
       if(session)await loadReplySessionTranscript(session.session_id);
     }catch(error){
       if(notificationThreadContext)notificationThreadContext.textContent=item.sourceSessionId?'Full run context available':'Notification output context';
+      setThreadBusy(false,'');
     }
   }
 
@@ -1309,33 +1643,50 @@
     if(event)event.preventDefault();
     if(!notificationThreadItem||notificationThreadStreamId)return;
     const reply=String(notificationThreadInput&&notificationThreadInput.value||'').trim();
-    if(!reply)return;
+    const filesSnapshot=[...notificationThreadFiles];
+    if(!reply&&!filesSnapshot.length)return;
     try{
       if(!notificationThreadSession){
         setThreadBusy(true,notificationThreadItem.sourceSessionId?'Preparing full context…':'Preparing output context…');
         const resolved=await resolveReplySession(notificationThreadItem);
         await loadReplySessionTranscript(resolved.session_id,{attach:false});
       }
+      let uploaded=[];
+      if(filesSnapshot.length){
+        setThreadBusy(true,'Uploading…');
+        if(typeof uploadPendingFiles!=='function')throw new Error('File upload is unavailable');
+        uploaded=await uploadPendingFiles({clearPending:false,sessionId:notificationThreadSession.session_id,files:filesSnapshot});
+      }
+      const uploadedPaths=uploaded.map(file=>file&&file.path?file.path:(file&&file.name?file.name:(file&&file.filename?file.filename:file)));
+      let messageText=reply;
+      if(uploadedPaths.length&&!messageText)messageText=`I've uploaded ${uploadedPaths.length} file(s): ${uploadedPaths.join(', ')}`;
+      else if(uploadedPaths.length)messageText=`${messageText}\n\n[Attached files: ${uploadedPaths.join(', ')}]`;
       const visibleMessages=(notificationThreadSession.messages||[]).slice(notificationThreadBaseMessages.length);
       const firstFallbackTurn=!notificationThreadSession.parent_session_id&&!visibleMessages.some(message=>message&&message.role==='user');
-      const wireMessage=firstFallbackTurn?notificationContextMessage(notificationThreadItem,reply):reply;
+      const wireMessage=firstFallbackTurn?notificationContextMessage(notificationThreadItem,messageText):messageText;
       notificationThreadSession.messages=Array.isArray(notificationThreadSession.messages)?notificationThreadSession.messages:[];
       notificationThreadSession.messages.push({role:'user',content:wireMessage});
-      if(notificationThreadInput)notificationThreadInput.value='';
       renderThreadMessages();
       setThreadBusy(true,'Starting…');
       const body={
         session_id:notificationThreadSession.session_id,
         message:wireMessage,
-        attachments:[],
+        model:notificationThreadModel.model||notificationThreadSession.model||undefined,
+        model_provider:notificationThreadModel.model_provider||notificationThreadSession.model_provider||undefined,
+        explicit_model_pick:notificationThreadModelExplicit||undefined,
+        attachments:uploaded.length?uploaded:undefined,
         profile:notificationThreadSession.profile||undefined,
         source:'webui'
       };
       const payload=await api('/api/chat/start',{method:'POST',body:JSON.stringify(body),timeoutMs:120000});
       if(!payload||!payload.stream_id)throw new Error(payload&&payload.error||'Reply did not start');
+      if(notificationThreadInput){notificationThreadInput.value='';notificationThreadInput.style.height='';}
+      notificationThreadFiles=[];
+      if(notificationThreadFileInput)notificationThreadFileInput.value='';
+      renderNotificationThreadFiles();
       attachNotificationThreadStream(payload.stream_id);
     }catch(error){
-      setThreadBusy(false,notificationThreadSession&&notificationThreadSession.parent_session_id?'Full run context':'Notification output context');
+      setThreadBusy(false,'');
       if(typeof showToast==='function')showToast(`Reply failed: ${error.message||error}`,4000);
       if(notificationThreadSession)void loadReplySessionTranscript(notificationThreadSession.session_id,{attach:false}).catch(()=>{});
     }
@@ -1971,7 +2322,9 @@
       if(typeof openCronCreate==='function')openCronCreate();
     });
     document.addEventListener('pointerdown',event=>{
-      if(!(event.target instanceof Element)||!event.target.closest('.tailnet-scheduled-job-controls'))closeScheduledJobMenus();
+      if(!(event.target instanceof Element)||!event.target.closest('.tailnet-scheduled-job-menu'))closeScheduledJobMenus();
+      if(!(event.target instanceof Element)||(!event.target.closest('#tailnetNotificationThreadPromptsPopup')&&!event.target.closest('#tailnetNotificationThreadPrompts')))closeNotificationThreadPrompts();
+      if(!(event.target instanceof Element)||(!event.target.closest('#tailnetNotificationThreadModelDropdown')&&!event.target.closest('#tailnetNotificationThreadModelChip')))closeNotificationThreadModelDropdown();
     });
     document.addEventListener('keydown',event=>{
       if(event.key==='Escape'&&scheduledList&&scheduledList.querySelector('.tailnet-scheduled-job-menu:not([hidden])')){
@@ -2015,12 +2368,30 @@
     if(notificationThreadBack)notificationThreadBack.addEventListener('click',closeNotificationThread);
     if(notificationThreadComposer)notificationThreadComposer.addEventListener('submit',sendNotificationThreadReply);
     if(notificationThreadStop)notificationThreadStop.addEventListener('click',()=>void stopNotificationThreadReply());
-    if(notificationThreadInput)notificationThreadInput.addEventListener('keydown',event=>{
-      if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){
-        event.preventDefault();
-        void sendNotificationThreadReply(event);
-      }
-    });
+    if(notificationThreadInput){
+      notificationThreadInput.addEventListener('input',()=>{
+        notificationThreadDraft=notificationThreadInput.value;
+        autoResizeNotificationThreadInput();
+        updateNotificationThreadSend();
+      });
+      notificationThreadInput.addEventListener('keydown',event=>{
+        if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){
+          event.preventDefault();
+          if(!notificationThreadSend||!notificationThreadSend.disabled)void sendNotificationThreadReply(event);
+        }
+      });
+    }
+    if(notificationThreadAttach&&notificationThreadFileInput){
+      notificationThreadAttach.addEventListener('click',()=>notificationThreadFileInput.click());
+      notificationThreadFileInput.addEventListener('change',()=>{
+        notificationThreadFiles.push(...Array.from(notificationThreadFileInput.files||[]));
+        notificationThreadFileInput.value='';
+        renderNotificationThreadFiles();
+        updateNotificationThreadSend();
+      });
+    }
+    if(notificationThreadPrompts)notificationThreadPrompts.addEventListener('click',()=>void toggleNotificationThreadPrompts());
+    if(notificationThreadModelChip)notificationThreadModelChip.addEventListener('click',()=>void toggleNotificationThreadModelDropdown());
     appsById.set(privateMarketplace.id,privateMarketplace);
     privateAdd.addEventListener('click',()=>activateApp(privateMarketplace));
     document.addEventListener('hermesui:tailnet-app-selected',event=>{

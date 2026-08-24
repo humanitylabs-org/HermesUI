@@ -70,7 +70,7 @@
     };
   }
 })()</script>
-<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1&high-signal-toggle=v1&mobile-session-home=v1&notification-operations=v2&mobile-rail-right=v1&rail-selection-ring=v1">
+<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1&high-signal-toggle=v1&mobile-session-home=v1&notification-operations=v3&mobile-rail-right=v1&rail-selection-ring=v1">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
@@ -203,10 +203,41 @@
         </header>
         <div class="tailnet-notification-thread-pinned msg-body" id="tailnetNotificationThreadPinned"></div>
         <div class="tailnet-notification-thread-messages" id="tailnetNotificationThreadMessages" aria-live="polite"></div>
-        <form class="tailnet-notification-thread-composer" id="tailnetNotificationThreadComposer">
+        <form class="tailnet-notification-thread-composer composer-box" id="tailnetNotificationThreadComposer">
+          <div class="attach-tray tailnet-notification-thread-attach-tray" id="tailnetNotificationThreadAttachTray"></div>
           <textarea id="tailnetNotificationThreadInput" rows="1" placeholder="Reply to this notification" aria-label="Reply to this notification"></textarea>
-          <button class="tailnet-notification-thread-send" id="tailnetNotificationThreadSend" type="submit">Send</button>
-          <button class="tailnet-notification-thread-stop" id="tailnetNotificationThreadStop" type="button" hidden>Stop</button>
+          <div class="tailnet-notification-thread-footer">
+            <div class="composer-left">
+              <input type="file" id="tailnetNotificationThreadFileInput" class="file-input-visually-hidden" multiple accept="image/*,text/*,application/pdf,application/json,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.md,.py,.js,.ts,.yaml,.yml,.toml,.csv,.sh,.txt,.log,.env,.xls,.xlsx,.doc,.docx,.zip,.tar,.gz,.tgz,.bz2,.xz">
+              <button type="button" class="icon-btn has-tooltip" id="tailnetNotificationThreadAttach" data-tooltip="Attach files" aria-label="Attach files">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              </button>
+              <button type="button" class="icon-btn has-tooltip" id="tailnetNotificationThreadPrompts" data-tooltip="Saved prompts" aria-label="Saved prompts" aria-haspopup="menu" aria-expanded="false" aria-controls="tailnetNotificationThreadPromptsPopup">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              </button>
+              <div class="composer-model-wrap tailnet-notification-thread-model-wrap">
+                <button class="composer-model-chip" id="tailnetNotificationThreadModelChip" type="button" title="Reply thread model · does not change the main chat" aria-label="Reply thread model; does not change the main chat" aria-haspopup="listbox" aria-expanded="false" aria-controls="tailnetNotificationThreadModelDropdown">
+                  <span class="composer-model-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2"/></svg></span>
+                  <span class="composer-model-label" id="tailnetNotificationThreadModelLabel">Default</span>
+                  <span class="composer-model-chevron" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </button>
+                <select id="tailnetNotificationThreadModelSelect" class="composer-model-select" title="Reply thread model" aria-hidden="true" tabindex="-1"></select>
+              </div>
+            </div>
+            <div class="composer-right">
+              <span class="composer-status tailnet-notification-thread-status" id="tailnetNotificationThreadStatus" aria-live="polite"></span>
+              <div class="tailnet-notification-thread-action-slot">
+                <button class="send-btn has-tooltip has-tooltip--left tailnet-notification-thread-send" id="tailnetNotificationThreadSend" type="submit" data-tooltip="Send message" aria-label="Send message" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                </button>
+                <button class="send-btn stop has-tooltip has-tooltip--left tailnet-notification-thread-stop" id="tailnetNotificationThreadStop" type="button" data-tooltip="Stop response" aria-label="Stop response" hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"></rect></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div id="tailnetNotificationThreadPromptsPopup" class="saved-prompts-popup tailnet-notification-thread-prompts-popup" hidden role="menu" aria-label="Saved prompts"></div>
+          <div class="model-dropdown tailnet-notification-thread-model-dropdown" id="tailnetNotificationThreadModelDropdown"></div>
         </form>
       </section>
     </section>
@@ -1969,7 +2000,7 @@
 <script src="static/panels.js?v=__WEBUI_VERSION__&cron-notifications=v3&high-signal-model=v1&cron-modal=v1" defer></script>
 <script src="static/session-dashboard.js?v=__WEBUI_VERSION__&tab-polish=v1&high-signal-model=v6&high-signal-history=v1&background-resume=v1&mode-rail=v1&summary-trust=v1&high-signal-toggle=v1" defer></script>
 <script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__&labeled-adjacent-tabs=v1" defer></script>
-<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v2&mobile-rail-right=v1" defer></script>
+<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1" defer></script>
 <script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3&semantic-icons=v1" defer></script>
 <script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/boot.js?v=__WEBUI_VERSION__&tab-polish=v1" defer></script>

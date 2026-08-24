@@ -46,7 +46,7 @@
       "upstream_sha256": "b883cc5f4e2fa5ee01cc87e1ed1546ba9ab47079632ce692a77cfa65178bb6d6"
     },
     {
-      "hermesui_sha256": "9a22bdc76d4858b810034f97991aedd6db709626b40494ca033e92dc5023069a",
+      "hermesui_sha256": "336a56b3e5c9f4343b8edf2693a727232277999a70ff5b4df590df00d8e890e3",
       "path": "static/index.html",
       "upstream_sha256": "4850e0f609c56ef5619dcb023f95398224b053fcca6b1125d4f8a2923f9b2a3c"
     },
@@ -96,12 +96,12 @@
       "upstream_sha256": "087f2a5d42fa71bceaa650138875d2cb1ed41129ef58f0d749072eec0d395c2f"
     },
     {
-      "hermesui_sha256": "206341e7014135837dad07901879be0cf18a62b7245a00c1b11c34cbb3496135",
+      "hermesui_sha256": "fba9c210e4c34f4bea33f77b050e2a0dafee5c3b81484e5e24c620ecc3461c83",
       "path": "static/style.css",
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },
     {
-      "hermesui_sha256": "2a630c0418e9c67ec6307f2e7bec34fa6879a579cb5cbd44ff6558e9fd383604",
+      "hermesui_sha256": "ebf78b6982c70a2a58454d8c17924b065636fbb8654520a3502d5022ccabcc81",
       "path": "static/sw.js",
       "upstream_sha256": "cfdc35b1dd3f20f9ef8e885008dd76c3bcd2fe3deb61c1708f2e6d88514e2ff8"
     },
@@ -111,7 +111,7 @@
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "5c528c320a260079ef4c598470b2d38c6aa5a9879ab214c0e64aa7b970eebe08",
+      "hermesui_sha256": "5cb507679dfa900ec2856d0ecbc05057f2b95b8412247df1d6a1622ddb3aff24",
       "path": "static/tailnet-app-rail.js",
       "upstream_sha256": null
     },
