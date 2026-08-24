@@ -116,9 +116,9 @@ def test_mode_theme_and_settings_controls_are_fixed_at_the_bottom_of_the_app_rai
     assert groups < mode < theme < settings
     assert INDEX.count('id="sessionViewToggle"') == 1
     assert INDEX.count('id="chatSettingsToggle"') == 1
-    assert 'aria-label="Switch to High Signal mode"' in rail
+    assert 'aria-label="Turn High Signal mode on"' in rail
     assert 'tailnet-session-view-icon--signal' in rail
-    assert 'tailnet-session-view-icon--classic' in rail
+    assert 'tailnet-session-view-icon--classic' not in rail
     assert 'aria-label="Switch to dark mode"' in rail
     assert ".tailnet-app-controls" in CSS
     assert "tailnetThemeToggle" in JS
@@ -535,10 +535,24 @@ def test_mobile_app_selector_is_fixed_and_sessions_are_a_real_page():
     assert '.sidebar.mobile-session-page .panel-view{margin-left:0;}' in CSS
 
 
+def test_mobile_hermes_home_becomes_a_session_menu_only_outside_the_session_list():
+    rail = _rail_markup()
+    assert 'class="tailnet-app-home-icon"' in rail
+    assert 'class="tailnet-app-home-menu-icon"' in rail
+    assert '<path d="M4 7h16M4 12h16M4 17h16"/>' in rail
+    assert "function syncHermesHomeControl()" in JS
+    assert "root.dataset.mobileSessionView!=='sessions'" in JS
+    assert "home.classList.toggle('is-session-menu',opensSessions)" in JS
+    assert "const label=opensSessions?'Open sessions':'Hermes UI'" in JS
+    assert "attributeFilter:['data-tailnet-view','data-mobile-session-view']" in JS
+    assert '#tailnetAppHome.is-session-menu .tailnet-app-home-icon{display:none;}' in CSS
+    assert '#tailnetAppHome.is-session-menu .tailnet-app-home-menu-icon{display:flex;}' in CSS
+
+
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1"'
         in INDEX
     )
     assert (

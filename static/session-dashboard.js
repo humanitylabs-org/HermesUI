@@ -1065,7 +1065,7 @@
     if(!toggle||typeof toggle.setAttribute!=='function') return;
     const root=document.documentElement;
     const dashboard=!!(root&&root.dataset&&root.dataset.sessionView==='dashboard');
-    const label=dashboard?'Switch to Classic view':'Switch to High Signal mode';
+    const label=dashboard?'Turn High Signal mode off':'Turn High Signal mode on';
     toggle.setAttribute('aria-label',label);
     toggle.setAttribute('aria-pressed',dashboard?'true':'false');
     toggle.setAttribute('data-tooltip',label);

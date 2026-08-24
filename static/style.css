@@ -2191,17 +2191,25 @@
   .tailnet-bookmark-menu button:hover,.tailnet-bookmark-menu button:focus-visible{background:var(--hover-bg);outline:none;}
   .tailnet-bookmark-menu button.danger{color:var(--danger,#f87171);}
   .tailnet-app-home-icon{display:block;width:34px;height:34px;border-radius:6px;}
+  .tailnet-app-home-menu-icon{display:none;width:34px;height:34px;align-items:center;justify-content:center;color:var(--text);}
+  .tailnet-app-home-menu-icon svg{display:block;width:23px;height:23px;}
   .tailnet-app-groups{width:100%;min-height:0;flex:1 1 auto;display:flex;flex-direction:column;align-items:center;gap:6px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;padding-bottom:4px;box-sizing:border-box;}
   .tailnet-app-groups::-webkit-scrollbar{display:none;}
   .tailnet-app-controls{width:100%;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 0 0;border-top:1px solid var(--border);box-sizing:border-box;}
   .tailnet-rail-control{flex:0 0 auto;}
-  .tailnet-session-view-icon{width:20px;height:20px;display:none;align-items:center;justify-content:center;}
+  .tailnet-session-view-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
   .tailnet-session-view-icon svg{display:block;width:20px;height:20px;}
-  html[data-session-view="classic"] .tailnet-session-view-icon--signal,
-  html[data-session-view="dashboard"] .tailnet-session-view-icon--classic{display:flex;}
-  .tailnet-session-view-toggle{position:relative;margin-bottom:7px;background:var(--surface-subtle);color:var(--text);box-shadow:inset 0 0 0 1px var(--border);}
+  .tailnet-session-view-toggle{position:relative;margin-bottom:7px;background:var(--surface-subtle);color:var(--text);box-shadow:inset 0 0 0 1px var(--border);transition:color .18s,background .18s,box-shadow .18s,transform .18s;}
   .tailnet-session-view-toggle::after{content:"";position:absolute;left:4px;right:4px;bottom:-5px;height:1px;background:var(--border);pointer-events:none;}
-  html[data-session-view="dashboard"] #sessionViewToggle{color:var(--accent-text);background:var(--accent-bg);box-shadow:inset 0 0 0 1px var(--accent-bg-strong);}
+  html[data-session-view="dashboard"] #sessionViewToggle{color:#fff;background:linear-gradient(145deg,#b06cff,#7437e8);box-shadow:inset 0 0 0 1px rgba(237,220,255,.82),0 0 10px rgba(159,82,255,.9),0 0 22px rgba(129,56,232,.62);transform:translateZ(0) scale(1.035);}
+  html[data-session-view="dashboard"] #sessionViewToggle .tailnet-session-view-icon svg{filter:drop-shadow(0 0 4px rgba(255,255,255,.92));}
+  @media (prefers-reduced-motion:no-preference){
+    html[data-session-view="dashboard"] #sessionViewToggle{animation:highSignalPowerGlow 2.2s ease-in-out infinite;}
+  }
+  @keyframes highSignalPowerGlow{
+    0%,100%{box-shadow:inset 0 0 0 1px rgba(237,220,255,.78),0 0 9px rgba(159,82,255,.76),0 0 18px rgba(129,56,232,.52);}
+    50%{box-shadow:inset 0 0 0 1px rgba(255,255,255,.95),0 0 14px rgba(181,112,255,1),0 0 28px rgba(129,56,232,.78);}
+  }
   .tailnet-theme-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
   .tailnet-theme-icon svg{display:block;width:20px;height:20px;}
   :root:not(.dark) .tailnet-theme-icon--sun,
@@ -2360,6 +2368,8 @@
     html:not([data-tailnet-view="external"]) .app-titlebar{margin-left:48px;width:calc(100% - 48px);box-sizing:border-box;}
     html:not([data-tailnet-view="external"]) .sidebar{left:48px;width:calc(100vw - 48px);transform:translateX(calc(-100% - 48px));}
     html:not([data-tailnet-view="external"]) .sidebar.mobile-open{transform:translateX(0);}
+    #tailnetAppHome.is-session-menu .tailnet-app-home-icon{display:none;}
+    #tailnetAppHome.is-session-menu .tailnet-app-home-menu-icon{display:flex;}
     html[data-mobile-session-view="sessions"] .app-titlebar{display:none!important;}
     .sidebar.mobile-session-page .mobile-sidebar-close{display:none!important;}
     .sidebar.mobile-session-page .panel-view{margin-left:0;}

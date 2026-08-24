@@ -744,6 +744,20 @@
       if(selected)link.setAttribute('aria-current','page');
       else link.removeAttribute('aria-current');
     });
+    syncHermesHomeControl();
+  }
+
+  function syncHermesHomeControl(){
+    if(!home)return;
+    const opensSessions=isPhoneWidth()
+      &&root.dataset.tailnetView==='hermes'
+      &&root.dataset.mobileSessionView!=='sessions'
+      &&home.classList.contains('active');
+    home.classList.toggle('is-session-menu',opensSessions);
+    const label=opensSessions?'Open sessions':'Hermes UI';
+    home.setAttribute('aria-label',label);
+    home.setAttribute('data-tooltip',label);
+    home.title=label;
   }
 
   function activateHermes({remember=true,openMobileMenu=false}={}){
@@ -1283,7 +1297,10 @@
     if(themeToggle)themeToggle.addEventListener('click',toggleShellTheme);
     if(wizardCanvasFrame)wizardCanvasFrame.addEventListener('load',sendThemeToWizardCanvas);
     new MutationObserver(syncThemeToggle).observe(root,{attributes:true,attributeFilter:['class','data-skin']});
+    new MutationObserver(syncHermesHomeControl).observe(root,{attributes:true,attributeFilter:['data-tailnet-view','data-mobile-session-view']});
+    window.addEventListener('resize',syncHermesHomeControl,{passive:true});
     syncThemeToggle();
+    syncHermesHomeControl();
     if(notificationsReadAll)notificationsReadAll.addEventListener('click',markAllNotificationsRead);
     notificationFilterButtons.forEach(button=>button.addEventListener('click',()=>setNotificationFilter(button.dataset.notificationFilter)));
     appsById.set(privateMarketplace.id,privateMarketplace);

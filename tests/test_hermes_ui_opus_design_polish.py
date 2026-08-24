@@ -76,7 +76,7 @@ def test_conversation_settings_are_grouped_rule_lists_with_clear_verbs():
 def test_mode_control_is_separate_and_settled_duration_has_one_source():
     assert ".tailnet-session-view-toggle{position:relative;margin-bottom:7px;" in CSS
     assert ".tailnet-session-view-toggle::after" in CSS
-    assert 'html[data-session-view="dashboard"] #sessionViewToggle{color:var(--accent-text);background:var(--accent-bg);' in CSS
+    assert 'html[data-session-view="dashboard"] #sessionViewToggle{color:#fff;background:linear-gradient(145deg,#b06cff,#7437e8);' in CSS
     summary = _function_body(UI, "_syncToolCallGroupSummary")
     assert "? _activityProcessedElapsedLabel(group)" in summary
     assert ": t('processed_elapsed','');" in summary
@@ -90,6 +90,8 @@ def test_all_changed_shell_assets_have_matching_cache_identities():
         "&status-indicators=v1",
         "&summary-trust=v1",
         "&labeled-adjacent-tabs=v1",
+        "&high-signal-toggle=v1",
+        "&mobile-session-home=v1",
     )
     for identity in identities:
         assert identity in INDEX

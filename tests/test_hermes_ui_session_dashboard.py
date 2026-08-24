@@ -21,16 +21,24 @@ def test_contextual_view_action_stays_in_the_app_rail_and_never_reloads():
     assert INDEX.count('id="sessionViewToggle"') == 1
     assert 'id="sessionViewToggle"' in rail
     assert rail.index('id="sessionViewToggle"') < rail.index('id="tailnetThemeToggle"')
-    assert 'tailnet-session-view-icon--signal' in rail
-    assert 'tailnet-session-view-icon--classic' in rail
+    assert rail.count('tailnet-session-view-icon--signal') == 1
+    assert 'tailnet-session-view-icon--classic' not in rail
     assert "chat-settings-footer" not in INDEX
     assert ".session-view-toggle" not in CSS
-    assert "Switch to Classic view" in DASHBOARD
-    assert "Switch to High Signal mode" in DASHBOARD
+    assert "Turn High Signal mode off" in DASHBOARD
+    assert "Turn High Signal mode on" in DASHBOARD
     assert "toggle.setAttribute('data-tooltip',label)" in DASHBOARD
     assert "toggle.setAttribute('aria-pressed',dashboard?'true':'false')" in DASHBOARD
     assert "window.history.replaceState" in DASHBOARD
     assert "location.reload" not in DASHBOARD
+
+
+def test_high_signal_toggle_uses_one_signal_glyph_and_a_purple_power_glow():
+    assert '.tailnet-session-view-icon{width:20px;height:20px;display:flex;' in CSS
+    assert 'html[data-session-view="dashboard"] #sessionViewToggle{color:#fff;background:linear-gradient(145deg,#b06cff,#7437e8);' in CSS
+    assert '@keyframes highSignalPowerGlow' in CSS
+    assert 'filter:drop-shadow(0 0 4px rgba(255,255,255,.92))' in CSS
+    assert '@media (prefers-reduced-motion:no-preference)' in CSS
 
 
 def test_high_signal_uses_the_available_inline_width_without_resizing_sessions():
