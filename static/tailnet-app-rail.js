@@ -24,6 +24,15 @@
     {key:'disabled',label:'Disabled'},
     {key:'readonly',label:'Read-only'}
   ];
+  const ACTIVE_FREQUENCY_GROUPS=[
+    {key:'hourly',label:'Hourly & more often'},
+    {key:'daily',label:'Daily'},
+    {key:'weekly',label:'Weekly'},
+    {key:'monthly',label:'Monthly'},
+    {key:'yearly',label:'Yearly'},
+    {key:'once',label:'One-time'},
+    {key:'other',label:'Other schedules'}
+  ];
   const URL_SCHEME_RE=/^[a-z][a-z0-9+.-]*:/i;
   const GROUPS={
     company:{label:'work app',plural:'work apps',icon:'company'},
@@ -914,6 +923,53 @@
     return grouped;
   }
 
+  function scheduledActiveFrequencyKey(job){
+    const schedule=job&&job.schedule&&typeof job.schedule==='object'?job.schedule:{};
+    const kind=String(schedule.kind||'').toLowerCase();
+    const repeatTimes=Number(job&&job.repeat&&job.repeat.times);
+    if(kind==='once'||kind==='timestamp'||repeatTimes===1)return 'once';
+    if(kind==='interval'){
+      const minutes=Number(schedule.minutes);
+      if(!Number.isFinite(minutes)||minutes<=0)return 'other';
+      if(minutes<1440)return 'hourly';
+      if(minutes<10080)return 'daily';
+      if(minutes<40320)return 'weekly';
+      if(minutes<525600)return 'monthly';
+      return 'yearly';
+    }
+    const raw=String(schedule.expr||schedule.expression||job.schedule_display||'').trim();
+    const macroFrequency={
+      '@hourly':'hourly',
+      '@daily':'daily',
+      '@midnight':'daily',
+      '@weekly':'weekly',
+      '@monthly':'monthly',
+      '@yearly':'yearly',
+      '@annually':'yearly'
+    }[raw.toLowerCase()];
+    if(macroFrequency)return macroFrequency;
+    const fields=raw.split(/\s+/);
+    if(kind!=='cron'&&fields.length!==5&&fields.length!==6)return 'other';
+    const cron=fields.length===6?fields.slice(1):fields;
+    if(cron.length!==5)return 'other';
+    const [,hour,monthDay,month,weekday]=cron;
+    const wildcard=value=>value==='*'||value==='?';
+    if(!wildcard(month))return 'yearly';
+    if(!wildcard(monthDay))return 'monthly';
+    if(!wildcard(weekday)){
+      const normalized=weekday.toUpperCase();
+      return normalized==='1-5'||normalized==='MON-FRI'?'daily':'weekly';
+    }
+    if(!/^\d{1,2}$/.test(hour))return 'hourly';
+    return 'daily';
+  }
+
+  function scheduledActiveJobsByFrequency(jobs){
+    const grouped=new Map(ACTIVE_FREQUENCY_GROUPS.map(group=>[group.key,[]]));
+    jobs.forEach(job=>grouped.get(scheduledActiveFrequencyKey(job)).push(job));
+    return grouped;
+  }
+
   function scheduledRelativeMeta(job,groupKey){
     const future=groupKey==='active'||groupKey==='paused';
     const value=future?job.next_run_at:job.last_run_at;
@@ -1060,23 +1116,7 @@
       :'No scheduled jobs.';
     const grouped=scheduledJobsByGroup();
     let menuIndex=0;
-    SCHEDULED_JOB_GROUPS.forEach(groupMeta=>{
-      const jobs=grouped.get(groupMeta.key)||[];
-      if(!jobs.length)return;
-      const group=document.createElement('section');
-      group.className=`tailnet-scheduled-group is-${groupMeta.key}`;
-      group.dataset.scheduledGroup=groupMeta.key;
-      const heading=document.createElement('h3');
-      heading.className='tailnet-scheduled-group-head';
-      const headingLabel=document.createElement('strong');
-      headingLabel.textContent=groupMeta.label;
-      const count=document.createElement('span');
-      count.className='tailnet-scheduled-group-count';
-      count.textContent=`· ${jobs.length}`;
-      heading.append(headingLabel,count);
-      const rows=document.createElement('div');
-      rows.className='tailnet-scheduled-group-rows';
-      jobs.forEach(job=>{
+    const appendJobRow=(rows,job,groupMeta,frequencyMeta=null)=>{
       const row=document.createElement('article');
       row.className='tailnet-scheduled-job';
       row.dataset.jobId=String(job.id||'');
@@ -1097,12 +1137,14 @@
       next.dataset.scheduledTimeValue=timing.value;
       detail.append(next);
       main.append(top,detail);
+      const accessibleGroup=frequencyMeta?`${groupMeta.label}, ${frequencyMeta.label}`:groupMeta.label;
       row.dataset.jobName=String(job.name||job.id);
-      row.dataset.jobGroup=groupMeta.label;
+      row.dataset.jobGroup=accessibleGroup;
+      if(frequencyMeta)row.dataset.jobFrequency=frequencyMeta.key;
       if(!job.read_only){
         const menuId=`tailnet-scheduled-job-menu-${menuIndex++}`;
         row.tabIndex=0;
-        row.setAttribute('aria-label',`${job.name||job.id}. ${groupMeta.label}. ${next.textContent||'No run time available'}. Press Enter, right-click, or hold for actions.`);
+        row.setAttribute('aria-label',`${job.name||job.id}. ${accessibleGroup}. ${next.textContent||'No run time available'}. Press Enter, right-click, or hold for actions.`);
         row.setAttribute('aria-haspopup','menu');
         row.setAttribute('aria-expanded','false');
         row.setAttribute('aria-controls',menuId);
@@ -1121,7 +1163,48 @@
         row.append(main);
       }
       rows.appendChild(row);
-      });
+    };
+    SCHEDULED_JOB_GROUPS.forEach(groupMeta=>{
+      const jobs=grouped.get(groupMeta.key)||[];
+      if(!jobs.length)return;
+      const group=document.createElement('section');
+      group.className=`tailnet-scheduled-group is-${groupMeta.key}`;
+      group.dataset.scheduledGroup=groupMeta.key;
+      const heading=document.createElement('h3');
+      heading.className='tailnet-scheduled-group-head';
+      const headingLabel=document.createElement('strong');
+      headingLabel.textContent=groupMeta.label;
+      const count=document.createElement('span');
+      count.className='tailnet-scheduled-group-count';
+      count.textContent=`· ${jobs.length}`;
+      heading.append(headingLabel,count);
+      const rows=document.createElement('div');
+      rows.className='tailnet-scheduled-group-rows';
+      if(groupMeta.key==='active'){
+        const frequencyGroups=scheduledActiveJobsByFrequency(jobs);
+        ACTIVE_FREQUENCY_GROUPS.forEach(frequencyMeta=>{
+          const frequencyJobs=frequencyGroups.get(frequencyMeta.key)||[];
+          if(!frequencyJobs.length)return;
+          const frequency=document.createElement('section');
+          frequency.className=`tailnet-scheduled-frequency is-${frequencyMeta.key}`;
+          frequency.dataset.scheduledFrequency=frequencyMeta.key;
+          const frequencyHeading=document.createElement('h4');
+          frequencyHeading.className='tailnet-scheduled-frequency-head';
+          const frequencyLabel=document.createElement('strong');
+          frequencyLabel.textContent=frequencyMeta.label;
+          const frequencyCount=document.createElement('span');
+          frequencyCount.className='tailnet-scheduled-frequency-count';
+          frequencyCount.textContent=`· ${frequencyJobs.length}`;
+          frequencyHeading.append(frequencyLabel,frequencyCount);
+          const frequencyRows=document.createElement('div');
+          frequencyRows.className='tailnet-scheduled-frequency-rows';
+          frequencyJobs.forEach(job=>appendJobRow(frequencyRows,job,groupMeta,frequencyMeta));
+          frequency.append(frequencyHeading,frequencyRows);
+          rows.appendChild(frequency);
+        });
+      }else{
+        jobs.forEach(job=>appendJobRow(rows,job,groupMeta));
+      }
       group.append(heading,rows);
       scheduledList.appendChild(group);
     });

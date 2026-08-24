@@ -6,6 +6,7 @@ INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 RAIL = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
 SESSIONS = (ROOT / "static" / "sessions.js").read_text(encoding="utf-8")
 STYLE = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
+SW = (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
 PANELS = (ROOT / "static" / "panels.js").read_text(encoding="utf-8")
 
 
@@ -70,6 +71,36 @@ def test_scheduled_jobs_are_grouped_chronologically_without_repeated_status_tags
     assert ":root.dark .tailnet-scheduled-group.is-active .tailnet-scheduled-group-head{color:#4ade80" in STYLE
     assert ":root.dark .tailnet-scheduled-group.is-paused .tailnet-scheduled-group-head{color:#facc15" in STYLE
     assert ".tailnet-scheduled-group-head::before" in STYLE
+
+
+def test_active_jobs_are_subgrouped_from_most_to_least_recurring():
+    assert "const ACTIVE_FREQUENCY_GROUPS=[" in RAIL
+    labels = (
+        "Hourly & more often",
+        "Daily",
+        "Weekly",
+        "Monthly",
+        "Yearly",
+        "One-time",
+        "Other schedules",
+    )
+    positions = [RAIL.index(f"label:'{label}'", RAIL.index("const ACTIVE_FREQUENCY_GROUPS=[")) for label in labels]
+    assert positions == sorted(positions)
+    assert "function scheduledActiveFrequencyKey(job)" in RAIL
+    assert "kind==='once'||kind==='timestamp'||repeatTimes===1" in RAIL
+    assert "if(minutes<1440)return 'hourly'" in RAIL
+    assert "if(minutes<10080)return 'daily'" in RAIL
+    assert "if(minutes<40320)return 'weekly'" in RAIL
+    assert "if(minutes<525600)return 'monthly'" in RAIL
+    assert "'@weekly':'weekly'" in RAIL
+    assert "'@monthly':'monthly'" in RAIL
+    assert "'@yearly':'yearly'" in RAIL
+    assert "return normalized==='1-5'||normalized==='MON-FRI'?'daily':'weekly'" in RAIL
+    assert "frequency.dataset.scheduledFrequency=frequencyMeta.key" in RAIL
+    assert "frequencyJobs.forEach(job=>appendJobRow(frequencyRows,job,groupMeta,frequencyMeta))" in RAIL
+    assert "row.dataset.jobFrequency=frequencyMeta.key" in RAIL
+    assert ".tailnet-scheduled-frequency-head{position:sticky" in STYLE
+    assert ".tailnet-scheduled-frequency-rows{padding-left:12px" in STYLE
 
 
 def test_job_actions_open_from_the_whole_row_on_context_long_press_or_keyboard():
@@ -149,8 +180,9 @@ def test_contained_reply_sessions_are_removed_before_every_sidebar_render_path()
     assert "let _containedCronReplySessions = [];" in SESSIONS
     assert "function _isContainedCronReplySession(session)" in SESSIONS
     assert "_containedCronReplySessions=receivedSessions.filter(_isContainedCronReplySession);" in SESSIONS
-    assert "const serverSessions=receivedSessions.filter(session=>!_isContainedCronReplySession(session));" in SESSIONS
-    assert "sessData.sidebar_reference_sessions.filter(session=>!_isContainedCronReplySession(session))" in SESSIONS
+    assert "!_isContainedCronReplySession(session)&&!_isHiddenCronViewerSession(session,_allProjects)" in SESSIONS
+    assert "const hiddenViewerSessions=receivedSessions.filter" in SESSIONS
+    assert "_isContainedCronReplySession(session)||_isHiddenCronViewerSession(session,_allProjects)" in SESSIONS
     assert SESSIONS.index("const serverSessions=receivedSessions.filter") < SESSIONS.index("_allSessions = _mergeOptimisticFirstTurnSessions(serverSessions)")
 
 
@@ -169,6 +201,18 @@ def test_notifications_layout_is_compact_responsive_and_thread_composer_stays_be
     assert ".tailnet-notification-thread-pinned{height:190px;max-height:190px;}" in STYLE
     assert ".tailnet-scheduled-job-more{" not in STYLE
     assert "right:60px" in STYLE
+    assert "top:32px" in STYLE
+
+
+def test_active_frequency_assets_share_one_cache_identity():
+    style_suffix = "&human-cron=v1&active-frequency=v1"
+    rail_suffix = "&human-cron=v1&active-frequency=v1"
+    index_style = next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
+    sw_style = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
+    index_rail = next(line for line in INDEX.splitlines() if "static/tailnet-app-rail.js?v=" in line)
+    sw_rail = next(line for line in SW.splitlines() if "'./static/tailnet-app-rail.js' + VQ" in line)
+    assert style_suffix in index_style and style_suffix in sw_style
+    assert rail_suffix in index_rail and rail_suffix in sw_rail
 
 
 def test_dark_mode_send_controls_use_light_fill_and_dark_foreground():

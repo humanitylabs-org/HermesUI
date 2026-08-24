@@ -2301,6 +2301,14 @@
   :root.dark .tailnet-scheduled-group.is-paused .tailnet-scheduled-group-head{color:#facc15;}
   :root.dark .tailnet-scheduled-group.is-disabled .tailnet-scheduled-group-head{color:#94a3b8;}
   :root.dark .tailnet-scheduled-group.is-readonly .tailnet-scheduled-group-head{color:#60a5fa;}
+  .tailnet-scheduled-frequency{display:flex;flex-direction:column;}
+  .tailnet-scheduled-frequency+.tailnet-scheduled-frequency{margin-top:5px;}
+  .tailnet-scheduled-frequency-head{position:sticky;z-index:2;top:32px;display:flex;align-items:center;gap:4px;min-height:29px;margin:0;padding:7px 8px 5px 22px;border-bottom:1px solid color-mix(in srgb,var(--border) 82%,transparent);background:color-mix(in srgb,var(--bg) 96%,transparent);color:color-mix(in srgb,#16803c 72%,var(--text));backdrop-filter:blur(8px);box-sizing:border-box;}
+  .tailnet-scheduled-frequency-head strong{font-size:11px;font-weight:800;line-height:1.2;}
+  .tailnet-scheduled-frequency-count{font-size:10px;font-weight:750;font-variant-numeric:tabular-nums;opacity:.7;}
+  :root.dark .tailnet-scheduled-frequency-head{color:color-mix(in srgb,#4ade80 72%,var(--text));}
+  .tailnet-scheduled-frequency-rows{padding-left:12px;border-left:1px solid color-mix(in srgb,#16803c 24%,var(--border));}
+  :root.dark .tailnet-scheduled-frequency-rows{border-left-color:color-mix(in srgb,#4ade80 24%,var(--border));}
   .tailnet-scheduled-job{position:relative;display:block;min-height:54px;padding:9px 8px;border-bottom:1px solid var(--border);user-select:none;-webkit-touch-callout:none;}
   .tailnet-scheduled-job.is-busy{opacity:.62;}
   .tailnet-scheduled-job[tabindex]{cursor:context-menu;}

@@ -2764,7 +2764,13 @@ function _sessionSourceTabCount(filter, renderedWebuiSessionCount, renderedCliSe
 }
 
 function _setActiveProjectFilter(projectId) {
-  const next = projectId === NO_PROJECT_FILTER ? NO_PROJECT_FILTER : (projectId || null);
+  let next = projectId === NO_PROJECT_FILTER ? NO_PROJECT_FILTER : (projectId || null);
+  // The reserved Cron Jobs project is storage for background run history, not a
+  // user-facing conversation folder. Fail closed if stale UI state or a future
+  // caller tries to select it directly.
+  if(next!==NO_PROJECT_FILTER&&(_allProjects||[]).some(project=>
+    _isHiddenCronProject(project)&&String(project.project_id||'')===String(next)
+  )) next=null;
   if (_activeProject === next) return;
   _activeProject = next;
   renderSessionListFromCache();
@@ -4427,6 +4433,23 @@ let _showArchived = false;  // toggle to show archived sessions
 let _sessionSelectMode = false;  // batch select mode
 const _selectedSessions = new Set();  // selected session IDs
 let _allProjects = [];  // cached project list
+const _HIDDEN_CRON_PROJECT_NAME = 'cron jobs';
+function _isHiddenCronProject(project){
+  return !!(project&&String(project.name||'').trim().toLowerCase()===_HIDDEN_CRON_PROJECT_NAME);
+}
+function _visibleSessionProjects(projects=_allProjects){
+  return (Array.isArray(projects)?projects:[]).filter(project=>!_isHiddenCronProject(project));
+}
+function _isHiddenCronViewerSession(session, projects=_allProjects){
+  if(!session) return false;
+  const sid=String(session.session_id||'').trim().toLowerCase();
+  if(_isCronSessionForUnread(session)||sid.startsWith('cron_')) return true;
+  const projectId=String(session.project_id||'');
+  if(!projectId) return false;
+  return (Array.isArray(projects)?projects:[]).some(project=>
+    _isHiddenCronProject(project)&&String(project.project_id||'')===projectId
+  );
+}
 // Sentinel value for the _activeProject state when filtering to sessions
 // that have no project_id assigned. Distinct from real project IDs so the
 // equality check below can branch cleanly on it. The literal string is
@@ -4877,7 +4900,7 @@ function _showBatchProjectPicker(){
       showToast('Removed from project');exitSessionSelectMode();await renderSessionList();
     }catch(e){showToast('Move failed: '+(e.message||e));}
   };picker.appendChild(none);
-  for(const p of(_allProjects||[])){
+  for(const p of _visibleSessionProjects()){
     const item=document.createElement('div');item.className='project-picker-item';
     if(p.color){const dot=document.createElement('span');dot.className='color-dot';
       dot.style.cssText='width:6px;height:6px;border-radius:50%;background:'+p.color+';flex-shrink:0;';item.appendChild(dot);}
@@ -5935,17 +5958,28 @@ function _applySessionListPayload(sessData, projData, opts){
   if (typeof sessData.server_tz === 'string') {
     _serverTz = sessData.server_tz;
   }
+  _allProjects=Array.isArray(projData.projects)?projData.projects:[];
+  if(_activeProject!==NO_PROJECT_FILTER&&(_allProjects||[]).some(project=>
+    _isHiddenCronProject(project)&&String(project.project_id||'')===String(_activeProject||'')
+  )) _activeProject=null;
   const receivedSessions=_optimisticallyRemovedSessionIds.size
     ? (sessData.sessions||[]).filter(s=>s&&!_optimisticallyRemovedSessionIds.has(s.session_id))
     : (sessData.sessions||[]);
   _containedCronReplySessions=receivedSessions.filter(_isContainedCronReplySession);
-  const serverSessions=receivedSessions.filter(session=>!_isContainedCronReplySession(session));
-  if(_serverWebuiSessionCount!==null&&_containedCronReplySessions.length){
-    const hiddenActiveCount=_containedCronReplySessions.filter(session=>!session.archived).length;
+  const serverSessions=receivedSessions.filter(session=>
+    !_isContainedCronReplySession(session)&&!_isHiddenCronViewerSession(session,_allProjects)
+  );
+  const hiddenViewerSessions=receivedSessions.filter(session=>
+    _isContainedCronReplySession(session)||_isHiddenCronViewerSession(session,_allProjects)
+  );
+  if(_serverWebuiSessionCount!==null&&hiddenViewerSessions.length){
+    const hiddenActiveCount=hiddenViewerSessions.filter(session=>!session.archived).length;
     _serverWebuiSessionCount=Math.max(0,_serverWebuiSessionCount-hiddenActiveCount);
   }
   _sidebarReferenceSessions = Array.isArray(sessData.sidebar_reference_sessions)
-    ? sessData.sidebar_reference_sessions.filter(session=>!_isContainedCronReplySession(session))
+    ? sessData.sidebar_reference_sessions.filter(session=>
+      !_isContainedCronReplySession(session)&&!_isHiddenCronViewerSession(session,_allProjects)
+    )
     : [];
   _reconcileActiveSessionIdleStateFromList(serverSessions);
   _allSessions = _mergeOptimisticFirstTurnSessions(serverSessions);
@@ -5980,7 +6014,7 @@ function _applySessionListPayload(sessData, projData, opts){
   }
   _syncSessionAttentionSoundState(_allSessions);
   _pruneLineageReportCacheToVisibleSessions(_allSessions);
-  _allProjects = projData.projects||[];
+
   // Capture the recovering-from-error state BEFORE clearing it: the error banner
   // DOM was rendered outside the signature path, so if this payload heals with
   // rows identical to the last render, the identical-signature skip below would
@@ -8153,6 +8187,7 @@ function _partitionSidebarSessionRows(allMatched, activeSidForSidebar){
   let cliArchivedCount=0;
   for(const s of allMatched){
     if(!_sidebarRowHasVisibleMessages(s, activeSidForSidebar)) continue;
+    if(_isHiddenCronViewerSession(s)) continue;
     const isCli=_isCliSession(s);
     if(isCli) cliSessionCount++;
     if(s.default_hidden&&!(_activeProject&&_activeProject!==NO_PROJECT_FILTER&&s.project_id===_activeProject)) continue;
@@ -8202,6 +8237,7 @@ function _scopedSidebarReferenceRows(isCli){
   if(typeof _sidebarReferenceSessions==='undefined'||!Array.isArray(_sidebarReferenceSessions)||!_sidebarReferenceSessions.length) return [];
   return _sidebarReferenceSessions.filter(s=>{
     if(!s) return false;
+    if(_isHiddenCronViewerSession(s)) return false;
     // Source scope: only references in the same webui/cli bucket as this render.
     if(_isCliSession(s)!==!!isCli) return false;
     // Project scope: mirror _partitionSidebarSessionRows exactly.
@@ -8395,7 +8431,8 @@ function renderSessionListFromCache(){
   // With zero projects every session is necessarily unassigned, so showing
   // both All and Unassigned adds no information.
   const hasUnprojected=profileFiltered.some(s=>!s.project_id);
-  if(_allProjects.length>0){
+  const visibleProjects=_visibleSessionProjects();
+  if(visibleProjects.length>0){
     const bar=document.createElement('div');
     bar.className='project-bar';
     // "All" chip
@@ -8416,7 +8453,7 @@ function renderSessionListFromCache(){
       bar.appendChild(noneChip);
     }
     // Project chips
-    for(const p of _allProjects){
+    for(const p of visibleProjects){
       const chip=document.createElement('span');
       chip.className='project-chip'+(p.project_id===_activeProject?' active':'');
       if(p.color){
@@ -9836,7 +9873,7 @@ function _showProjectPicker(session, anchorEl){
     if(projProfile === 'default' || sessionProfile === 'default') return false;
     return true;
   };
-  for(const p of _allProjects){
+  for(const p of _visibleSessionProjects()){
     if (_profileHidesProject(p.profile)) continue;
     const item=document.createElement('div');
     item.className='project-picker-item'+(session.project_id===p.project_id?' active':'');

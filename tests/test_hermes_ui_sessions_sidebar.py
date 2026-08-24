@@ -34,12 +34,26 @@ def test_search_is_hidden_until_the_header_icon_opens_it():
 
 
 def test_project_filters_only_render_after_a_real_folder_exists():
-    assert "if(_allProjects.length>0){" in SESSIONS
+    assert "const visibleProjects=_visibleSessionProjects();" in SESSIONS
+    assert "if(visibleProjects.length>0){" in SESSIONS
     assert "if(_allProjects.length>0||hasUnprojected){" not in SESSIONS
     assert "function createSessionProjectFromHeader()" in SESSIONS
     assert "message:'Folder name:'" in SESSIONS
     project_bar = SESSIONS[SESSIONS.index("// Project filter bar"):SESSIONS.index("// Profile filter toggle")]
     assert "project-create-btn" not in project_bar
+
+
+def test_reserved_cron_project_and_background_sessions_stay_out_of_the_viewer():
+    assert "const _HIDDEN_CRON_PROJECT_NAME = 'cron jobs';" in SESSIONS
+    assert "function _isHiddenCronProject(project)" in SESSIONS
+    assert "function _visibleSessionProjects(projects=_allProjects)" in SESSIONS
+    assert "function _isHiddenCronViewerSession(session, projects=_allProjects)" in SESSIONS
+    assert "_isCronSessionForUnread(session)||sid.startsWith('cron_')" in SESSIONS
+    assert "if(_isHiddenCronViewerSession(s)) continue;" in SESSIONS
+    assert "if(_isHiddenCronViewerSession(s)) return false;" in SESSIONS
+    assert "for(const p of _visibleSessionProjects())" in SESSIONS
+    assert "for(const p of visibleProjects)" in SESSIONS
+    assert "if(next!==NO_PROJECT_FILTER&&(_allProjects||[]).some(project=>" in SESSIONS
 
 
 def test_select_is_in_header_and_archive_is_at_list_bottom():
