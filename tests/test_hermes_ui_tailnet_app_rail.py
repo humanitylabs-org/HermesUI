@@ -149,9 +149,12 @@ def test_mobile_bottom_menu_owns_sessions_notifications_and_utilities():
     assert 'data-mobile-utility="settings"' in INDEX
     assert '.tailnet-app-controls{display:none;}' in CSS
     assert '#tailnetNotificationsButton{display:none;}' in CSS
-    assert '.mobile-primary-menu{position:fixed;z-index:220;left:0;right:var(--mobile-rail-w);bottom:0;display:grid;' in CSS
+    assert '.mobile-primary-menu{position:fixed;z-index:220;left:max(10px,env(safe-area-inset-left,0px));right:calc(var(--mobile-rail-w) + 10px);bottom:calc(8px + env(safe-area-inset-bottom,0px));display:grid;' in CSS
     assert 'grid-template-columns:repeat(3,minmax(0,1fr))' in CSS
-    assert 'bottom:calc(64px + env(safe-area-inset-bottom,0px))' in CSS
+    assert '--mobile-nav-clearance:calc(80px + env(safe-area-inset-bottom,0px))' in CSS
+    assert 'bottom:calc(var(--mobile-nav-clearance) + 4px)' in CSS
+    assert 'border-radius:22px;background:color-mix(in srgb,var(--sidebar) 78%,transparent)' in CSS
+    assert '.sidebar.mobile-session-page .session-title{font-size:15px;font-weight:650;' in CSS
     assert "activateHermes();\n      if(typeof window.openMobileSessionPage==='function')window.openMobileSessionPage();" in JS
     assert "mobileNotificationsButton.addEventListener('click'" in JS
     assert "activateMobileUtility(document.getElementById('sessionViewToggle'))" in JS
@@ -162,6 +165,7 @@ def test_mobile_bottom_menu_owns_sessions_notifications_and_utilities():
     sw_rail = next(line for line in SW.splitlines() if "'./static/tailnet-app-rail.js' + VQ" in line)
     assert '&mobile-bottom-menu=v1&mobile-collapsible-rail=v1' in sw_style
     assert '&mobile-bottom-menu=v1&mobile-collapsible-rail=v1' in sw_rail
+    assert '&mobile-modern-nav=v1' in sw_style
 
 
 def test_cron_notification_rows_are_compact_full_row_disclosures():
@@ -542,7 +546,7 @@ def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page(
         'height:100%;height:100dvh;box-sizing:border-box;'
         in CSS
     )
-    assert ':root{--mobile-rail-w:calc(56px + env(safe-area-inset-right,0px));}' in CSS
+    assert ':root{--mobile-rail-w:calc(56px + env(safe-area-inset-right,0px));--mobile-nav-clearance:calc(80px + env(safe-area-inset-bottom,0px));}' in CSS
     assert 'html[data-mobile-rail="collapsed"]{--mobile-rail-w:0px;}' in CSS
     assert '.layout{margin-left:0;margin-right:var(--mobile-rail-w);width:calc(100% - var(--mobile-rail-w));}' in CSS
     assert (
@@ -552,7 +556,7 @@ def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page(
     )
     assert (
         'html:not([data-tailnet-view="external"]) .sidebar{left:0;right:auto;'
-        'bottom:calc(58px + env(safe-area-inset-bottom,0px));'
+        'bottom:var(--mobile-nav-clearance);'
         'width:calc(100vw - var(--mobile-rail-w));transform:translateX(-100%);}'
         in CSS
     )
@@ -582,7 +586,7 @@ def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page(
     assert '.rail.tailnet-app-rail .rail-btn.active::before' not in CSS
     assert '.rail .nav-tab.active::before' not in CSS
     assert '.rail.tailnet-app-rail .rail-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}' in CSS
-    assert '.tailnet-scheduled-job-menu{position:fixed;z-index:100;top:auto;right:calc(var(--mobile-rail-w,48px) + 12px);bottom:calc(70px + env(safe-area-inset-bottom));' in CSS
+    assert '.tailnet-scheduled-job-menu{position:fixed;z-index:100;top:auto;right:calc(var(--mobile-rail-w,48px) + 12px);bottom:calc(var(--mobile-nav-clearance,80px) + 4px);' in CSS
     assert '.toast{right:calc(var(--mobile-rail-w) + 12px);left:12px;' in CSS
 
 
