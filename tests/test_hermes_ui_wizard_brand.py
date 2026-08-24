@@ -61,44 +61,46 @@ def test_legacy_icon_routes_are_exact_wizard_hat_aliases():
 
 
 def test_all_visible_shell_brand_surfaces_use_the_wizard_hat():
-    assert 'rel="icon" type="image/svg+xml" href="static/wizard-hat.svg"' in INDEX
-    assert 'rel="shortcut icon" href="static/wizard-hat.ico"' in INDEX
+    assert 'rel="icon" type="image/png" sizes="32x32" href="static/wizard-hat-32.png"' in INDEX
+    assert 'rel="shortcut icon"' not in INDEX
     assert 'rel="apple-touch-icon" sizes="512x512" href="static/wizard-hat-apple-touch.png"' in INDEX
     assert 'id="tailnetAppHome"' in INDEX
-    assert 'class="tailnet-app-home-icon" src="static/wizard-hat.svg"' in INDEX
-    assert 'class="wizard-brand-icon" src="static/wizard-hat.svg"' in INDEX
-    assert 'class="wizard-brand-mark" src="static/wizard-hat-mark.svg"' in INDEX
+    assert 'class="tailnet-app-home-icon" src="static/wizard-hat-32.png"' in INDEX
+    assert 'class="wizard-brand-icon" src="static/wizard-hat-32.png"' in INDEX
+    assert 'class="wizard-brand-mark" src="static/wizard-hat-192.png"' in INDEX
     assert 'aria-label="Wizard hat"' in INDEX
     assert "Hermes caduceus" not in INDEX
     assert "hm-g0" not in INDEX
 
 
 def test_share_header_notifications_and_worker_use_the_wizard_hat():
-    assert "'+root+'static/wizard-hat.svg" in SHARE
+    assert "'+root+'static/wizard-hat-32.png" in SHARE
     assert 'class="wizard-brand-icon" id="shareBrandIcon"' in SHARE
-    assert "document.getElementById('shareBrandIcon').src=root+'static/wizard-hat.svg'" in SHARE
+    assert "document.getElementById('shareBrandIcon').src=root+'static/wizard-hat-192.png'" in SHARE
     assert "share-mark" not in SHARE
     assert "icon:'static/wizard-hat-192.png'" in MESSAGES
     assert "badge:'static/wizard-hat-32.png'" in MESSAGES
     for asset in (
-        "wizard-hat.svg",
-        "wizard-hat-mark.svg",
         "wizard-hat-32.png",
         "wizard-hat-192.png",
+    ):
+        assert f"./static/{asset}" in SW
+    for deferred_asset in (
+        "wizard-hat.svg",
+        "wizard-hat-mark.svg",
         "wizard-hat-512.png",
         "wizard-hat-maskable-192.png",
         "wizard-hat-maskable-512.png",
         "wizard-hat-apple-touch.png",
         "wizard-hat.ico",
     ):
-        assert f"./static/{asset}" in SW
+        assert f"./static/{deferred_asset}" not in SW
     assert "wizard-hat-source.png" not in SW
 
 
 def test_manifest_and_raster_assets_use_complete_any_and_maskable_families():
     manifest_icons = {icon["src"]: icon.get("purpose") for icon in MANIFEST["icons"]}
     assert manifest_icons == {
-        "static/wizard-hat.svg": "any",
         "static/wizard-hat-32.png": "any",
         "static/wizard-hat-192.png": "any",
         "static/wizard-hat-512.png": "any",

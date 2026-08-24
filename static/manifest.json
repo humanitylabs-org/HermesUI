@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "HermesUI",
-  "short_name": "HermesUI",
+  "name": "Hermes",
+  "short_name": "Hermes",
   "description": "A focused, mobile-first interface for Hermes Agent",
   "start_url": "./?source=pwa",
   "scope": "./",
@@ -27,12 +27,7 @@
     }
   ],
   "icons": [
-    {
-      "src": "static/wizard-hat.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
+
     {
       "src": "static/wizard-hat-32.png",
       "sizes": "32x32",

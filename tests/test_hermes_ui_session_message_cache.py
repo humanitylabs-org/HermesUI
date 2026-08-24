@@ -85,6 +85,55 @@ def test_warm_session_switch_avoids_a_short_loading_label_flash():
     assert "},200);" in SESSIONS_JS
 
 
+def test_warm_cache_survives_reload_only_inside_the_current_tab():
+    assert "const _SESSION_MESSAGE_CACHE_STORAGE_KEY = 'hermesui.session-message-cache.v1'" in SESSIONS_JS
+    assert "sessionStorage.setItem(_SESSION_MESSAGE_CACHE_STORAGE_KEY" in SESSIONS_JS
+    assert "localStorage.setItem(_SESSION_MESSAGE_CACHE_STORAGE_KEY" not in SESSIONS_JS
+    harness = f"""
+const assert = require('assert');
+const backing=new Map();
+const sessionStorage={{
+  getItem:key=>backing.has(key)?backing.get(key):null,
+  setItem:(key,value)=>backing.set(key,String(value)),
+  removeItem:key=>backing.delete(key),
+}};
+let _allSessions=[];
+const S={{session:null,messages:[],toolCalls:[],busy:false,activeStreamId:null,activeProfile:'default'}};
+let _messagesTruncated=false;
+let _oldestIdx=0;
+let _msgLimitMax=500;
+const _MSG_LIMIT_MAX=500;
+function _sessionSidebarSortCompare(){{return 0;}}
+function _isExternalSession(){{return false;}}
+function _profileMatchesActiveProfile(a,b){{return a===b;}}
+async function api(){{throw new Error('network should not run');}}
+{_cache_source()}
+assert.strictEqual(_storeSessionMessageCache('reload-safe',{{session_id:'reload-safe',message_count:1,profile:'default',updated_at:10,messages:[{{role:'assistant',content:'warm'}}]}}),true);
+assert.ok(backing.get(_SESSION_MESSAGE_CACHE_STORAGE_KEY));
+_sessionMessageCache.clear();
+_hydrateSessionMessageCache();
+const restored=_takeFreshSessionMessageCache('reload-safe',{{message_count:1,profile:'default',updated_at:10}});
+assert.strictEqual(restored.session.messages[0].content,'warm');
+assert.strictEqual(_storeSessionMessageCache('oversized',{{session_id:'oversized',message_count:1,profile:'default',messages:[{{role:'assistant',content:'x'.repeat(400000)}}]}}),false);
+const raw=JSON.parse(backing.get(_SESSION_MESSAGE_CACHE_STORAGE_KEY));
+raw.entries.push(['busy',{{storedAt:Date.now(),messageCount:1,revision:'',profile:'default',data:{{session:{{session_id:'busy',message_count:1,active_stream_id:'run',messages:[]}}}}}}]);
+backing.set(_SESSION_MESSAGE_CACHE_STORAGE_KEY,JSON.stringify(raw));
+_sessionMessageCache.clear();
+_hydrateSessionMessageCache();
+assert.strictEqual(_sessionMessageCache.has('busy'),false);
+console.log(JSON.stringify({{ok:true,size:_sessionMessageCache.size}}));
+"""
+    result = subprocess.run(
+        ["node", "--input-type=commonjs", "-e", harness],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout.strip()) == {"ok": True, "size": 1}
+
+
 def test_selected_session_cache_priority_applies_on_desktop_too():
     open_start = SESSIONS_JS.index("async function _openSidebarSession(session")
     open_end = SESSIONS_JS.index("function _isReadOnlySession", open_start)

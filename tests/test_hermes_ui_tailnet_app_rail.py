@@ -106,7 +106,11 @@ def test_minimal_cron_notifications_live_below_wizard_before_private_apps():
     assert "rich.className='tailnet-notification-rich'" in JS
     assert "richBody.className='tailnet-notification-rich-body msg-body'" in JS
     assert "refreshCronNotificationBadge" not in JS
-    assert "setNotificationsBadge(0);\n    void loadCronNotifications();" in JS
+    assert "const NOTIFICATION_ITEMS_CACHE_KEY='hermesui.cron-notification-items.v1'" in JS
+    assert "sessionStorage.getItem(NOTIFICATION_ITEMS_CACHE_KEY)" in JS
+    assert "renderCronNotifications();\n    scheduleNotificationRefresh();" in JS
+    assert "setNotificationsBadge(0);\n    void loadCronNotifications();" not in JS
+    assert "fullRefresh:!notificationItems.size" in JS
     assert "if(jobIds.length)void loadCronNotifications({jobIds});" in JS
 
 
@@ -620,7 +624,7 @@ def test_mobile_right_rail_is_collapsible_and_hides_redundant_home():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1"'
         in INDEX
     )
     assert (

@@ -2128,7 +2128,7 @@ async function loadSession(sid){
       const modelRefreshPromise=_deferSessionSideEffect(modelRefreshSid,()=>{
         if(!isActiveModelRefreshSession()) return undefined;
         return populateModelDropdown({freshness:'session_visit'});
-      }).catch(()=>{});
+      },1200).catch(()=>{});
       if(typeof window!=='undefined') window._modelDropdownReady=modelRefreshPromise;
     }
   }
@@ -3109,17 +3109,18 @@ function _afterSessionFirstPaint(fn, delayMs=0){
       try{ resolve(typeof fn==='function' ? fn() : undefined); }
       catch(_){ resolve(undefined); }
     };
+    const queueIdle=()=>{
+      if(typeof requestIdleCallback==='function')requestIdleCallback(invoke,{timeout:1500});
+      else invoke();
+    };
     const run=()=>{
-      if(typeof requestIdleCallback==='function'){
-        requestIdleCallback(invoke,{timeout:1500});
-      }else{
-        setTimeout(invoke, delayMs);
-      }
+      if(delayMs>0)setTimeout(queueIdle,delayMs);
+      else queueIdle();
     };
     if(typeof requestAnimationFrame==='function'){
       requestAnimationFrame(()=>requestAnimationFrame(run));
     }else{
-      setTimeout(run, delayMs);
+      run();
     }
   });
 }
@@ -3175,7 +3176,7 @@ function _resolveSessionModelForDisplaySoon(sid){
     }catch(_){
       // Keep session switching non-blocking; the next load can try again.
     }
-  },0);
+  },1200);
 }
 
 // Tracks whether the current session has older messages that were not
@@ -3192,13 +3193,17 @@ let _messagesTruncated = false;
 // server-bounded and do not consume the visible-message budget.
 // Older messages are loaded on-demand via _loadOlderMessages().
 const _INITIAL_MSG_LIMIT = 30;
-// Frontend-only warm transcript cache. This deliberately lives in page memory
-// rather than CacheStorage/localStorage: session content disappears with the
-// tab, is never available offline, and never bypasses the live metadata/auth
-// request made by loadSession(). Classic and High Signal share loadSession(),
-// so this one bounded cache benefits both views without separate code paths.
+// Frontend-only warm transcript cache. Page memory is mirrored into bounded
+// sessionStorage so a reload in the same tab can reuse recent tails. Content is
+// never placed in CacheStorage/localStorage, disappears when the tab closes,
+// and never bypasses the live metadata/auth request made by loadSession().
+// Classic and High Signal share loadSession(), so this one bounded cache
+// benefits both views without separate code paths.
+const _SESSION_MESSAGE_CACHE_STORAGE_KEY = 'hermesui.session-message-cache.v1';
 const _SESSION_MESSAGE_CACHE_MAX = 5;
 const _SESSION_MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000;
+const _SESSION_MESSAGE_CACHE_STORAGE_MAX_CHARS = 1500000;
+const _SESSION_MESSAGE_CACHE_ENTRY_MAX_CHARS = 350000;
 const _SESSION_MESSAGE_PREFETCH_CONCURRENCY = 2;
 const _SESSION_MESSAGE_CACHE_ROW_MAX = 200;
 const _sessionMessageCache = new Map();
@@ -3245,6 +3250,53 @@ function _sessionMessageCacheBusy(session){
   ));
 }
 
+function _persistSessionMessageCache(){
+  if(typeof sessionStorage==='undefined') return;
+  try{
+    const now=Date.now();
+    const entries=[];
+    for(const [sid,entry] of _sessionMessageCache.entries()){
+      if(!entry||(now-Number(entry.storedAt||0))>_SESSION_MESSAGE_CACHE_TTL_MS) continue;
+      if(!entry.data||!entry.data.session||_sessionMessageCacheBusy(entry.data.session)) continue;
+      const serialized=JSON.stringify([sid,entry]);
+      if(serialized.length>_SESSION_MESSAGE_CACHE_ENTRY_MAX_CHARS) continue;
+      entries.push([sid,entry]);
+    }
+    let payload=JSON.stringify({version:1,entries});
+    while(entries.length&&payload.length>_SESSION_MESSAGE_CACHE_STORAGE_MAX_CHARS){
+      entries.shift();
+      payload=JSON.stringify({version:1,entries});
+    }
+    if(entries.length)sessionStorage.setItem(_SESSION_MESSAGE_CACHE_STORAGE_KEY,payload);
+    else sessionStorage.removeItem(_SESSION_MESSAGE_CACHE_STORAGE_KEY);
+  }catch(_e){}
+}
+
+function _hydrateSessionMessageCache(){
+  if(typeof sessionStorage==='undefined') return;
+  try{
+    const raw=JSON.parse(sessionStorage.getItem(_SESSION_MESSAGE_CACHE_STORAGE_KEY)||'null');
+    const entries=raw&&raw.version===1&&Array.isArray(raw.entries)?raw.entries:[];
+    const now=Date.now();
+    entries.slice(-_SESSION_MESSAGE_CACHE_MAX).forEach(pair=>{
+      const sid=String(pair&&pair[0]||'');
+      const entry=pair&&pair[1];
+      const session=entry&&entry.data&&entry.data.session;
+      if(!sid||!entry||!session||!Array.isArray(session.messages)) return;
+      if(session.messages.length>_SESSION_MESSAGE_CACHE_ROW_MAX||_sessionMessageCacheBusy(session)) return;
+      if((now-Number(entry.storedAt||0))>_SESSION_MESSAGE_CACHE_TTL_MS) return;
+      const serialized=JSON.stringify(pair);
+      if(serialized.length>_SESSION_MESSAGE_CACHE_ENTRY_MAX_CHARS) return;
+      _sessionMessageCache.set(sid,entry);
+    });
+    _persistSessionMessageCache();
+  }catch(_e){
+    try{sessionStorage.removeItem(_SESSION_MESSAGE_CACHE_STORAGE_KEY);}catch(_ignore){}
+  }
+}
+
+_hydrateSessionMessageCache();
+
 function _storeSessionMessageCache(sid,session){
   sid=String(sid||'');
   if(!sid||!session||_sessionMessageCacheBusy(session)) return false;
@@ -3255,18 +3307,23 @@ function _storeSessionMessageCache(sid,session){
   const snapshot=_sessionMessageCacheClone({session});
   if(!snapshot||!snapshot.session||!Array.isArray(snapshot.session.messages)) return false;
   // Refresh insertion order so Map doubles as a tiny LRU.
-  _sessionMessageCache.delete(sid);
-  _sessionMessageCache.set(sid,{
+  const entry={
     storedAt:Date.now(),
     messageCount,
     revision:_sessionMessageCacheRevision(session),
     profile:_sessionMessageCacheProfile(session),
     data:snapshot,
-  });
+  };
+  try{
+    if(JSON.stringify([sid,entry]).length>_SESSION_MESSAGE_CACHE_ENTRY_MAX_CHARS) return false;
+  }catch(_e){return false;}
+  _sessionMessageCache.delete(sid);
+  _sessionMessageCache.set(sid,entry);
   while(_sessionMessageCache.size>_SESSION_MESSAGE_CACHE_MAX){
     const oldest=_sessionMessageCache.keys().next().value;
     _sessionMessageCache.delete(oldest);
   }
+  _persistSessionMessageCache();
   return messages.length===snapshot.session.messages.length;
 }
 
@@ -3289,6 +3346,7 @@ function _freshSessionMessageCacheEntry(sid,metadata){
     : expectedCount!==null&&entry.messageCount===expectedCount;
   if(expired||profileMismatch||_sessionMessageCacheBusy(metadata)||!authorityMatches){
     _sessionMessageCache.delete(sid);
+    _persistSessionMessageCache();
     return null;
   }
   return entry;
@@ -3302,6 +3360,7 @@ function _takeFreshSessionMessageCache(sid,metadata){
   // the reusable cache entry.
   _sessionMessageCache.delete(sid);
   _sessionMessageCache.set(sid,entry);
+  _persistSessionMessageCache();
   return _sessionMessageCacheClone(entry.data);
 }
 
@@ -3318,6 +3377,7 @@ function _hasWarmSessionMessageCache(sid,session){
     : entry.profile!==profile;
   if(expired||profileMismatch||revisionMismatch){
     _sessionMessageCache.delete(sid);
+    _persistSessionMessageCache();
     return false;
   }
   return true;

@@ -8,9 +8,7 @@
      MUST appear before manifest/favicon links so browsers resolve relative URLs against the
      correct base when the page is served from /session/<id> routes. See #2226. -->
 <script>(function(){var path=location.pathname,marker='/session/',i=path.indexOf(marker),p;i>=0?p=(path.slice(0,i+1)||'/'):p=(path.endsWith('/')?path:(path.replace(/\/[^\/]*$/,'/')||'/'));document.write('<base href="'+location.origin+p+'">');})()</script>
-<link rel="icon" type="image/svg+xml" href="static/wizard-hat.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="static/wizard-hat-32.png">
-<link rel="shortcut icon" href="static/wizard-hat.ico">
 <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -129,7 +127,7 @@
     </button>
   </div>
   <div class="app-titlebar-inner">
-    <span class="app-titlebar-icon" aria-hidden="true"><img class="wizard-brand-icon" src="static/wizard-hat.svg" alt="" width="16" height="16"></span>
+    <span class="app-titlebar-icon" aria-hidden="true"><img class="wizard-brand-icon" src="static/wizard-hat-32.png" alt="" width="16" height="16"></span>
     <span class="app-titlebar-title" id="appTitlebarTitle">Hermes</span>
     <span class="app-titlebar-sub" id="appTitlebarSub" hidden></span>
   </div>
@@ -263,7 +261,7 @@
   </section>
   <nav class="rail tailnet-app-rail" id="tailnetAppRail" aria-label="Tailnet apps">
     <a class="rail-btn tailnet-app-link active has-tooltip" id="tailnetAppHome" href="./" data-tooltip="Hermes UI" aria-label="Hermes UI" title="Hermes UI" aria-current="page">
-      <img class="tailnet-app-home-icon" src="static/wizard-hat.svg" alt="" width="34" height="34">
+      <img class="tailnet-app-home-icon" src="static/wizard-hat-32.png" alt="" width="34" height="34">
     </a>
     <button class="rail-btn tailnet-app-link tailnet-notifications-link has-tooltip" id="tailnetNotificationsButton" type="button" data-tailnet-app-id="cron-notifications" aria-label="Notifications" data-tooltip="Notifications">
       <span class="tailnet-app-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg></span>
@@ -652,7 +650,7 @@
         </div>
       </section>
       <div class="empty-state" id="emptyState">
-        <div class="empty-logo"><img class="wizard-brand-mark" src="static/wizard-hat-mark.svg" alt="" role="img" aria-label="Wizard hat" width="88" height="88"></div>
+        <div class="empty-logo"><img class="wizard-brand-mark" src="static/wizard-hat-192.png" alt="" role="img" aria-label="Wizard hat" width="88" height="88"></div>
         <h2 data-i18n="empty_title">What can I help with?</h2>
         <p data-i18n="empty_subtitle">Ask anything, run commands, explore files, or manage your scheduled tasks.</p>
         <div class="suggestion-grid">
@@ -2027,14 +2025,14 @@
 <script src="static/ui.js?v=__WEBUI_VERSION__&tab-polish=v1&recovery-filter=v2&background-resume=v1&classic-duration=v1" defer></script>
 <script src="static/workspace.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/terminal.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/sessions.js?v=__WEBUI_VERSION__&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1" defer></script>
+<script src="static/sessions.js?v=__WEBUI_VERSION__&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1&performance-cache=v1" defer></script>
 <script src="static/commands.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/messages.js?v=__WEBUI_VERSION__&tab-polish=v1&recovery-filter=v2" defer></script>
 <script src="static/extension_settings.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/panels.js?v=__WEBUI_VERSION__&cron-notifications=v3&high-signal-model=v1&cron-modal=v1&human-cron=v1&scheduled-dashboard=v1" defer></script>
 <script src="static/session-dashboard.js?v=__WEBUI_VERSION__&tab-polish=v1&high-signal-model=v6&high-signal-history=v1&background-resume=v1&mode-rail=v1&summary-trust=v1&high-signal-toggle=v1" defer></script>
 <script src="static/session-swipe-navigation.js?v=__WEBUI_VERSION__&labeled-adjacent-tabs=v1" defer></script>
-<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1" defer></script>
+<script src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1" defer></script>
 <script src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3&semantic-icons=v1" defer></script>
 <script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/boot.js?v=__WEBUI_VERSION__&tab-polish=v1" defer></script>

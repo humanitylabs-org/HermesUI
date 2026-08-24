@@ -12,6 +12,7 @@
   const BROWSER_FALLBACK_DELAY_MS=3000;
   const NOTIFICATIONS_ID='cron-notifications';
   const NOTIFICATION_STATE_KEY='hermesui.cron-notifications.v1';
+  const NOTIFICATION_ITEMS_CACHE_KEY='hermesui.cron-notification-items.v1';
   const THEME_STORAGE_KEY='hermes-theme';
   const MOBILE_RAIL_STORAGE_KEY='hermesui.mobile-rail.v1';
   const NOTIFICATION_OUTPUT_LIMIT=4;
@@ -138,7 +139,9 @@
   let bookmarkServerAvailable=false;
   let bookmarkSyncPromise=Promise.resolve();
   let notificationState=readNotificationState();
-  let notificationItems=new Map();
+  let cachedNotifications=readNotificationItems();
+  let notificationItems=cachedNotifications.items;
+  let notificationWatermarks=cachedNotifications.watermarks;
   let notificationsLoading=false;
   let notificationFilter='unread';
   let notificationsMode='notifications';
@@ -666,6 +669,55 @@
     }catch(_){}
   }
 
+  function readNotificationItems(){
+    const items=new Map();
+    const watermarks={};
+    try{
+      const raw=JSON.parse(sessionStorage.getItem(NOTIFICATION_ITEMS_CACHE_KEY)||'null');
+      const rows=raw&&raw.version===1&&Array.isArray(raw.items)?raw.items:[];
+      rows.slice(0,NOTIFICATION_LIST_LIMIT).forEach(item=>{
+        const key=String(item&&item.key||'');
+        const jobId=String(item&&item.jobId||'');
+        const modified=Number(item&&item.modified);
+        const response=String(item&&item.response||'').slice(0,8000);
+        if(!key||!jobId||!Number.isFinite(modified)||!response)return;
+        items.set(key,{
+          key,jobId,
+          name:String(item.name||jobId).slice(0,120),
+          filename:String(item.filename||'').slice(0,240),
+          modified,
+          status:item.status==='error'?'error':'ok',
+          response,
+          sourceSessionId:String(item.sourceSessionId||''),
+          contextMode:item.contextMode==='full'?'full':'output'
+        });
+      });
+      if(raw&&raw.watermarks&&typeof raw.watermarks==='object'){
+        Object.entries(raw.watermarks).slice(-100).forEach(([jobId,value])=>{
+          const stamp=Number(value);
+          if(jobId&&Number.isFinite(stamp)&&stamp>0)watermarks[jobId]=stamp;
+        });
+      }
+    }catch(_){}
+    return {items,watermarks};
+  }
+
+  function writeNotificationItems(){
+    try{
+      const items=Array.from(notificationItems.values())
+        .sort((left,right)=>right.modified-left.modified)
+        .slice(0,NOTIFICATION_LIST_LIMIT);
+      const watermarks={};
+      Object.entries(notificationWatermarks)
+        .sort(([,left],[,right])=>Number(right)-Number(left))
+        .slice(0,100)
+        .forEach(([jobId,value])=>{
+          if(Number.isFinite(Number(value)))watermarks[jobId]=Number(value);
+        });
+      sessionStorage.setItem(NOTIFICATION_ITEMS_CACHE_KEY,JSON.stringify({version:1,items,watermarks}));
+    }catch(_){}
+  }
+
   function notificationReadCutoff(jobId){
     return Math.max(Number(notificationState.readThrough)||0,Number(notificationState.readJobs[jobId])||0);
   }
@@ -899,6 +951,13 @@
     }catch(_){return new Map();}
   }
 
+  function cronNotificationWatermark(job,latestSessions){
+    const lastRun=Date.parse(job&&job.last_run_at||'')/1000;
+    const recent=latestSessions.get(String(job&&job.id||''));
+    const completed=Number(recent&&recent.completed_at)||0;
+    return Math.max(Number.isFinite(lastRun)?lastRun:0,completed);
+  }
+
   async function fetchCronNotificationOutputs(job,latestSessions=new Map()){
     const payload=await api(`/api/crons/output?job_id=${encodeURIComponent(job.id)}&limit=${NOTIFICATION_OUTPUT_LIMIT}`);
     const outputs=Array.isArray(payload&&payload.outputs)?payload.outputs:[];
@@ -1022,27 +1081,48 @@
     });
   }
 
-  async function loadCronNotifications({jobIds=null}={}){
+  async function loadCronNotifications({jobIds=null,fullRefresh=false}={}){
     if(notificationsLoading)return;
     notificationsLoading=true;
     if(notificationsStatus&&!notificationItems.size)notificationsStatus.textContent='Loading…';
     try{
       const [jobs,latestSessions]=await Promise.all([fetchCronNotificationJobs(),fetchLatestCronSessions()]);
       const ids=jobIds?new Set(jobIds.map(String)):null;
-      const selected=ids?jobs.filter(job=>ids.has(String(job.id))):jobs;
-      if(!ids)notificationItems.clear();
+      const liveIds=new Set(jobs.map(job=>String(job.id)));
+      Array.from(notificationItems.entries()).forEach(([key,item])=>{
+        if(!liveIds.has(item.jobId))notificationItems.delete(key);
+      });
+      Object.keys(notificationWatermarks).forEach(jobId=>{
+        if(!liveIds.has(jobId))delete notificationWatermarks[jobId];
+      });
+      const selected=ids
+        ?jobs.filter(job=>ids.has(String(job.id)))
+        :fullRefresh
+          ?jobs
+          :jobs.filter(job=>cronNotificationWatermark(job,latestSessions)>Number(notificationWatermarks[String(job.id)]||0));
       const batches=await mapWithConcurrency(selected,4,job=>fetchCronNotificationOutputs(job,latestSessions));
       selected.forEach(job=>{
         const prefix=`${job.id}:`;
         Array.from(notificationItems.keys()).forEach(key=>{if(key.startsWith(prefix))notificationItems.delete(key);});
+        notificationWatermarks[String(job.id)]=cronNotificationWatermark(job,latestSessions)||Date.now()/1000;
       });
       batches.flat().forEach(item=>notificationItems.set(item.key,item));
+      writeNotificationItems();
     }catch(_){
       if(notificationsStatus)notificationsStatus.textContent='Notifications are unavailable right now.';
     }finally{
       notificationsLoading=false;
       renderCronNotifications();
     }
+  }
+
+  function scheduleNotificationRefresh(){
+    if(!notificationItems.size)return;
+    setTimeout(()=>{
+      const refresh=()=>{if(!document.hidden)void loadCronNotifications();};
+      if(typeof requestIdleCallback==='function')requestIdleCallback(refresh,{timeout:4000});
+      else refresh();
+    },1500);
   }
 
   function scheduledStatusMeta(job){
@@ -2052,7 +2132,7 @@
     notificationsMode='notifications';
     syncNotificationsModeControls();
     setNotificationFilter('unread');
-    void loadCronNotifications();
+    void loadCronNotifications({fullRefresh:!notificationItems.size});
   }
 
   function closeSessionsOverlay(){
@@ -2732,8 +2812,8 @@
     try{remembered=sessionStorage.getItem(STORAGE_KEY)||'';}catch(_){}
     if(remembered&&appsById.has(remembered))activateApp(appsById.get(remembered));
     else activateHermes({remember:false});
-    setNotificationsBadge(0);
-    void loadCronNotifications();
+    renderCronNotifications();
+    scheduleNotificationRefresh();
     const desktopHomeMedia=window.matchMedia('(min-width:901px)');
     const syncHomeAcrossBreakpoint=()=>{if(!activeId)activateHermes({remember:false});};
     if(typeof desktopHomeMedia.addEventListener==='function')desktopHomeMedia.addEventListener('change',syncHomeAcrossBreakpoint);

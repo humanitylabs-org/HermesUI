@@ -15,7 +15,8 @@ SESSIONS_JS = (ROOT / "static" / "sessions.js").read_text(encoding="utf-8")
 def test_share_page_constructs_absolute_mounted_assets_before_loading_them() -> None:
     assert "path.lastIndexOf(marker)" in SHARE_HTML
     assert "window.__HERMES_SHARE_APP_ROOT__=root" in SHARE_HTML
-    assert "'+root+'static/wizard-hat.svg" in SHARE_HTML
+    assert "'+root+'static/wizard-hat-32.png" in SHARE_HTML
+    assert "root+'static/wizard-hat-192.png'" in SHARE_HTML
     assert "'+root+'static/style.css" in SHARE_HTML
     assert "'+root+'static/ui.js" in SHARE_HTML
     assert "'+root+'static/share.js" in SHARE_HTML

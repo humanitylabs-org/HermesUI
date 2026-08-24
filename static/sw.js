@@ -11,6 +11,8 @@
 // changes the worker bytes so hot frontend deployments refresh an existing
 // process's shell cache without interrupting active agent runs. The private-app
 // rail marker keeps the visible selector limited to installed private apps.
+// performance-cache-v1 serves immutable versioned shell bytes immediately and
+// refreshes the same exact URL in the background.
 const CACHE_NAME = 'hermes-shell-__WEBUI_VERSION__';
 
 // Static assets that form the app shell.
@@ -32,9 +34,9 @@ const SHELL_ASSETS = [
   './static/assistant_turn_anchors.js' + VQ,
   './static/ui.js' + VQ + '&tab-polish=v1&recovery-filter=v2&background-resume=v1&classic-duration=v1',
   './static/messages.js' + VQ + '&tab-polish=v1&recovery-filter=v2',
-  './static/sessions.js' + VQ + '&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1',
+  './static/sessions.js' + VQ + '&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1&performance-cache=v1',
   './static/session-swipe-navigation.js' + VQ + '&labeled-adjacent-tabs=v1',
-  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1',
+  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1',
   './static/tailnet-app-manager.js' + VQ + '&cron-notifications=v3&semantic-icons=v1',
   './static/panels.js' + VQ + '&cron-notifications=v3&high-signal-model=v1&cron-modal=v1&human-cron=v1&scheduled-dashboard=v1',
   './static/commands.js' + VQ,
@@ -47,15 +49,8 @@ const SHELL_ASSETS = [
   './static/vendor/smd.min.js' + VQ,
   './static/vendor/katex/0.16.22/katex.min.css' + VQ,
   './static/vendor/katex/0.16.22/katex.min.js' + VQ,
-  './static/wizard-hat.svg',
-  './static/wizard-hat-mark.svg',
   './static/wizard-hat-32.png',
   './static/wizard-hat-192.png',
-  './static/wizard-hat-512.png',
-  './static/wizard-hat-maskable-192.png',
-  './static/wizard-hat-maskable-512.png',
-  './static/wizard-hat-apple-touch.png',
-  './static/wizard-hat.ico',
   './manifest.json',
 ];
 
@@ -95,7 +90,7 @@ self.addEventListener('activate', (event) => {
 // - API calls (/api/*, /stream) → always network (never cache)
 // - Login assets → always network (never cache stale auth code)
 // - Page navigations → network-first so auth redirects/cookies are honored
-// - Shell assets → network-first with cache fallback
+// - Versioned shell assets → cached immediately, revalidated in background
 // - Everything else → network-only
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
@@ -168,23 +163,26 @@ self.addEventListener('fetch', (event) => {
   const shellPath = './' + relPath.replace(/^\/+/, '') + url.search;
   if (!SHELL_ASSETS.includes(shellPath)) return;
 
-  // Shell assets: network-first with cache fallback. This keeps offline support
-  // but avoids executing stale JS/CSS after a local hotfix when WEBUI_VERSION
-  // has not changed yet (e.g. before a guarded restart updates the ?v token).
+  // Shell assets: network-first with cache fallback was the previous policy.
+  // stale-while-revalidate is safe here because every JS/CSS request carries
+  // the git version in its exact URL, so a deployment naturally misses the old
+  // cache. Repeat visits get current cached bytes without a network round-trip,
+  // while the same URL refreshes in the background for local same-version fixes.
+  const refresh = fetch(new Request(event.request, { cache: 'no-store' })).then((response) => {
+    if (event.request.method === 'GET' && response.status === 200) {
+      const clone = response.clone();
+      caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+    }
+    return response;
+  }).catch(() => caches.match(event.request).then((cached) => (
+    cached || Promise.reject(new Error('shell unavailable'))
+  )));
+  event.waitUntil(refresh.then(() => undefined, () => undefined));
   event.respondWith(
-    fetch(new Request(event.request, { cache: 'no-store' })).then((response) => {
-      if (
-        event.request.method === 'GET' &&
-        response.status === 200
-      ) {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-      }
-      return response;
-    }).catch(() => caches.match(event.request).then((cached) => cached || new Response('Offline', {
+    caches.match(event.request).then((cached) => cached || refresh).catch(() => new Response('Offline', {
       status: 503,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    })))
+    }))
   );
 });
 
