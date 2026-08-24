@@ -47,7 +47,7 @@ process.stdout.write(JSON.stringify(result));
 
 def test_old_webui_panel_tabs_are_not_in_the_desktop_rail():
     rail = _rail_markup()
-    assert 'aria-label="Wizard OS apps"' in rail
+    assert 'aria-label="Tailnet apps"' in rail
     assert "data-panel=" not in rail
     assert "switchPanel(" not in rail
 
@@ -149,7 +149,7 @@ def test_mobile_bottom_menu_owns_sessions_notifications_and_utilities():
     assert 'data-mobile-utility="settings"' in INDEX
     assert '.tailnet-app-controls{display:none;}' in CSS
     assert '#tailnetNotificationsButton{display:none;}' in CSS
-    assert '.mobile-primary-menu{position:fixed;z-index:220;left:0;right:48px;bottom:0;display:grid;' in CSS
+    assert '.mobile-primary-menu{position:fixed;z-index:220;left:0;right:var(--mobile-rail-w);bottom:0;display:grid;' in CSS
     assert 'grid-template-columns:repeat(3,minmax(0,1fr))' in CSS
     assert 'bottom:calc(64px + env(safe-area-inset-bottom,0px))' in CSS
     assert "activateHermes();\n      if(typeof window.openMobileSessionPage==='function')window.openMobileSessionPage();" in JS
@@ -160,8 +160,8 @@ def test_mobile_bottom_menu_owns_sessions_notifications_and_utilities():
     assert "window.innerWidth>640" in JS
     sw_style = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     sw_rail = next(line for line in SW.splitlines() if "'./static/tailnet-app-rail.js' + VQ" in line)
-    assert '&mobile-bottom-menu=v1' in sw_style
-    assert '&mobile-bottom-menu=v1' in sw_rail
+    assert '&mobile-bottom-menu=v1&mobile-collapsible-rail=v1' in sw_style
+    assert '&mobile-bottom-menu=v1&mobile-collapsible-rail=v1' in sw_rail
 
 
 def test_cron_notification_rows_are_compact_full_row_disclosures():
@@ -538,20 +538,22 @@ def test_external_app_is_the_only_mobile_content_beside_the_persistent_selector(
 
 def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page():
     assert (
-        '.rail.tailnet-app-rail{position:fixed;left:auto;right:0;top:0;bottom:0;width:48px;'
+        '.rail.tailnet-app-rail{position:fixed;left:auto;right:0;top:0;bottom:0;width:calc(56px + env(safe-area-inset-right,0px));'
         'height:100%;height:100dvh;box-sizing:border-box;'
         in CSS
     )
-    assert '.layout{margin-left:0;margin-right:48px;width:calc(100% - 48px);}' in CSS
+    assert ':root{--mobile-rail-w:calc(56px + env(safe-area-inset-right,0px));}' in CSS
+    assert 'html[data-mobile-rail="collapsed"]{--mobile-rail-w:0px;}' in CSS
+    assert '.layout{margin-left:0;margin-right:var(--mobile-rail-w);width:calc(100% - var(--mobile-rail-w));}' in CSS
     assert (
         'html:not([data-tailnet-view="external"]) .app-titlebar{'
-        'margin-left:0;margin-right:48px;width:calc(100% - 48px);box-sizing:border-box;}'
+        'margin-left:0;margin-right:var(--mobile-rail-w);width:calc(100% - var(--mobile-rail-w));box-sizing:border-box;}'
         in CSS
     )
     assert (
         'html:not([data-tailnet-view="external"]) .sidebar{left:0;right:auto;'
         'bottom:calc(58px + env(safe-area-inset-bottom,0px));'
-        'width:calc(100vw - 48px);transform:translateX(-100%);}'
+        'width:calc(100vw - var(--mobile-rail-w));transform:translateX(-100%);}'
         in CSS
     )
     assert (
@@ -572,13 +574,16 @@ def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page(
     assert 'html[data-mobile-session-view="sessions"] .app-titlebar{display:none!important;}' in CSS
     assert '.sidebar.mobile-session-page .mobile-sidebar-close{display:none!important;}' in CSS
     assert '.sidebar.mobile-session-page .panel-view{margin-left:0;}' in CSS
-    assert '.rail.tailnet-app-rail{border-right:0;border-left:1px solid var(--border);}' in CSS
+    assert 'html[data-mobile-rail="collapsed"] .rail.tailnet-app-rail{transform:translateX(100%);visibility:hidden;pointer-events:none;' in CSS
+    assert '#tailnetAppHome{display:none;}' in CSS
+    assert '.tailnet-app-groups{justify-content:center;justify-content:safe center;' in CSS
+    assert '.rail.tailnet-app-rail .rail-btn,.rail.tailnet-app-rail .tailnet-app-add{width:44px;height:44px;' in CSS
     assert '.rail.tailnet-app-rail .rail-btn.active{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 55%,transparent);}' in CSS
     assert '.rail.tailnet-app-rail .rail-btn.active::before' not in CSS
     assert '.rail .nav-tab.active::before' not in CSS
     assert '.rail.tailnet-app-rail .rail-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}' in CSS
-    assert '.tailnet-scheduled-job-menu{position:fixed;z-index:100;top:auto;right:60px;bottom:calc(70px + env(safe-area-inset-bottom));' in CSS
-    assert '.toast{right:60px;left:12px;' in CSS
+    assert '.tailnet-scheduled-job-menu{position:fixed;z-index:100;top:auto;right:calc(var(--mobile-rail-w,48px) + 12px);bottom:calc(70px + env(safe-area-inset-bottom));' in CSS
+    assert '.toast{right:calc(var(--mobile-rail-w) + 12px);left:12px;' in CSS
 
 
 def test_rail_tooltips_and_bookmark_actions_flip_away_from_the_right_edge():
@@ -587,7 +592,7 @@ def test_rail_tooltips_and_bookmark_actions_flip_away_from_the_right_edge():
     assert "anchorX>window.innerWidth/2" in JS
 
 
-def test_mobile_right_rail_home_remains_a_destination_without_menu_redundancy():
+def test_mobile_right_rail_is_collapsible_and_hides_redundant_home():
     rail = _rail_markup()
     assert 'class="tailnet-app-home-icon"' in rail
     assert 'class="tailnet-app-home-menu-icon"' not in rail
@@ -597,12 +602,21 @@ def test_mobile_right_rail_home_remains_a_destination_without_menu_redundancy():
     assert "home.addEventListener('click',event=>{\n      event.preventDefault();\n      activateHermes();" in JS
     assert 'id="mobileSessionsButton"' not in rail
     assert 'id="mobileNotificationsButton"' not in rail
+    assert 'id="mobileRailHandle"' in INDEX
+    assert 'aria-controls="tailnetAppRail"' in INDEX
+    assert "const MOBILE_RAIL_STORAGE_KEY='hermesui.mobile-rail.v1'" in JS
+    assert "appRail.inert=collapsed" in JS
+    assert "localStorage.setItem(MOBILE_RAIL_STORAGE_KEY,next?'collapsed':'expanded')" in JS
+    assert "mobileRailHandle.setAttribute('aria-label',collapsed?'Show apps':'Hide apps')" in JS
+    assert "document.dispatchEvent(new CustomEvent('hermesui:mobile-rail-changed'" in JS
+    assert '.mobile-rail-handle{appearance:none;position:fixed;z-index:245;top:50%;right:var(--mobile-rail-w);' in CSS
+    assert 'html[data-mobile-rail="collapsed"] .mobile-rail-handle svg{transform:rotate(180deg);}' in CSS
 
 
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v7&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1"'
         in INDEX
     )
     assert (

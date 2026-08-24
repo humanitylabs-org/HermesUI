@@ -230,13 +230,13 @@ def test_notifications_layout_is_compact_responsive_and_thread_composer_stays_be
     assert ".tailnet-scheduled-job{display:block;min-height:44px" in STYLE
     assert ".tailnet-notification-thread-pinned{height:190px;max-height:190px;}" in STYLE
     assert ".tailnet-scheduled-job-more{" not in STYLE
-    assert "right:60px" in STYLE
+    assert "right:calc(var(--mobile-rail-w,48px) + 12px)" in STYLE
     assert "top:32px" in STYLE
 
 
 def test_active_frequency_assets_share_one_cache_identity():
-    style_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1"
-    rail_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1"
+    style_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1"
+    rail_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1"
     index_style = next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
     sw_style = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     index_rail = next(line for line in INDEX.splitlines() if "static/tailnet-app-rail.js?v=" in line)

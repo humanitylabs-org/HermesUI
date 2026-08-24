@@ -13,6 +13,7 @@
   const NOTIFICATIONS_ID='cron-notifications';
   const NOTIFICATION_STATE_KEY='hermesui.cron-notifications.v1';
   const THEME_STORAGE_KEY='hermes-theme';
+  const MOBILE_RAIL_STORAGE_KEY='hermesui.mobile-rail.v1';
   const NOTIFICATION_OUTPUT_LIMIT=4;
   const NOTIFICATION_LIST_LIMIT=40;
   const SCHEDULED_JOB_LONG_PRESS_MS=450;
@@ -96,6 +97,8 @@
   const notificationThreadModelDropdown=document.getElementById('tailnetNotificationThreadModelDropdown');
   const notificationThreadStatus=document.getElementById('tailnetNotificationThreadStatus');
   const home=document.getElementById('tailnetAppHome');
+  const appRail=document.getElementById('tailnetAppRail');
+  const mobileRailHandle=document.getElementById('mobileRailHandle');
   const themeToggle=document.getElementById('tailnetThemeToggle');
   const mobileSessionsButton=document.getElementById('mobileSessionsButton');
   const mobileNotificationsButton=document.getElementById('mobileNotificationsButton');
@@ -300,6 +303,48 @@
       activateNotifications();
     });
     syncMobilePrimaryMenu();
+  }
+
+  function mobileRailIsCollapsed(){
+    return root.dataset.mobileRail==='collapsed';
+  }
+
+  function syncMobileRail(){
+    if(!appRail||!mobileRailHandle)return;
+    const collapsed=isPhoneWidth()&&mobileRailIsCollapsed();
+    appRail.inert=collapsed;
+    if(collapsed)appRail.setAttribute('aria-hidden','true');
+    else appRail.removeAttribute('aria-hidden');
+    mobileRailHandle.setAttribute('aria-expanded',String(!collapsed));
+    mobileRailHandle.setAttribute('aria-label',collapsed?'Show apps':'Hide apps');
+    mobileRailHandle.title=collapsed?'Show apps':'Hide apps';
+  }
+
+  function setMobileRailCollapsed(collapsed,{persist=true,focusApps=false}={}){
+    if(!isPhoneWidth())return;
+    const next=!!collapsed;
+    root.dataset.mobileRail=next?'collapsed':'expanded';
+    if(persist){
+      try{localStorage.setItem(MOBILE_RAIL_STORAGE_KEY,next?'collapsed':'expanded');}catch(_){}
+    }
+    if(next&&appRail&&appRail.contains(document.activeElement)&&mobileRailHandle){
+      mobileRailHandle.focus({preventScroll:true});
+    }
+    syncMobileRail();
+    if(!next&&focusApps){
+      requestAnimationFrame(()=>{
+        const first=appRail&&appRail.querySelector('#tailnetAppLinks .rail-btn:not([hidden]),#tailnetPrivateManager:not([hidden]),#tailnetPrivateAdd:not([hidden])');
+        if(first&&isPhoneWidth()&&!mobileRailIsCollapsed())first.focus({preventScroll:true});
+      });
+    }
+    document.dispatchEvent(new CustomEvent('hermesui:mobile-rail-changed',{detail:{collapsed:next}}));
+  }
+
+  function bindMobileRail(){
+    if(!appRail||!mobileRailHandle)return;
+    mobileRailHandle.addEventListener('click',()=>setMobileRailCollapsed(!mobileRailIsCollapsed(),{focusApps:mobileRailIsCollapsed()}));
+    window.addEventListener('resize',syncMobileRail,{passive:true});
+    syncMobileRail();
   }
 
 
@@ -2578,6 +2623,7 @@
     });
     notificationsButton.addEventListener('click',activateNotifications);
     bindMobilePrimaryMenu();
+    bindMobileRail();
     if(themeToggle)themeToggle.addEventListener('click',toggleShellTheme);
     bindMobileUtilities();
     if(wizardCanvasFrame)wizardCanvasFrame.addEventListener('load',sendThemeToWizardCanvas);
