@@ -36,7 +36,7 @@ const SHELL_ASSETS = [
   './static/messages.js' + VQ + '&tab-polish=v1&recovery-filter=v2',
   './static/sessions.js' + VQ + '&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1&performance-cache=v1',
   './static/session-swipe-navigation.js' + VQ + '&labeled-adjacent-tabs=v1',
-  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1',
+  './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1',
   './static/tailnet-app-manager.js' + VQ + '&cron-notifications=v3&semantic-icons=v1',
   './static/panels.js' + VQ + '&cron-notifications=v3&high-signal-model=v1&cron-modal=v1&human-cron=v1&scheduled-dashboard=v1',
   './static/commands.js' + VQ,

@@ -157,6 +157,8 @@
   let notificationThreadStream=null;
   let notificationThreadStreamId='';
   let notificationThreadDraft='';
+  let notificationThreadLiveMessages=[];
+  let notificationThreadClarify=null;
   let notificationThreadFiles=[];
   let notificationThreadModel={model:'',model_provider:null};
   let notificationThreadModelExplicit=false;
@@ -903,6 +905,8 @@
     }
     notificationThreadStreamId='';
     notificationThreadDraft='';
+    notificationThreadLiveMessages=[];
+    notificationThreadClarify=null;
     notificationThreadItem=null;
     notificationThreadSession=null;
     notificationThreadBaseMessages=[];
@@ -1707,39 +1711,130 @@
     return count;
   }
 
+  function projectNotificationThreadStreamEvent(state,eventName,payload){
+    const next={
+      draft:String(state&&state.draft||''),
+      liveMessages:Array.isArray(state&&state.liveMessages)?[...state.liveMessages]:[],
+      clarify:state&&state.clarify||null,
+      status:String(state&&state.status||'Working…')
+    };
+    const data=payload&&typeof payload==='object'?payload:{};
+    if(eventName==='token'){
+      next.draft+=String(data.text||'');
+      next.status='Working…';
+    }else if(eventName==='interim_assistant'){
+      const text=String(data.text||'').trim();
+      if(text&&!data.already_streamed&&next.liveMessages[next.liveMessages.length-1]!==text)next.liveMessages.push(text);
+      next.status='Working…';
+    }else if(eventName==='clarify'){
+      const rawChoices=Array.isArray(data.choices_offered)?data.choices_offered:(Array.isArray(data.choices)?data.choices:[]);
+      next.clarify={
+        question:String(data.question||data.description||'Clarification needed'),
+        choices:rawChoices.map(String),
+        clarify_id:String(data.clarify_id||''),
+        responding:false
+      };
+      next.status='Needs your input';
+    }else if(eventName==='reasoning'){
+      next.status='Thinking…';
+    }else if(['tool','tool_start','tool_complete'].includes(eventName)){
+      next.status='Working…';
+    }
+    return next;
+  }
+
+  function appendNotificationThreadMessage(role,text,{live=false}={}){
+    const row=document.createElement('article');
+    row.className=`tailnet-notification-thread-message is-${role}${live?' is-live':''}`;
+    const label=document.createElement('span');
+    label.textContent=role==='user'?'You':'Wizard';
+    const body=document.createElement('div');
+    body.className='msg-body';
+    try{body.innerHTML=typeof renderMd==='function'?renderMd(text):text;}catch(_){body.textContent=text;}
+    row.append(label,body);
+    notificationThreadMessages.appendChild(row);
+    return {row,body};
+  }
+
   function renderThreadMessages(){
     if(!notificationThreadMessages)return;
     notificationThreadMessages.replaceChildren();
     const allMessages=Array.isArray(notificationThreadSession&&notificationThreadSession.messages)?notificationThreadSession.messages:[];
     const messages=allMessages.slice(notificationThreadBaseMessages.length).filter(message=>message&&['user','assistant'].includes(message.role));
-    if(!messages.length&&!notificationThreadDraft){
+    if(!messages.length&&!notificationThreadLiveMessages.length&&!notificationThreadDraft&&!notificationThreadClarify){
       const empty=document.createElement('p');
       empty.className='tailnet-notification-thread-empty';
       empty.textContent='Reply here without leaving Notifications.';
       notificationThreadMessages.appendChild(empty);
     }
     messages.forEach(message=>{
-      const row=document.createElement('article');
-      row.className=`tailnet-notification-thread-message is-${message.role}`;
-      const label=document.createElement('span');
-      label.textContent=message.role==='user'?'You':'Wizard';
-      const body=document.createElement('div');
-      body.className='msg-body';
       const text=message.role==='user'?stripNotificationContext(threadMessageText(message)):threadMessageText(message);
-      try{body.innerHTML=typeof renderMd==='function'?renderMd(text):text;}catch(_){body.textContent=text;}
-      row.append(label,body);
-      notificationThreadMessages.appendChild(row);
+      appendNotificationThreadMessage(message.role,text);
     });
-    if(notificationThreadDraft){
-      const row=document.createElement('article');
-      row.className='tailnet-notification-thread-message is-assistant is-live';
-      const label=document.createElement('span');
-      label.textContent='Wizard';
-      const body=document.createElement('div');
-      body.className='msg-body';
-      try{body.innerHTML=typeof renderMd==='function'?renderMd(notificationThreadDraft):notificationThreadDraft;}catch(_){body.textContent=notificationThreadDraft;}
-      row.append(label,body);
-      notificationThreadMessages.appendChild(row);
+    notificationThreadLiveMessages.forEach(text=>appendNotificationThreadMessage('assistant',text,{live:true}));
+    if(notificationThreadDraft)appendNotificationThreadMessage('assistant',notificationThreadDraft,{live:true});
+    if(notificationThreadClarify){
+      const pending=notificationThreadClarify;
+      const responding=!!pending.responding;
+      const {body}=appendNotificationThreadMessage('assistant','',{live:true});
+      body.classList.add('tailnet-notification-thread-clarify');
+      const question=document.createElement('div');
+      question.className='clarify-question';
+      question.textContent=pending.question||'Clarification needed';
+      const choices=document.createElement('div');
+      choices.className='clarify-choices';
+      const offered=Array.isArray(pending.choices)?pending.choices:[];
+      offered.forEach((choice,index)=>{
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='clarify-choice';
+        button.disabled=responding;
+        const badge=document.createElement('span');
+        badge.className='clarify-choice-badge';
+        badge.textContent=String(index+1);
+        const label=document.createElement('span');
+        label.className='clarify-choice-text';
+        label.textContent=choice;
+        button.append(badge,label);
+        button.addEventListener('click',()=>void respondNotificationThreadClarify(choice));
+        choices.appendChild(button);
+      });
+      const other=document.createElement('button');
+      other.type='button';
+      other.className='clarify-choice other';
+      other.disabled=responding;
+      const otherBadge=document.createElement('span');
+      otherBadge.className='clarify-choice-badge';
+      otherBadge.textContent='•';
+      const otherText=document.createElement('span');
+      otherText.className='clarify-choice-text';
+      otherText.textContent='Other';
+      other.append(otherBadge,otherText);
+      choices.appendChild(other);
+      const response=document.createElement('div');
+      response.className='clarify-response';
+      const input=document.createElement('input');
+      input.className='clarify-input';
+      input.type='text';
+      input.autocomplete='off';
+      input.placeholder='Type your response…';
+      input.disabled=responding;
+      const submit=document.createElement('button');
+      submit.type='button';
+      submit.className='clarify-submit';
+      submit.textContent=responding?'Responding…':'Send';
+      submit.disabled=responding;
+      const send=()=>void respondNotificationThreadClarify(input.value);
+      other.addEventListener('click',()=>input.focus());
+      submit.addEventListener('click',send);
+      input.addEventListener('keydown',event=>{
+        if(event.key==='Enter'){
+          event.preventDefault();
+          send();
+        }
+      });
+      response.append(input,submit);
+      body.replaceChildren(question,choices,response);
     }
     notificationThreadMessages.scrollTop=notificationThreadMessages.scrollHeight;
     if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>{
@@ -1970,6 +2065,8 @@
     notificationThreadBaseMessages=[];
     notificationThreadSource=null;
     notificationThreadDraft='';
+    notificationThreadLiveMessages=[];
+    notificationThreadClarify=null;
     notificationThreadFiles=[];
     notificationThreadModel={model:'',model_provider:null};
     notificationThreadModelExplicit=false;
@@ -1999,6 +2096,63 @@
     }
   }
 
+  function applyNotificationThreadStreamEvent(eventName,event){
+    let payload={};
+    try{payload=JSON.parse(event&&event.data||'{}');}catch(_){}
+    const next=projectNotificationThreadStreamEvent({
+      draft:notificationThreadDraft,
+      liveMessages:notificationThreadLiveMessages,
+      clarify:notificationThreadClarify,
+      status:String(notificationThreadStatus&&notificationThreadStatus.textContent||'Working…')
+    },eventName,payload);
+    notificationThreadDraft=next.draft;
+    notificationThreadLiveMessages=next.liveMessages;
+    notificationThreadClarify=next.clarify;
+    renderThreadMessages();
+    setThreadBusy(true,next.status);
+  }
+
+  async function respondNotificationThreadClarify(response){
+    const pending=notificationThreadClarify;
+    const sid=String(notificationThreadSession&&notificationThreadSession.session_id||'');
+    const value=String(response||'').trim();
+    if(!pending||!sid||!value||pending.responding)return;
+    const clarifyId=String(pending.clarify_id||'');
+    notificationThreadClarify={...pending,responding:true};
+    renderThreadMessages();
+    setThreadBusy(true,'Responding…');
+    try{
+      const result=await api('/api/clarify/respond',{
+        method:'POST',
+        body:JSON.stringify({session_id:sid,response:value,clarify_id:clarifyId})
+      });
+      if(!result||!result.ok)throw new Error(result&&result.error||'Clarification response was not accepted');
+      if(notificationThreadClarify&&String(notificationThreadClarify.clarify_id||'')===clarifyId){
+        notificationThreadClarify=null;
+        if(notificationThreadSession&&notificationThreadSession.session_id===sid){
+          notificationThreadSession.messages=Array.isArray(notificationThreadSession.messages)?notificationThreadSession.messages:[];
+          notificationThreadSession.messages.push({role:'user',content:value,_clarify_response:true});
+        }
+        renderThreadMessages();
+        setThreadBusy(true,'Working…');
+      }
+    }catch(error){
+      const same=notificationThreadClarify&&String(notificationThreadClarify.clarify_id||'')===clarifyId;
+      if(error&&error.status===409&&same){
+        notificationThreadClarify=null;
+        renderThreadMessages();
+        setThreadBusy(true,'Working…');
+        if(typeof showToast==='function')showToast('Clarification expired; the thread has been refreshed.',4000);
+        void loadReplySessionTranscript(sid,{attach:false}).catch(()=>{});
+        return;
+      }
+      if(same)notificationThreadClarify={...notificationThreadClarify,responding:false};
+      renderThreadMessages();
+      setThreadBusy(true,'Needs your input');
+      if(typeof showToast==='function')showToast(`Clarification failed: ${error.message||error}`,4000);
+    }
+  }
+
   function attachNotificationThreadStream(streamId){
     const id=String(streamId||'');
     if(!id)return;
@@ -2006,10 +2160,21 @@
     if(notificationThreadStream)notificationThreadStream.close();
     notificationThreadStreamId=id;
     notificationThreadDraft='';
+    notificationThreadLiveMessages=[];
+    notificationThreadClarify=null;
     setThreadBusy(true,'Working…');
     const source=new EventSource(new URL(`api/chat/stream?stream_id=${encodeURIComponent(id)}`,document.baseURI||location.href).href,{withCredentials:true});
     notificationThreadStream=source;
     let terminal=false;
+    const seenEventIds=new Set();
+    const listen=(eventName,handler)=>{
+      source.addEventListener(eventName,event=>{
+        const eventId=String(event&&event.lastEventId||'');
+        if(eventId&&seenEventIds.has(eventId))return;
+        if(eventId)seenEventIds.add(eventId);
+        handler(event);
+      });
+    };
     const settle=async label=>{
       if(terminal)return;
       terminal=true;
@@ -2017,16 +2182,16 @@
       if(notificationThreadStream===source)notificationThreadStream=null;
       notificationThreadStreamId='';
       notificationThreadDraft='';
+      notificationThreadLiveMessages=[];
+      notificationThreadClarify=null;
       if(notificationThreadSession&&notificationThreadItem){
         try{await loadReplySessionTranscript(notificationThreadSession.session_id,{attach:false});}
         catch(_){setThreadBusy(false,label||'Reply saved');}
       }
     };
-    source.addEventListener('token',event=>{
-      try{notificationThreadDraft+=JSON.parse(event.data).text||'';}catch(_){}
-      renderThreadMessages();
+    ['token','interim_assistant','reasoning','tool','tool_start','tool_complete','clarify'].forEach(eventName=>{
+      listen(eventName,event=>applyNotificationThreadStreamEvent(eventName,event));
     });
-    source.addEventListener('tool_start',()=>setThreadBusy(true,'Working…'));
     source.addEventListener('done',()=>{void settle('Reply saved');});
     source.addEventListener('cancel',()=>{void settle('Stopped');});
     source.addEventListener('stream_end',()=>{void settle('Reply saved');});
@@ -2771,7 +2936,6 @@
     if(notificationThreadStop)notificationThreadStop.addEventListener('click',()=>void stopNotificationThreadReply());
     if(notificationThreadInput){
       notificationThreadInput.addEventListener('input',()=>{
-        notificationThreadDraft=notificationThreadInput.value;
         autoResizeNotificationThreadInput();
         updateNotificationThreadSend();
       });
