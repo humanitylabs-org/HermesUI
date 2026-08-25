@@ -7237,8 +7237,8 @@ function _sessionStatusGroups(orderedSessions) {
   // it in Working, but after all genuinely running sessions.
   working.push(...blankDrafts);
   const groups=[];
-  if(working.length) groups.push({label:'Working',status:'working',items:working});
   if(done.length) groups.push({label:'Done',status:'done',items:done});
+  if(working.length) groups.push({label:'Working',status:'working',items:working});
   return groups;
 }
 
@@ -8631,9 +8631,9 @@ function renderSessionListFromCache(){
     newSessionLauncherInserted=true;
   };
   for(const g of groups){
-    // With both status groups present, this puts the primary creation action in
-    // the requested visual gap: after Working and immediately before Done.
-    if(g.status==='done') appendNewSessionLauncher();
+    // Keep the primary creation action in the visual gap between Done and
+    // Working. The same ordering also covers one-group edge states.
+    if(g.status==='working') appendNewSessionLauncher();
     const wrapper=document.createElement('div');
     wrapper.className='session-date-group';
     const hdr=document.createElement('div');
@@ -8674,7 +8674,7 @@ function renderSessionListFromCache(){
     if(groupBottomPad>0){ body.appendChild(_sessionVirtualSpacer(groupBottomPad,'after')); }
     wrapper.appendChild(body);
     list.appendChild(wrapper);
-    if(g.status==='working') appendNewSessionLauncher();
+    if(g.status==='done') appendNewSessionLauncher();
   }
   // Empty lists and one-group edge states still keep New session reachable.
   appendNewSessionLauncher();
