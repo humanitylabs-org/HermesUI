@@ -4386,6 +4386,20 @@ function _isHiddenCronProject(project){
 function _visibleSessionProjects(projects=_allProjects){
   return (Array.isArray(projects)?projects:[]).filter(project=>!_isHiddenCronProject(project));
 }
+function _syncSessionFolderCreateAffordances(hasVisibleProjects){
+  const headerFolderBtn=$('btnNewSessionFolder');
+  if(headerFolderBtn) headerFolderBtn.hidden=Boolean(hasVisibleProjects);
+}
+function _makeProjectFilterChipKeyboardAccessible(chip,isActive,activate){
+  chip.setAttribute('role','button');
+  chip.tabIndex=0;
+  chip.setAttribute('aria-pressed',isActive?'true':'false');
+  chip.onkeydown=(e)=>{
+    if(e.target!==chip||(e.key!=='Enter'&&e.key!==' ')) return;
+    e.preventDefault();
+    activate();
+  };
+}
 function _isHiddenCronViewerSession(session, projects=_allProjects){
   if(!session) return false;
   const sid=String(session.session_id||'').trim().toLowerCase();
@@ -5632,6 +5646,7 @@ function showSessionListSkeleton(targetProfile){
     projectDock.replaceChildren();
     projectDock.hidden=true;
   }
+  _syncSessionFolderCreateAffordances(false);
   // Tear down any active virtual-scroll state up front so a pending scroll-driven
   // render can't repaint the previous profile's cached rows over the skeleton
   // (#4662 Codex gate). Cancel the queued RAF and drop the data-session-virtual-*
@@ -8380,6 +8395,7 @@ function renderSessionListFromCache(){
   // both All and Unassigned adds no information.
   const hasUnprojected=profileFiltered.some(s=>!s.project_id);
   const visibleProjects=_visibleSessionProjects();
+  _syncSessionFolderCreateAffordances(visibleProjects.length>0);
   if(visibleProjects.length>0){
     const bar=document.createElement('div');
     bar.className='project-bar';
@@ -8388,6 +8404,7 @@ function renderSessionListFromCache(){
     allChip.className='project-chip'+(!_activeProject?' active':'');
     allChip.textContent='All';
     allChip.onclick=()=>{_setActiveProjectFilter(null);};
+    _makeProjectFilterChipKeyboardAccessible(allChip,!_activeProject,()=>_setActiveProjectFilter(null));
     bar.appendChild(allChip);
     // "Unassigned" chip — only when there are sessions with no project to
     // filter to. Hidden in the common case where every session is already
@@ -8398,6 +8415,7 @@ function renderSessionListFromCache(){
       noneChip.textContent='Unassigned';
       noneChip.title='Show conversations not yet assigned to a project';
       noneChip.onclick=()=>{_setActiveProjectFilter(NO_PROJECT_FILTER);};
+      _makeProjectFilterChipKeyboardAccessible(noneChip,_activeProject===NO_PROJECT_FILTER,()=>_setActiveProjectFilter(NO_PROJECT_FILTER));
       bar.appendChild(noneChip);
     }
     // Project chips
@@ -8411,6 +8429,7 @@ function renderSessionListFromCache(){
         chip.appendChild(dot);
       }
       const nameSpan=document.createElement('span');
+      nameSpan.className='project-chip-name';
       nameSpan.textContent=p.name;
       chip.appendChild(nameSpan);
       let _pClickTimer=null;
@@ -8418,6 +8437,7 @@ function renderSessionListFromCache(){
         clearTimeout(_pClickTimer);
         _pClickTimer=setTimeout(()=>{_pClickTimer=null;_setActiveProjectFilter(p.project_id);},220);
       };
+      _makeProjectFilterChipKeyboardAccessible(chip,p.project_id===_activeProject,()=>_setActiveProjectFilter(p.project_id));
       chip.ondblclick=(e)=>{e.stopPropagation();clearTimeout(_pClickTimer);_pClickTimer=null;_startProjectRename(p,chip);};
       chip.oncontextmenu=(e)=>{e.preventDefault();_showProjectContextMenu(e,p,chip);};
       // Touch long-press → context menu (mobile UX: project chips can only be
@@ -8467,6 +8487,14 @@ function renderSessionListFromCache(){
       if(window._projectQuickCreate) _attachProjectQuickCreateButton(chip,p);
       bar.appendChild(chip);
     }
+    const addChip=document.createElement('button');
+    addChip.type='button';
+    addChip.className='project-chip project-chip-new';
+    addChip.title='New folder';
+    addChip.setAttribute('aria-label','New folder');
+    addChip.innerHTML='<svg class="folder-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>';
+    addChip.onclick=(e)=>{e.stopPropagation();createSessionProjectFromHeader();};
+    bar.appendChild(addChip);
     (projectDock||list).appendChild(bar);
     if(projectDock) projectDock.hidden=false;
   }
@@ -10010,8 +10038,6 @@ function _showProjectContextMenu(e, proj, chip){
   // the session list show through the menu). Same variable used by
   // .session-action-menu and other floating popovers.
   menu.style.cssText='position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 0;z-index:9999;min-width:140px;box-shadow:0 4px 16px rgba(0,0,0,.35);';
-  menu.style.left=e.clientX+'px';
-  menu.style.top=e.clientY+'px';
 
   // Rename option
   const renameItem=document.createElement('div');
@@ -10056,6 +10082,22 @@ function _showProjectContextMenu(e, proj, chip){
   menu.appendChild(delItem);
 
   document.body.appendChild(menu);
+  // Folder chips can now sit immediately above the mobile navigation. Clamp
+  // their long-press menu inside the usable viewport instead of opening under
+  // the bottom bar or beyond the right edge.
+  const menuRect=menu.getBoundingClientRect();
+  const viewportMargin=8;
+  const mobileFolderDock=window.matchMedia&&window.matchMedia('(max-width:640px)').matches;
+  const mobileNav=mobileFolderDock?$('mobilePrimaryMenu'):null;
+  const usableBottom=mobileNav&&!mobileNav.hidden
+    ? mobileNav.getBoundingClientRect().top-viewportMargin
+    : window.innerHeight-viewportMargin;
+  const maxLeft=Math.max(viewportMargin,window.innerWidth-menuRect.width-viewportMargin);
+  const maxTop=Math.max(viewportMargin,usableBottom-menuRect.height);
+  const requestedLeft=Number(e.clientX)||viewportMargin;
+  const requestedTop=Number(e.clientY)||viewportMargin;
+  menu.style.left=Math.min(Math.max(viewportMargin,requestedLeft),maxLeft)+'px';
+  menu.style.top=Math.min(Math.max(viewportMargin,requestedTop),maxTop)+'px';
   const dismiss=()=>{menu.remove();document.removeEventListener('click',dismiss);};
   setTimeout(()=>document.addEventListener('click',dismiss),0);
 }
