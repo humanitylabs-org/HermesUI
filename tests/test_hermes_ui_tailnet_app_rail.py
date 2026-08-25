@@ -171,6 +171,40 @@ def test_mobile_bottom_menu_owns_sessions_notifications_and_utilities():
     assert '&mobile-modern-nav=v1' in sw_style
 
 
+def test_mobile_toggle_rows_explain_state_and_reserve_purple_for_high_signal():
+    menu = INDEX[
+        INDEX.index('id="mobileSessionUtilitiesMenu"') : INDEX.index(
+            '<div class="mobile-overlay"', INDEX.index('id="mobileSessionUtilitiesMenu"')
+        )
+    ]
+    assert menu.count('class="mobile-session-utility-switch"') == 2
+    assert menu.count('class="mobile-session-utility-knob"') == 2
+    assert '<span class="mobile-session-utility-note">Experimental</span>' in menu
+    assert '<span class="mobile-session-utility-label">Appearance</span>' in menu
+    assert '<span class="mobile-session-utility-note">Light</span>' in menu
+    assert 'mobile-session-utility-state' not in menu
+
+    assert '.mobile-session-utility-switch{position:relative;width:40px;height:24px;' in CSS
+    assert '.mobile-session-utility-knob{position:absolute;top:3px;left:3px;width:18px;height:18px;' in CSS
+    assert '.mobile-session-utility[aria-checked="true"] .mobile-session-utility-knob{transform:translateX(16px);}' in CSS
+    assert '.mobile-session-utility[data-mobile-utility="session-view"][aria-checked="true"]{' in CSS
+    assert 'background:rgba(124,58,237,.08)' in CSS
+    assert '.mobile-session-utility[data-mobile-utility="session-view"][aria-checked="true"] .mobile-session-utility-switch{background:#7c3aed;' in CSS
+    assert '.mobile-session-utility[data-mobile-utility="theme"][aria-checked="true"] .mobile-session-utility-switch{background:var(--accent);' in CSS
+
+    assert "note.textContent=enabled?'Experimental · On':'Experimental'" in JS
+    assert "'High Signal mode, experimental, on':'High Signal mode, experimental, off'" in JS
+    assert "note.textContent=enabled?'Dark':'Light'" in JS
+    assert "'Appearance: dark. Switch to light mode.':'Appearance: light. Switch to dark mode.'" in JS
+
+    index_style = next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
+    sw_style = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
+    index_rail = next(line for line in INDEX.splitlines() if "static/tailnet-app-rail.js?v=" in line)
+    sw_rail = next(line for line in SW.splitlines() if "'./static/tailnet-app-rail.js' + VQ" in line)
+    for asset_line in (index_style, sw_style, index_rail, sw_rail):
+        assert '&mobile-toggle-switches=v1' in asset_line
+
+
 def test_cron_notification_rows_are_compact_full_row_disclosures():
     assert "const role=document.createElement('span')" in JS
     assert "const icon=document.createElement('span')" in JS
@@ -623,7 +657,7 @@ def test_mobile_right_rail_is_collapsible_and_hides_redundant_home():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&mobile-toggle-switches=v1"'
         in INDEX
     )
     assert (

@@ -211,14 +211,16 @@
     if(mobileSessionViewUtility){
       const enabled=root.dataset.sessionView==='dashboard';
       mobileSessionViewUtility.setAttribute('aria-checked',String(enabled));
-      const state=mobileSessionViewUtility.querySelector('.mobile-session-utility-state');
-      if(state)state.textContent=enabled?'On':'Off';
+      const note=mobileSessionViewUtility.querySelector('.mobile-session-utility-note');
+      if(note)note.textContent=enabled?'Experimental · On':'Experimental';
+      mobileSessionViewUtility.setAttribute('aria-label',enabled?'High Signal mode, experimental, on':'High Signal mode, experimental, off');
     }
     if(mobileThemeUtility){
       const enabled=resolvedTheme()==='dark';
       mobileThemeUtility.setAttribute('aria-checked',String(enabled));
-      const state=mobileThemeUtility.querySelector('.mobile-session-utility-state');
-      if(state)state.textContent=enabled?'On':'Off';
+      const note=mobileThemeUtility.querySelector('.mobile-session-utility-note');
+      if(note)note.textContent=enabled?'Dark':'Light';
+      mobileThemeUtility.setAttribute('aria-label',enabled?'Appearance: dark. Switch to light mode.':'Appearance: light. Switch to dark mode.');
     }
   }
 
