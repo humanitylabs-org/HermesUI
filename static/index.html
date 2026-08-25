@@ -69,7 +69,7 @@
     };
   }
 })()</script>
-<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1&high-signal-toggle=v1&mobile-session-home=v1&notification-operations=v3&mobile-rail-right=v1&rail-selection-ring=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&mobile-modern-nav=v1&notification-hierarchy=v1">
+<link rel="stylesheet" href="static/style.css?v=__WEBUI_VERSION__&overlay=wizard-canvas-v8&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1&high-signal-toggle=v1&mobile-session-home=v1&notification-operations=v3&mobile-rail-right=v1&rail-selection-ring=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&mobile-modern-nav=v1&notification-hierarchy=v1&mobile-folder-dock=v1">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
   <!-- KaTeX math rendering CSS (loaded eagerly from vendored assets to prevent font CSP noise) -->
   <link rel="stylesheet" href="static/vendor/katex/0.16.22/katex.min.css">
@@ -340,6 +340,7 @@
         <button class="session-new-session-proxy" id="btnNewChat" type="button" aria-label="New session" tabindex="-1" hidden></button>
       </div>
       <div class="session-search sidebar-search" id="sessionSearchWrap" hidden><div class="session-search-field"><svg class="sidebar-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input id="sessionSearch" type="search" placeholder="Filter sessions..." oninput="filterSessions()" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other"><button type="button" id="sessionSearchClear" class="session-search-clear has-tooltip has-tooltip--bottom-right" aria-label="Clear session filter" data-tooltip="Clear session filter" onclick="clearSessionSearch()" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>
+      <div class="session-project-dock" id="sessionProjectDock" hidden></div>
       <div class="session-list" id="sessionList"></div>
     </div>
     <!-- Tasks (cron) panel -->
@@ -2025,7 +2026,7 @@
 <script src="static/ui.js?v=__WEBUI_VERSION__&tab-polish=v1&recovery-filter=v2&background-resume=v1&classic-duration=v1" defer></script>
 <script src="static/workspace.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/terminal.js?v=__WEBUI_VERSION__" defer></script>
-<script src="static/sessions.js?v=__WEBUI_VERSION__&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1&performance-cache=v1" defer></script>
+<script src="static/sessions.js?v=__WEBUI_VERSION__&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1&performance-cache=v1&mobile-folder-dock=v1" defer></script>
 <script src="static/commands.js?v=__WEBUI_VERSION__" defer></script>
 <script src="static/messages.js?v=__WEBUI_VERSION__&tab-polish=v1&recovery-filter=v2" defer></script>
 <script src="static/extension_settings.js?v=__WEBUI_VERSION__" defer></script>
