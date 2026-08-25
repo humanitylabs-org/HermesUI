@@ -7236,6 +7236,9 @@ function _sessionStatusGroups(orderedSessions) {
   // The untouched current session is a starting point, not active work yet. Keep
   // it in Working, but after all genuinely running sessions.
   working.push(...blankDrafts);
+  // Done reads as a chronological history: older sessions lead into the newest
+  // completed session at the bottom, immediately before the archive control.
+  done.sort((a,b)=>_sessionSortTimestampMs(a)-_sessionSortTimestampMs(b));
   const groups=[];
   if(done.length) groups.push({label:'Done',status:'done',items:done});
   if(working.length) groups.push({label:'Working',status:'working',items:working});
@@ -8630,10 +8633,47 @@ function renderSessionListFromCache(){
     list.appendChild(_sessionNewSessionLauncher());
     newSessionLauncherInserted=true;
   };
+  let archiveControlsInserted=false;
+  const appendArchiveControls=()=>{
+    if(archiveControlsInserted) return;
+    archiveControlsInserted=true;
+    const archivePagingFilterActive=_sessionArchivePagingFilterActive();
+    if(_showArchived&&!archivePagingFilterActive){
+      const activeArchivedTotal=_sessionSourceFilter==='cli'?_archivedCliCount:_archivedWebuiCount;
+      const loadedArchivedCount=sidebarRows.filter(s=>s&&s.archived&&(_sessionSourceFilter==='cli'?_isCliSession(s):!_isCliSession(s))).length;
+      const archiveLoadCapReached=Number(_archivedRowsLoadedLimit||0)>=SESSION_ARCHIVED_MAX_LOADED_LIMIT;
+      const remainingArchived=archiveLoadCapReached?0:Math.max(0, Number(activeArchivedTotal||0)-loadedArchivedCount);
+      if(remainingArchived>0){
+        const more=document.createElement('div');
+        more.className='session-archive-more';
+        more.style.cssText='font-size:10px;padding:6px 10px;color:var(--muted);cursor:pointer;text-align:center;opacity:.8;';
+        more.textContent='Load '+Math.min(SESSION_ARCHIVED_PAGE_SIZE, remainingArchived)+' more archived ('+remainingArchived+' remaining)';
+        more.onclick=()=>{
+          _archivedRowsLoadedLimit=Math.min(
+            SESSION_ARCHIVED_MAX_LOADED_LIMIT,
+            Math.max(SESSION_ARCHIVED_PAGE_SIZE, Number(_archivedRowsLoadedLimit)||SESSION_ARCHIVED_PAGE_SIZE)+SESSION_ARCHIVED_PAGE_SIZE
+          );
+          renderSessionList();
+        };
+        list.appendChild(more);
+      }
+    }
+    if(archivedCount>0||_showArchived){
+      const toggle=document.createElement('button');
+      toggle.type='button';
+      toggle.className='session-archive-toggle';
+      toggle.textContent=_showArchived?'Hide archived':'Show '+archivedCount+' archived';
+      toggle.onclick=()=>{
+        _showArchived=!_showArchived;
+        if(_showArchived) _archivedRowsLoadedLimit=SESSION_ARCHIVED_PAGE_SIZE;
+        renderSessionList();
+      };
+      list.appendChild(toggle);
+    }
+  };
   for(const g of groups){
-    // Keep the primary creation action in the visual gap between Done and
-    // Working. The same ordering also covers one-group edge states.
-    if(g.status==='working') appendNewSessionLauncher();
+    // Archive controls occupy the boundary after Done and before Working.
+    if(g.status==='working') appendArchiveControls();
     const wrapper=document.createElement('div');
     wrapper.className='session-date-group';
     const hdr=document.createElement('div');
@@ -8674,9 +8714,10 @@ function renderSessionListFromCache(){
     if(groupBottomPad>0){ body.appendChild(_sessionVirtualSpacer(groupBottomPad,'after')); }
     wrapper.appendChild(body);
     list.appendChild(wrapper);
-    if(g.status==='done') appendNewSessionLauncher();
+    if(g.status==='done') appendArchiveControls();
   }
-  // Empty lists and one-group edge states still keep New session reachable.
+  // One-group and empty-list states preserve the same trailing action order.
+  appendArchiveControls();
   appendNewSessionLauncher();
   if(virtualAnchorScrollTop!==null){
     list.scrollTop=virtualAnchorScrollTop;
@@ -8690,41 +8731,7 @@ function renderSessionListFromCache(){
     list.scrollTop=listScrollTopBeforeRender;
     _resyncSessionVirtualWindowAfterRender(list, listScrollTopBeforeRender, virtualWindow);
   }
-  const archivePagingFilterActive=_sessionArchivePagingFilterActive();
-  if(_showArchived&&!archivePagingFilterActive){
-    const activeArchivedTotal=_sessionSourceFilter==='cli'?_archivedCliCount:_archivedWebuiCount;
-    const loadedArchivedCount=sidebarRows.filter(s=>s&&s.archived&&(_sessionSourceFilter==='cli'?_isCliSession(s):!_isCliSession(s))).length;
-    const archiveLoadCapReached=Number(_archivedRowsLoadedLimit||0)>=SESSION_ARCHIVED_MAX_LOADED_LIMIT;
-    const remainingArchived=archiveLoadCapReached?0:Math.max(0, Number(activeArchivedTotal||0)-loadedArchivedCount);
-    if(remainingArchived>0){
-      const more=document.createElement('div');
-      more.className='session-archive-more';
-      more.style.cssText='font-size:10px;padding:6px 10px;color:var(--muted);cursor:pointer;text-align:center;opacity:.8;';
-      more.textContent='Load '+Math.min(SESSION_ARCHIVED_PAGE_SIZE, remainingArchived)+' more archived ('+remainingArchived+' remaining)';
-      more.onclick=()=>{
-        _archivedRowsLoadedLimit=Math.min(
-          SESSION_ARCHIVED_MAX_LOADED_LIMIT,
-          Math.max(SESSION_ARCHIVED_PAGE_SIZE, Number(_archivedRowsLoadedLimit)||SESSION_ARCHIVED_PAGE_SIZE)+SESSION_ARCHIVED_PAGE_SIZE
-        );
-        renderSessionList();
-      };
-      list.appendChild(more);
-    }
-  }
-  // Archived sessions stay at the bottom of the list, where the old Select
-  // affordance lived. Select itself is now a persistent icon in the header.
-  if(archivedCount>0||_showArchived){
-    const toggle=document.createElement('button');
-    toggle.type='button';
-    toggle.className='session-archive-toggle';
-    toggle.textContent=_showArchived?'Hide archived':'Show '+archivedCount+' archived';
-    toggle.onclick=()=>{
-      _showArchived=!_showArchived;
-      if(_showArchived) _archivedRowsLoadedLimit=SESSION_ARCHIVED_PAGE_SIZE;
-      renderSessionList();
-    };
-    list.appendChild(toggle);
-  }
+
   // Refresh FLIP and queued archive/delete reflow both drive
   // --session-reflow-offset. Refresh wins so one render has one transform writer.
   const reflowBefore=animateRefresh?flipBefore:_pendingSessionReflowPositions;
