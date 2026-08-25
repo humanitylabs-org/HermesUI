@@ -27,13 +27,14 @@ def test_sidebar_renders_only_working_and_done_status_groups():
     assert "session-status-group-indicator" in SESSIONS
     assert "g.status==='working'?'is-streaming':'is-unread'" in SESSIONS
     assert ".session-status-group-indicator{" in STYLE
+    assert SESSIONS.index("groups.push({label:'Done'") < SESSIONS.index("groups.push({label:'Working'")
 
 
-def test_new_session_launcher_separates_working_from_done():
+def test_new_session_launcher_separates_done_from_working():
     assert "function _sessionNewSessionLauncher()" in SESSIONS
     assert "button.id='btnSessionListNewChat'" in SESSIONS
-    assert "if(g.status==='done') appendNewSessionLauncher();" in SESSIONS
     assert "if(g.status==='working') appendNewSessionLauncher();" in SESSIONS
+    assert "if(g.status==='done') appendNewSessionLauncher();" in SESSIONS
     assert "appendNewSessionLauncher();\n  if(virtualAnchorScrollTop" in SESSIONS
     assert ".session-new-session-button{width:100%;min-height:44px" in STYLE
     assert ".session-new-session-proxy[hidden]{display:none!important;}" in STYLE
@@ -50,7 +51,7 @@ def test_new_session_launcher_separates_working_from_done():
 
 def test_status_group_assets_have_matching_cache_identity():
     css_suffix = "&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1"
-    js_suffix = "&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1&performance-cache=v1&mobile-folder-dock=v2&folder-pill-colors=v1"
+    js_suffix = "&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1&performance-cache=v1&mobile-folder-dock=v2&folder-pill-colors=v1&done-first=v1"
     index_css = next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
     sw_css = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     assert css_suffix in index_css
@@ -123,16 +124,16 @@ console.log(JSON.stringify({
     )
     payload = json.loads(result.stdout)
     assert payload["grouped"] == [
-        {"label": "Working", "status": "working", "ids": ["own-working", "child-working", "blank-current"]},
         {"label": "Done", "status": "done", "ids": ["done-new", "done-old"]},
+        {"label": "Working", "status": "working", "ids": ["own-working", "child-working", "blank-current"]},
     ]
     assert payload["afterCompletion"] == [
-        {"label": "Working", "ids": ["blank-current"]},
         {"label": "Done", "ids": ["own-working", "done-new", "child-working", "done-old"]},
+        {"label": "Working", "ids": ["blank-current"]},
     ]
     assert payload["afterSend"] == [
-        {"label": "Working", "ids": ["blank-current"]},
         {"label": "Done", "ids": ["own-working", "done-new", "child-working", "done-old"]},
+        {"label": "Working", "ids": ["blank-current"]},
     ]
     assert payload["afterNavigation"] == [
         {"label": "Done", "ids": ["blank-current", "own-working", "done-new", "child-working", "done-old"]},
