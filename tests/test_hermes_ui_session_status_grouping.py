@@ -51,7 +51,7 @@ def test_sidebar_controls_follow_done_archive_working_new_order():
 
 def test_status_group_assets_have_matching_cache_identity():
     css_suffix = "&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1"
-    js_suffix = "&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1&performance-cache=v1&mobile-folder-dock=v2&folder-pill-colors=v1&done-first=v1&sidebar-order=v2"
+    js_suffix = "&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1&performance-cache=v1&mobile-folder-dock=v2&folder-pill-colors=v1&done-first=v1&sidebar-order=v2&mobile-tabs-removed=v1"
     index_css = next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
     sw_css = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     assert css_suffix in index_css
