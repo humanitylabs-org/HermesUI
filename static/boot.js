@@ -2034,17 +2034,14 @@ $('btnNewChat').onclick=async()=>{
   // `_restoreSettledSession()` in messages.js: an active stream id or a queued
   // pending user message means the session is real, not empty.
   if(_currentSessionIsReusableEmptyChat()){
-    if(window.__sessionSwipeNavigation) window.__sessionSwipeNavigation.syncTabs(true);
     $('msg').focus();closeMobileSidebar();return;
   }
   if(typeof _restoreRememberedNewChatDraftSession==='function'
      && await _restoreRememberedNewChatDraftSession()){
     await renderSessionList();
-    if(window.__sessionSwipeNavigation) window.__sessionSwipeNavigation.syncTabs(true);
     closeMobileSidebar();$('msg').focus();return;
   }
   await newSession();await renderSessionList();
-  if(window.__sessionSwipeNavigation) window.__sessionSwipeNavigation.syncTabs(true);
   closeMobileSidebar();$('msg').focus();
 };
 $('btnDownload').onclick=()=>{
@@ -2437,7 +2434,6 @@ document.addEventListener('keydown',async e=>{
     // the moment they want to switch context. newSession() leaves the in-flight
     // stream running on its own session; the user just gets a fresh blank one.
     await newSession();await renderSessionList();
-    if(window.__sessionSwipeNavigation) window.__sessionSwipeNavigation.syncTabs(true);
     closeMobileSidebar();$('msg').focus();
   }
   // Cmd/Ctrl+, opens/closes Settings, except while the user is typing in a

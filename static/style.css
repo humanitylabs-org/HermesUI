@@ -1526,7 +1526,7 @@
   .pwa-standalone{overscroll-behavior:none;}
   .pwa-standalone body{-webkit-tap-highlight-color:transparent;}
   .app-titlebar-new-chat{display:none;}
-  .mobile-session-tabs{display:none;}
+
   .pwa-standalone .app-titlebar-reload{display:inline-flex;}
   .pwa-offline .app-titlebar::after{content:'';position:absolute;left:50%;bottom:5px;width:5px;height:5px;border-radius:999px;background:var(--warning);box-shadow:0 0 0 3px color-mix(in srgb,var(--warning) 22%,transparent);transform:translateX(-50%);}
   .pwa-resumed .app-titlebar-title{animation:pwa-title-resume .6s ease-out;}
@@ -2742,8 +2742,7 @@
   .workspace-toggle-btn:disabled{opacity:.38;cursor:not-allowed;}
   .chip.model{color:var(--accent-text);border-color:var(--accent-bg-strong);background:var(--accent-bg);}
   .messages-shell{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;}
-  .messages-shell.session-swipe-active{overflow:hidden;}
-  @media (max-width:640px) and (pointer:coarse){.messages-shell{touch-action:pan-y;}}
+
   .messages{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0;position:relative;z-index:0;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior-y:contain;overflow-anchor:auto;}
   .session-dashboard{width:100%;max-width:none;height:100%;min-height:0;margin:0;padding:0;box-sizing:border-box;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr);gap:0;overflow:hidden;align-self:stretch;}
   html[data-session-view="dashboard"] .messages{overflow:hidden;}
@@ -2783,11 +2782,7 @@
   .session-switch-skeleton-line--short{width:38%;}
   html[data-session-view="classic"] .session-switch-skeleton-high-signal{display:none;}
   html[data-session-view="dashboard"] .session-switch-skeleton-classic{display:none;}
-  .session-swipe-preview{position:absolute;inset:0;z-index:8;display:block;background:var(--main-bg);overflow:hidden;pointer-events:none;visibility:hidden;transform:translate3d(100%,0,0);will-change:transform;contain:layout paint style;}
-  .session-swipe-preview.is-visible{visibility:visible;}
-  .messages.session-swipe-moving,.session-swipe-preview.session-swipe-moving{transition:none;will-change:transform;}
-  .messages.session-swipe-settling,.session-swipe-preview.session-swipe-settling{transition:transform .18s cubic-bezier(.22,.72,.2,1);will-change:transform;}
-  .session-swipe-preview .session-switch-skeleton{background:var(--main-bg);}
+
   .session-dashboard-section{min-width:0;min-height:0;max-width:100%;padding:14px 18px;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;background:transparent;border:0;border-radius:0;box-shadow:none;isolation:isolate;}
   .session-dashboard-section:not(:last-child){border-bottom:1px solid var(--border);}
   .session-dashboard-section--completed[data-empty="1"]{opacity:.72;}
@@ -3675,27 +3670,9 @@
       transform:translateX(-100%);transition:transform .25s ease;will-change:transform;}
     .sidebar.mobile-open{transform:translateX(0);}
     .sidebar .resize-handle{display:none;}
-    /* Mobile session pager. Tabs and chat share one horizontal gesture; the
-       tab row never scrolls independently from the session beneath it. */
-    .app-titlebar{height:52px;justify-content:flex-start;gap:3px;padding-left:max(2px,env(safe-area-inset-left,0));padding-right:max(4px,env(safe-area-inset-right,0));overflow:hidden;}
-    .app-titlebar-left{display:none!important;}
-    .app-titlebar-profile{display:none!important;}
-    .app-titlebar-inner,.app-titlebar-spacer,.app-titlebar-reload{display:none!important;}
-    .mobile-session-tabs{display:block;flex:1 1 auto;min-width:0;height:46px;-webkit-app-region:no-drag;}
-    .mobile-session-tabs-viewport{position:relative;width:100%;min-width:0;height:44px;overflow:hidden;overflow-anchor:none;overscroll-behavior-inline:contain;scrollbar-width:none;touch-action:pan-y;isolation:isolate;}
-    .mobile-session-tabs-viewport::-webkit-scrollbar{display:none;}
-    .mobile-session-tabs-track{display:flex;align-items:flex-end;gap:4px;width:max-content;min-width:100%;height:44px;transform:translate3d(0,0,0);}
-    .mobile-session-tabs-track::before{content:'';flex:0 0 var(--mobile-session-tab-gutter,20%);height:1px;}
-    .mobile-session-tabs-track::after{content:'';flex:0 0 var(--mobile-session-end-gutter,calc(50% - 20px));height:1px;}
-    .mobile-session-tab-list{display:flex;align-items:flex-end;gap:4px;flex:0 0 auto;height:44px;}
-    .mobile-session-tab{position:relative;flex:0 0 var(--mobile-session-tab-width,60vw);width:var(--mobile-session-tab-width,60vw);height:40px;display:flex;align-items:center;justify-content:flex-start;gap:7px;border:1px solid var(--border);border-bottom-color:var(--border);border-radius:11px 11px 0 0;background:color-mix(in srgb,var(--surface) 72%,var(--sidebar));color:var(--muted);padding:0 13px;font:inherit;font-size:11px;font-weight:600;line-height:1;cursor:pointer;overflow:hidden;white-space:nowrap;-webkit-tap-highlight-color:transparent;box-sizing:border-box;box-shadow:0 -1px 5px rgba(0,0,0,.05);transition:color .14s,border-color .14s,background .14s,box-shadow .14s;}
-    .mobile-session-tab[aria-selected="true"]{z-index:2;background:var(--surface-subtle-hover,var(--hover-bg));border-color:var(--border);border-bottom-color:var(--border);color:var(--text);font-weight:800;box-shadow:none;}
-    .mobile-session-tab-title{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-    .mobile-session-tab.has-session-state .mobile-session-tab-title{max-width:calc(100% - 26px);}
-    .mobile-session-tab-state{position:static;transform:none;flex:0 0 10px;}
-    .app-titlebar-new-chat.mobile-session-new-tab{display:inline-flex;align-items:center;justify-content:center;flex:0 0 40px;width:40px;height:40px;margin-bottom:0;padding:0;border:1px solid var(--border);border-bottom-color:var(--border);border-radius:11px 11px 0 0;background:color-mix(in srgb,var(--surface) 72%,var(--sidebar));color:var(--muted);box-shadow:0 -1px 5px rgba(0,0,0,.05);}
-    .app-titlebar-new-chat.mobile-session-new-tab:hover,.app-titlebar-new-chat.mobile-session-new-tab:focus-visible{background:var(--hover-bg);color:var(--text);}
-    .app-titlebar-new-chat.mobile-session-new-tab:disabled{opacity:.45;cursor:wait;}
+    /* Mobile session navigation lives in the bottom menu. Removing the desktop
+       titlebar here gives the conversation the space formerly used by tabs. */
+    .app-titlebar{display:none!important;}
     .system-health-panel.insights-card{gap:10px;padding:12px;}
     .system-health-head{align-items:flex-start;}
     .system-health-metrics{grid-template-columns:1fr;gap:8px;}

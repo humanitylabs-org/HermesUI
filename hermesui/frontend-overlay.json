@@ -6,7 +6,7 @@
       "upstream_sha256": "049445ab220cb4a564ab226420337f7995826bba623ccdd6b83020515204dcf1"
     },
     {
-      "hermesui_sha256": "df88482cdbac570a832ea4e62c256329fac8c920cb35a09c06922b108c6aef69",
+      "hermesui_sha256": "e66ffffd74e75d854fd9a40e4e90190d19a315e355cc6d914bfc3c53665f776f",
       "path": "static/boot.js",
       "upstream_sha256": "258ccc7b8a3be5c07f1081f0a50961c27ec0fdd0f7bb3eaed2b0a6a1ec8954f0"
     },
@@ -51,7 +51,7 @@
       "upstream_sha256": "c43b7b0885cf3cb285edc7046463076c9bf7a25dd5aa8eeb60198bf5c21524b0"
     },
     {
-      "hermesui_sha256": "0cf8192cd200ea6ea19680dd967a0abfdee217e04d1ee9194827711ebb72db3f",
+      "hermesui_sha256": "379facbc76eb13613c13d4abe85555c32eaa6b1226dbe882caf2b5a4a082ead6",
       "path": "static/index.html",
       "upstream_sha256": "4850e0f609c56ef5619dcb023f95398224b053fcca6b1125d4f8a2923f9b2a3c"
     },
@@ -86,7 +86,7 @@
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "bb144807c29926810f906297cebeaff9a5d2c6f16a4340d66882b4f669144ea3",
+      "hermesui_sha256": "600725b588d08c2148235b8f14f72516763b78a8712c288656c011fe5672b6ce",
       "path": "static/sessions.js",
       "upstream_sha256": "82fcbe004f5df8de94cf89614cf2a7ba40a324deeec5edd054db7dd6c1505233"
     },
@@ -101,12 +101,12 @@
       "upstream_sha256": "087f2a5d42fa71bceaa650138875d2cb1ed41129ef58f0d749072eec0d395c2f"
     },
     {
-      "hermesui_sha256": "22dfad3ab0018fa3c35ff65dd44dd05ffc5346ece6daed45801adc1858e85f50",
+      "hermesui_sha256": "eb7746878890ab20a15b76bb4a7cfe49918b120ff040a4f8cc769427b4eb3759",
       "path": "static/style.css",
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },
     {
-      "hermesui_sha256": "0e0353c167a60c5a15c3d2a4a500a89537d5c6c4b2d72e9f2b6166a944bf7254",
+      "hermesui_sha256": "8ef5adc6297b00c473a47374a510d0e90a3ff7e72732c8fb2fcfc836bc6b3a5f",
       "path": "static/sw.js",
       "upstream_sha256": "cfdc35b1dd3f20f9ef8e885008dd76c3bcd2fe3deb61c1708f2e6d88514e2ff8"
     },

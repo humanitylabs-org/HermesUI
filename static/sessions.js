@@ -2639,6 +2639,19 @@ function _sidebarSessionProfileName(session){
   return raw||'';
 }
 
+let _sessionContentLoadingDepth=0;
+function _setSessionContentLoading(on){
+  _sessionContentLoadingDepth=Math.max(0,_sessionContentLoadingDepth+(on?1:-1));
+  const visible=_sessionContentLoadingDepth>0;
+  const messages=document.getElementById('messages');
+  const skeleton=document.getElementById('sessionSwitchSkeleton');
+  if(messages){
+    messages.classList.toggle('session-switch-loading',visible);
+    messages.setAttribute('aria-busy',visible?'true':'false');
+  }
+  if(skeleton) skeleton.hidden=!visible;
+}
+
 async function _ensureSidebarSessionProfile(session){
   const targetProfile=_sidebarSessionProfileName(session);
   if(!_showAllProfiles||!targetProfile) return false;
@@ -2665,11 +2678,10 @@ async function _openSidebarSession(session, loadOpts={}){
   const wasMobileSessionPage=document.documentElement.dataset.mobileSessionView==='sessions';
   let openedTarget=false;
   const manageSessionContentLoading=!loadOpts.suppressSessionContentLoading;
-  const setSessionContentLoading=window.__sessionSwipeNavigation&&window.__sessionSwipeNavigation.setContentLoading;
-  if(manageSessionContentLoading&&typeof setSessionContentLoading==='function') setSessionContentLoading(true);
+  if(manageSessionContentLoading) _setSessionContentLoading(true);
   // A deliberate selection leaves the Sessions page immediately. The content
-  // area can then show the same mode-specific loading layout used by tabs and
-  // desktop switches instead of holding the list until the request finishes.
+  // area can show its mode-specific loading layout instead of holding the list
+  // until the request finishes.
   if(wasMobileSessionPage&&typeof closeMobileSidebar==='function') closeMobileSidebar(true);
   try{
     if(_isExternalSession(session)){
@@ -2682,15 +2694,11 @@ async function _openSidebarSession(session, loadOpts={}){
     if(S.session&&S.session.session_id===session.session_id){
       openedTarget=true;
       if(typeof closeMobileSidebar==='function') closeMobileSidebar();
-      // The first tab render may happen while the Sessions page still hides the
-      // titlebar. Rebuild and center once more after revealing its final geometry.
-      const syncSessionTabs=window.__sessionSwipeNavigation&&window.__sessionSwipeNavigation.syncTabs;
-      if(wasMobileSessionPage&&typeof syncSessionTabs==='function') syncSessionTabs(true);
     }
     renderSessionListFromCache();
   }finally{
     if(wasMobileSessionPage&&!openedTarget&&typeof openMobileSessionPage==='function') openMobileSessionPage();
-    if(manageSessionContentLoading&&typeof setSessionContentLoading==='function') setSessionContentLoading(false);
+    if(manageSessionContentLoading) _setSessionContentLoading(false);
   }
 }
 

@@ -8,7 +8,6 @@ INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
 DASHBOARD = (ROOT / "static" / "session-dashboard.js").read_text(encoding="utf-8")
 SESSIONS = (ROOT / "static" / "sessions.js").read_text(encoding="utf-8")
-SWIPE = (ROOT / "static" / "session-swipe-navigation.js").read_text(encoding="utf-8")
 UI = (ROOT / "static" / "ui.js").read_text(encoding="utf-8")
 SW = (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
 
@@ -49,12 +48,11 @@ def test_sessions_put_project_identity_before_title_and_state_at_the_right():
     assert ".session-item.streaming,.session-item.needs-attention,.session-item:focus-within,.session-item.menu-open{padding-right:40px;}" in CSS
 
 
-def test_mobile_adjacent_tabs_pair_live_state_with_the_session_label():
-    build = _function_body(SWIPE, "buildTab")
-    assert "if(visual.streaming||visual.attention)" in build
-    assert build.index("tab.appendChild(indicator)") < build.index("tab.appendChild(title)")
-    assert "justify-content:flex-start;gap:7px" in CSS
-    assert ".mobile-session-tab-state{position:static;transform:none;flex:0 0 10px;}" in CSS
+def test_mobile_adjacent_tabs_are_retired_in_favor_of_the_sessions_menu():
+    assert "session-swipe-navigation.js" not in INDEX
+    assert 'id="mobileSessionTabs"' not in INDEX
+    assert 'id="mobilePrimaryMenu"' in INDEX
+    assert ".app-titlebar{display:none!important;}" in CSS
 
 
 def test_conversation_settings_are_grouped_rule_lists_with_clear_verbs():
@@ -89,7 +87,7 @@ def test_all_changed_shell_assets_have_matching_cache_identities():
         "&classic-duration=v1",
         "&status-indicators=v1",
         "&summary-trust=v1",
-        "&labeled-adjacent-tabs=v1",
+        "&mobile-tabs-removed=v1",
         "&high-signal-toggle=v1",
         "&mobile-session-home=v1",
     )

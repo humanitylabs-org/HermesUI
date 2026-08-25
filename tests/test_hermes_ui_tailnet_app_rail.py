@@ -11,7 +11,6 @@ JS = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
 SW = (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
 MANAGER = (ROOT / "static" / "tailnet-app-manager.js").read_text(encoding="utf-8")
 BOOT = (ROOT / "static" / "boot.js").read_text(encoding="utf-8")
-SWIPE = (ROOT / "static" / "session-swipe-navigation.js").read_text(encoding="utf-8")
 GITIGNORE = (ROOT / ".gitignore").read_text(encoding="utf-8")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 FRAME_BRIDGE = (ROOT / "hermesui" / "support" / "tailnet-frame" / "index.html").read_text(encoding="utf-8")
@@ -570,7 +569,7 @@ def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page(
         in CSS
     )
     assert 'id="btnHamburger"' not in INDEX
-    assert 'id="mobileSessionTabs"' in INDEX
+    assert 'id="mobileSessionTabs"' not in INDEX
     assert 'id="mobilePrimaryMenu"' in INDEX
     assert "activateHermes({openMobileMenu:true})" not in JS
     assert "function openMobileSessionPage()" in BOOT
@@ -578,7 +577,7 @@ def test_mobile_app_selector_is_fixed_on_the_right_and_sessions_are_a_real_page(
     assert "document.documentElement.dataset.mobileSessionView='sessions';" in BOOT
     assert "if(_mobileSessionSelectionRequired())return openMobileSessionPage();" in BOOT
     assert "if(typeof openMobileSessionPage==='function') openMobileSessionPage();" in BOOT
-    assert "if(typeof syncMobileSessionNavigation==='function') syncMobileSessionNavigation();" in SWIPE
+    assert "function syncMobileSessionNavigation()" in BOOT
     assert 'html[data-mobile-session-view="sessions"] .app-titlebar{display:none!important;}' in CSS
     assert '.sidebar.mobile-session-page .mobile-sidebar-close{display:none!important;}' in CSS
     assert '.sidebar.mobile-session-page .panel-view{margin-left:0;}' in CSS

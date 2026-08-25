@@ -57,17 +57,11 @@ def test_help_pane_keeps_docs_and_retargets_issues_to_hermesui():
     assert pane.count('rel="noopener noreferrer"') == 2
 
 
-def test_phone_shell_intentionally_hides_the_reload_control():
+def test_phone_shell_intentionally_reclaims_the_desktop_titlebar():
     phone_start = CSS.index("@media(max-width:640px)")
     phone_css = CSS[phone_start:]
-    assert (
-        ".app-titlebar-inner,.app-titlebar-spacer,.app-titlebar-reload{display:none!important;}"
-        in phone_css
-    )
-    assert (
-        '.mobile-session-tabs{display:block;flex:1 1 auto;min-width:0;height:46px;'
-        in phone_css
-    )
+    assert ".app-titlebar{display:none!important;}" in phone_css
+    assert 'id="mobileSessionTabs"' not in INDEX
 
 
 def test_hermesui_manifest_routes_are_branded_parseable_and_installable():
