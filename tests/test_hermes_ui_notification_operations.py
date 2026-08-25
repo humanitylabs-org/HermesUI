@@ -14,7 +14,7 @@ PANELS = (ROOT / "static" / "panels.js").read_text(encoding="utf-8")
 
 def _function_body(src: str, signature: str) -> str:
     start = src.index(signature)
-    brace = src.index("{", start)
+    brace = src.index("){", start) + 1
     depth = 0
     for idx in range(brace, len(src)):
         char = src[idx]
@@ -275,6 +275,8 @@ def test_contained_reply_sessions_are_removed_before_every_sidebar_render_path()
 
 
 def test_notifications_layout_is_compact_responsive_and_thread_composer_stays_below_messages():
+    assert ".tailnet-notifications-head{display:flex;flex-direction:column;align-items:flex-start" in STYLE
+    assert ".tailnet-notifications-actions{display:flex;align-items:center;justify-content:flex-start" in STYLE
     assert ".tailnet-notifications-mode-button.is-active" in STYLE
     assert ".tailnet-scheduled-group{" in STYLE
     assert ".tailnet-scheduled-job{" in STYLE
@@ -292,9 +294,54 @@ def test_notifications_layout_is_compact_responsive_and_thread_composer_stays_be
     assert "top:32px" in STYLE
 
 
+def test_notification_reply_renders_one_wizard_label_and_skips_empty_messages():
+    helpers = "\n".join(
+        _function_body(RAIL, signature)
+        for signature in (
+            "function threadMessageText",
+            "function stripNotificationContext",
+            "function appendNotificationThreadMessage",
+            "function renderThreadMessages",
+        )
+    )
+    script = f"""
+class Element {{
+  constructor(tag){{this.tag=tag;this.children=[];this.className='';this.textContent='';this.innerHTML='';this.scrollTop=0;this.scrollHeight=0;}}
+  append(...nodes){{this.children.push(...nodes);this.scrollHeight=this.children.length;}}
+  appendChild(node){{this.append(node);return node;}}
+  replaceChildren(...nodes){{this.children=[...nodes];this.scrollHeight=this.children.length;}}
+}}
+global.document={{createElement:(tag)=>new Element(tag)}};
+let notificationThreadMessages=new Element('section');
+let notificationThreadSession={{messages:[
+  {{role:'assistant',content:''}},
+  {{role:'assistant',content:'First update'}},
+  {{role:'assistant',content:'Second update'}},
+  {{role:'user',content:'Continue'}},
+  {{role:'assistant',content:'Final answer'}}
+]}};
+let notificationThreadBaseMessages=[];
+let notificationThreadLiveMessages=['Live progress'];
+let notificationThreadDraft='Streaming tail';
+let notificationThreadClarify=null;
+function renderMd(text){{return text;}}
+{helpers}
+renderThreadMessages();
+const labels=notificationThreadMessages.children.flatMap(row=>row.children.filter(child=>child.tag==='span').map(child=>child.textContent));
+const bodies=notificationThreadMessages.children.flatMap(row=>row.children.filter(child=>child.className==='msg-body').map(child=>child.innerHTML));
+process.stdout.write(JSON.stringify({{labels,bodies,rowCount:notificationThreadMessages.children.length}}));
+"""
+    proc = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+    result = json.loads(proc.stdout)
+    assert result["labels"].count("Wizard") == 1
+    assert "You" in result["labels"]
+    assert "" not in result["bodies"]
+    assert result["rowCount"] == 6
+
+
 def test_active_frequency_assets_share_one_cache_identity():
-    style_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1"
-    rail_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1"
+    style_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&mobile-modern-nav=v1&notification-hierarchy=v1"
+    rail_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1"
     index_style = next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
     sw_style = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     index_rail = next(line for line in INDEX.splitlines() if "static/tailnet-app-rail.js?v=" in line)

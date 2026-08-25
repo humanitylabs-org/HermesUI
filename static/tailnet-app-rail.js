@@ -1743,15 +1743,18 @@
     return next;
   }
 
-  function appendNotificationThreadMessage(role,text,{live=false}={}){
+  function appendNotificationThreadMessage(role,text,{live=false,showLabel=true}={}){
     const row=document.createElement('article');
     row.className=`tailnet-notification-thread-message is-${role}${live?' is-live':''}`;
-    const label=document.createElement('span');
-    label.textContent=role==='user'?'You':'Wizard';
+    if(showLabel){
+      const label=document.createElement('span');
+      label.textContent=role==='user'?'You':'Wizard';
+      row.appendChild(label);
+    }
     const body=document.createElement('div');
     body.className='msg-body';
     try{body.innerHTML=typeof renderMd==='function'?renderMd(text):text;}catch(_){body.textContent=text;}
-    row.append(label,body);
+    row.appendChild(body);
     notificationThreadMessages.appendChild(row);
     return {row,body};
   }
@@ -1761,6 +1764,13 @@
     notificationThreadMessages.replaceChildren();
     const allMessages=Array.isArray(notificationThreadSession&&notificationThreadSession.messages)?notificationThreadSession.messages:[];
     const messages=allMessages.slice(notificationThreadBaseMessages.length).filter(message=>message&&['user','assistant'].includes(message.role));
+    let assistantLabelShown=false;
+    const appendMessage=(role,text,options={})=>{
+      if(!options.allowEmpty&&!String(text||'').trim())return null;
+      const showLabel=role!=='assistant'||!assistantLabelShown;
+      if(role==='assistant')assistantLabelShown=true;
+      return appendNotificationThreadMessage(role,text,{...options,showLabel});
+    };
     if(!messages.length&&!notificationThreadLiveMessages.length&&!notificationThreadDraft&&!notificationThreadClarify){
       const empty=document.createElement('p');
       empty.className='tailnet-notification-thread-empty';
@@ -1769,14 +1779,14 @@
     }
     messages.forEach(message=>{
       const text=message.role==='user'?stripNotificationContext(threadMessageText(message)):threadMessageText(message);
-      appendNotificationThreadMessage(message.role,text);
+      appendMessage(message.role,text);
     });
-    notificationThreadLiveMessages.forEach(text=>appendNotificationThreadMessage('assistant',text,{live:true}));
-    if(notificationThreadDraft)appendNotificationThreadMessage('assistant',notificationThreadDraft,{live:true});
+    notificationThreadLiveMessages.forEach(text=>appendMessage('assistant',text,{live:true}));
+    if(notificationThreadDraft)appendMessage('assistant',notificationThreadDraft,{live:true});
     if(notificationThreadClarify){
       const pending=notificationThreadClarify;
       const responding=!!pending.responding;
-      const {body}=appendNotificationThreadMessage('assistant','',{live:true});
+      const {body}=appendMessage('assistant','',{live:true,allowEmpty:true});
       body.classList.add('tailnet-notification-thread-clarify');
       const question=document.createElement('div');
       question.className='clarify-question';
