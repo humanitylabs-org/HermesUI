@@ -4400,6 +4400,36 @@ function _makeProjectFilterChipKeyboardAccessible(chip,isActive,activate){
     activate();
   };
 }
+function _normalizeProjectPillColor(value){
+  if(typeof value!=='string') return null;
+  let color=value.trim().toLowerCase();
+  if(/^#[0-9a-f]{3,4}$/.test(color)){
+    color='#'+color.slice(1,4).split('').map(part=>part+part).join('');
+  }else if(/^#[0-9a-f]{6}([0-9a-f]{2})?$/.test(color)){
+    color=color.slice(0,7);
+  }else{
+    return null;
+  }
+  return color;
+}
+function _projectPillInk(hex){
+  const channels=[1,3,5].map(index=>parseInt(hex.slice(index,index+2),16)/255);
+  const linear=channels.map(channel=>channel<=.04045?channel/12.92:Math.pow((channel+.055)/1.055,2.4));
+  const luminance=.2126*linear[0]+.7152*linear[1]+.0722*linear[2];
+  const dark='#000000',light='#ffffff';
+  const contrast=ink=>{
+    const inkLuminance=ink===dark?0:1;
+    return (Math.max(luminance,inkLuminance)+.05)/(Math.min(luminance,inkLuminance)+.05);
+  };
+  return contrast(dark)>=contrast(light)?dark:light;
+}
+function _applyProjectPillColor(chip,value){
+  const normalized=_normalizeProjectPillColor(value);
+  if(!normalized) return;
+  chip.classList.add('project-chip-colored');
+  chip.style.setProperty('--project-color',normalized);
+  chip.style.setProperty('--project-ink',_projectPillInk(normalized));
+}
 function _isHiddenCronViewerSession(session, projects=_allProjects){
   if(!session) return false;
   const sid=String(session.session_id||'').trim().toLowerCase();
@@ -8422,12 +8452,7 @@ function renderSessionListFromCache(){
     for(const p of visibleProjects){
       const chip=document.createElement('span');
       chip.className='project-chip'+(p.project_id===_activeProject?' active':'');
-      if(p.color){
-        const dot=document.createElement('span');
-        dot.className='color-dot';
-        dot.style.background=p.color;
-        chip.appendChild(dot);
-      }
+      _applyProjectPillColor(chip,p.color);
       const nameSpan=document.createElement('span');
       nameSpan.className='project-chip-name';
       nameSpan.textContent=p.name;

@@ -6402,7 +6402,7 @@ body.settings-popup-open{overflow:hidden;}
 .session-project-dock{flex:0 0 auto;min-width:0;overflow:hidden;}
 .session-project-dock[hidden]{display:none!important;}
 .project-bar{display:flex;gap:4px;padding:4px 10px 8px;flex-wrap:wrap;align-items:center;flex-shrink:0;}
-.project-chip{font-size:10px;appearance:none;font-family:Inter,system-ui,sans-serif;font-weight:600;line-height:1;padding:3px 8px;border-radius:12px;cursor:pointer;border:1px solid var(--border2);background:var(--input-bg);color:var(--muted);transition:background .15s,color .15s,border-color .15s,box-shadow .15s,transform .12s;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:100%;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;}
+.project-chip{font-size:10px;appearance:none;font-family:Inter,system-ui,sans-serif;font-weight:600;line-height:1;padding:3px 8px;border-radius:12px;cursor:pointer;border:1px solid var(--border2);background:var(--input-bg);color:var(--muted);transition:background .15s,color .15s,border-color .15s,box-shadow .15s,transform .12s;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:100%;box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;}
 .project-chip:hover{background:rgba(255,255,255,.08);color:var(--text);}
 .project-chip.active{background:var(--accent-bg);color:var(--accent-text);border-color:var(--accent-bg);}
 .project-chip:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--accent);}
@@ -6410,6 +6410,21 @@ body.settings-popup-open{overflow:hidden;}
 .project-chip-new{width:24px;min-width:24px;height:24px;padding:0;justify-content:center;background:transparent;color:var(--muted);}
 .project-chip-new svg{display:block;width:13px;height:13px;pointer-events:none;}
 .project-chip.long-pressing{background:var(--accent-bg);color:var(--accent-text);border-color:var(--accent-bg-strong);transform:scale(1.05);}
+.project-chip.project-chip-colored{background:color-mix(in srgb,var(--project-color) 24%,var(--surface));border-color:color-mix(in srgb,var(--project-color) 52%,var(--border2));color:var(--text);}
+.project-chip.project-chip-colored:hover{background:color-mix(in srgb,var(--project-color) 34%,var(--surface));border-color:color-mix(in srgb,var(--project-color) 68%,var(--border2));color:var(--text);}
+.project-chip.project-chip-colored.active{background:var(--project-color);border-color:var(--project-ink);color:var(--project-ink);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--project-ink) 42%,transparent);font-weight:750;}
+.project-chip.project-chip-colored:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;box-shadow:inset 0 0 0 1px var(--project-ink);}
+.project-chip.project-chip-colored.long-pressing{background:var(--project-color);border-color:var(--project-ink);color:var(--project-ink);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--project-ink) 42%,transparent);transform:none;transition-duration:.01ms;}
+:root:not(.dark) .project-chip.project-chip-colored{background:color-mix(in srgb,var(--project-color) 24%,var(--surface));border-color:color-mix(in srgb,var(--project-color) 52%,var(--border2));color:var(--text);}
+:root:not(.dark) .project-chip.project-chip-colored:hover{background:color-mix(in srgb,var(--project-color) 34%,var(--surface));border-color:color-mix(in srgb,var(--project-color) 68%,var(--border2));color:var(--text);}
+:root:not(.dark) .project-chip.project-chip-colored.active,:root:not(.dark) .project-chip.project-chip-colored.long-pressing{background:var(--project-color);border-color:var(--project-ink);color:var(--project-ink);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--project-ink) 42%,transparent);font-weight:750;}
+:root.dark .project-chip.project-chip-colored{background:color-mix(in srgb,var(--project-color) 30%,var(--surface));border-color:color-mix(in srgb,var(--project-color) 58%,var(--border2));color:var(--text);}
+:root.dark .project-chip.project-chip-colored:hover{background:color-mix(in srgb,var(--project-color) 40%,var(--surface));color:var(--text);}
+:root.dark .project-chip.project-chip-colored.active,:root.dark .project-chip.project-chip-colored.long-pressing{background:var(--project-color);border-color:var(--project-ink);color:var(--project-ink);}
+:root[data-skin="geist-contrast"] .project-chip.project-chip-colored{background:color-mix(in srgb,var(--project-color) 24%,var(--surface))!important;border-color:color-mix(in srgb,var(--project-color) 52%,var(--border2))!important;color:var(--text)!important;}
+:root[data-skin="geist-contrast"] .project-chip.project-chip-colored:hover{background:color-mix(in srgb,var(--project-color) 34%,var(--surface))!important;color:var(--text)!important;}
+:root[data-skin="geist-contrast"] .project-chip.project-chip-colored.active,:root[data-skin="geist-contrast"] .project-chip.project-chip-colored.long-pressing{background:var(--project-color)!important;border-color:var(--project-ink)!important;color:var(--project-ink)!important;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--project-ink) 42%,transparent)!important;font-weight:750!important;}
+.project-chip.project-chip-colored .project-chip-quick-create{color:inherit;}
 .project-chip-quick-create{
   border:1px solid transparent;
   border-radius:999px;
@@ -6456,7 +6471,10 @@ body.settings-popup-open{overflow:hidden;}
    rather than another project. Keeps full color treatment in the active
    state so it's still obviously selected. */
 .project-chip.no-project{border-style:dashed;}
-.project-chip .color-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0;}
+@media(forced-colors:active){
+  .project-chip.project-chip-colored{background:ButtonFace!important;border-color:ButtonText!important;color:ButtonText!important;forced-color-adjust:auto;}
+  .project-chip.project-chip-colored.active{background:Highlight!important;border-color:Highlight!important;color:HighlightText!important;box-shadow:none!important;font-weight:750;}
+}
 .project-create-btn{font-size:10px;padding:3px 6px;border-radius:12px;cursor:pointer;border:1px dashed var(--border2);background:none;color:var(--muted);opacity:.6;transition:all .15s;}
 .project-create-btn:hover{opacity:1;border-color:var(--blue);color:var(--blue);}
 .project-create-input{font-size:10px;padding:3px 8px;border-radius:12px;border:1px solid var(--accent-bg);background:var(--surface);color:var(--text);outline:none;min-width:40px;max-width:180px;width:auto;font-family:inherit;box-shadow:0 0 0 2px var(--accent-bg);}
@@ -8024,6 +8042,12 @@ html[data-conversation-outline="enabled"] #outlineToggleBtn:not([hidden]){displa
   .sidebar.mobile-session-page .project-bar::-webkit-scrollbar{display:none;}
   .sidebar.mobile-session-page .project-chip{min-height:36px;box-sizing:border-box;padding:0 12px;border-radius:18px;background:color-mix(in srgb,var(--text) 5%,transparent);border-color:color-mix(in srgb,var(--border2) 62%,transparent);color:var(--muted);font-size:12px;font-weight:640;}
   .sidebar.mobile-session-page .project-chip.active{background:color-mix(in srgb,var(--accent) 12%,transparent);border-color:transparent;color:var(--accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 38%,transparent),inset 0 1px 0 var(--glass-sheen);}
+  .sidebar.mobile-session-page .project-chip.project-chip-colored{background:color-mix(in srgb,var(--project-color) 24%,var(--surface));border-color:color-mix(in srgb,var(--project-color) 52%,var(--border2));color:var(--text);}
+  .sidebar.mobile-session-page .project-chip.project-chip-colored:hover{background:color-mix(in srgb,var(--project-color) 34%,var(--surface));border-color:color-mix(in srgb,var(--project-color) 68%,var(--border2));color:var(--text);}
+  .sidebar.mobile-session-page .project-chip.project-chip-colored.active,.sidebar.mobile-session-page .project-chip.project-chip-colored.long-pressing{background:var(--project-color);border-color:var(--project-ink);color:var(--project-ink);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--project-ink) 42%,transparent),inset 0 1px 0 var(--glass-sheen);font-weight:750;}
+  :root.dark .sidebar.mobile-session-page .project-chip.project-chip-colored{background:color-mix(in srgb,var(--project-color) 30%,var(--surface));border-color:color-mix(in srgb,var(--project-color) 58%,var(--border2));color:var(--text);}
+  :root.dark .sidebar.mobile-session-page .project-chip.project-chip-colored:hover{background:color-mix(in srgb,var(--project-color) 40%,var(--surface));color:var(--text);}
+  :root.dark .sidebar.mobile-session-page .project-chip.project-chip-colored.active,:root.dark .sidebar.mobile-session-page .project-chip.project-chip-colored.long-pressing{background:var(--project-color);border-color:var(--project-ink);color:var(--project-ink);}
   .sidebar.mobile-session-page .project-chip:focus-visible{box-shadow:inset 0 0 0 2px var(--accent);}
   .sidebar.mobile-session-page .project-chip-new{width:36px;min-width:36px;padding:0;background:transparent;color:var(--muted);}
   .sidebar.mobile-session-page .project-chip-new svg{width:15px;height:15px;}
