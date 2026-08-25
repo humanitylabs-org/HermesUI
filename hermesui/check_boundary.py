@@ -146,7 +146,7 @@ def main() -> int:
             raise RuntimeError(f"frontend overlay path mismatch; missing={missing}, extra={extra}")
 
         print(
-            f"Hermes UI boundary passed: upstream backend {commit} is unchanged except explicit pinned extensions; "
+            f"Hermes UI boundary passed: upstream backend {commit} is untouched except explicit pinned extensions; "
             f"{len(changed_static)} frontend overlay files and "
             f"{len(changed) - len(changed_static)} downstream support files are isolated."
         )
