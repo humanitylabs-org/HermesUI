@@ -56,11 +56,12 @@ def test_reserved_cron_project_and_background_sessions_stay_out_of_the_viewer():
     assert "if(next!==NO_PROJECT_FILTER&&(_allProjects||[]).some(project=>" in SESSIONS
 
 
-def test_select_is_in_header_and_archive_is_at_list_bottom():
+def test_select_is_in_header_and_archive_sits_between_done_and_working():
     assert 'onclick="toggleSessionSelectMode()"' in INDEX
     assert "selectModeButton.classList.toggle('active',_sessionSelectMode)" in SESSIONS
     assert "className='session-archive-toggle'" in SESSIONS
-    archive_index = SESSIONS.index("className='session-archive-toggle'")
-    group_render_index = SESSIONS.index("list.appendChild(wrapper);", SESSIONS.index("function renderSessionListFromCache()"))
-    assert archive_index > group_render_index
+    assert "const appendArchiveControls=()=>{" in SESSIONS
+    assert "if(g.status==='working') appendArchiveControls();" in SESSIONS
+    assert "if(g.status==='done') appendArchiveControls();" in SESSIONS
+    assert "appendArchiveControls();\n  appendNewSessionLauncher();" in SESSIONS
     assert ".session-archive-toggle{" in CSS
