@@ -5627,6 +5627,11 @@ const _SESSION_SKELETON_GROUPS = [
 function showSessionListSkeleton(targetProfile){
   const list = $('sessionList');
   if(!list) return;
+  const projectDock=$('sessionProjectDock');
+  if(projectDock){
+    projectDock.replaceChildren();
+    projectDock.hidden=true;
+  }
   // Tear down any active virtual-scroll state up front so a pending scroll-driven
   // render can't repaint the previous profile's cached rows over the skeleton
   // (#4662 Codex gate). Cancel the queued RAF and drop the data-session-virtual-*
@@ -8304,6 +8309,11 @@ function renderSessionListFromCache(){
   const cliSessionTabCount=_sessionSourceTabCount('cli', renderedWebuiSessionCount, renderedCliSessionCount);
   _syncSidebarExpansionForActiveSession(sessions, activeSidForSidebar);
   const list=$('sessionList');
+  const projectDock=$('sessionProjectDock');
+  if(projectDock){
+    projectDock.replaceChildren();
+    projectDock.hidden=true;
+  }
   const animateRefresh=_sessionListRefreshAnimationPending;
   _sessionListRefreshAnimationPending=false;
   const enterAllAnimatedRows=animateRefresh&&_sessionListEnterAllAnimationPending;
@@ -8457,7 +8467,8 @@ function renderSessionListFromCache(){
       if(window._projectQuickCreate) _attachProjectQuickCreateButton(chip,p);
       bar.appendChild(chip);
     }
-    list.appendChild(bar);
+    (projectDock||list).appendChild(bar);
+    if(projectDock) projectDock.hidden=false;
   }
   // Profile filter toggle (show sessions from other profiles).
   // Cross-profile rows live SERVER-SIDE behind ?all_profiles=1, so the toggle

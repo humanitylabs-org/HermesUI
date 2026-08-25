@@ -6398,6 +6398,8 @@ body.settings-popup-open{overflow:hidden;}
 .session-list-error-retry:hover:not(:disabled):not([aria-busy="true"]):not([aria-disabled="true"]){background:var(--hover-bg);border-color:var(--accent-bg-strong);color:var(--text);}
 .session-list-error-retry:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;}
 .session-list-error-retry:disabled,.session-list-error-retry[aria-busy="true"],.session-list-error-retry[aria-disabled="true"]{background:var(--surface);border-color:var(--border2);color:var(--muted);cursor:wait;opacity:1;}
+.session-project-dock{flex:0 0 auto;min-width:0;overflow:hidden;}
+.session-project-dock[hidden]{display:none!important;}
 .project-bar{display:flex;gap:4px;padding:4px 10px 8px;flex-wrap:wrap;align-items:center;flex-shrink:0;}
 .project-chip{font-size:10px;font-weight:600;padding:3px 8px;border-radius:12px;cursor:pointer;border:1px solid var(--border2);background:var(--input-bg);color:var(--muted);transition:all .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;}
 .project-chip:hover{background:rgba(255,255,255,.08);color:var(--text);}
@@ -8011,8 +8013,10 @@ html[data-conversation-outline="enabled"] #outlineToggleBtn:not([hidden]){displa
   .sidebar.mobile-session-page #panelChat .panel-head-btn{width:44px;height:44px;border-radius:14px;color:var(--muted);}
   .sidebar.mobile-session-page #panelChat .panel-head-btn:focus-visible,.sidebar.mobile-session-page #panelChat .panel-head-btn.active,.sidebar.mobile-session-page #panelChat .panel-head-btn[aria-pressed="true"]{background:color-mix(in srgb,var(--text) 8%,transparent);color:var(--text);outline:none;}
   .sidebar.mobile-session-page #panelChat .panel-head-btn:focus-visible{box-shadow:inset 0 0 0 2px var(--accent);}
-  .sidebar.mobile-session-page .session-list{padding:0 10px 12px;}
-  .sidebar.mobile-session-page .project-bar{gap:6px;padding:8px 0 10px;}
+  .sidebar.mobile-session-page .session-list{order:0;padding:0 10px 12px;}
+  .sidebar.mobile-session-page .session-project-dock{order:1;padding:0 10px;border-top:1px solid color-mix(in srgb,var(--border) 72%,transparent);background:color-mix(in srgb,var(--sidebar) 96%,transparent);box-shadow:0 -10px 24px -24px var(--glass-shadow);}
+  .sidebar.mobile-session-page .project-bar{gap:6px;padding:9px 0 10px;flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;}
+  .sidebar.mobile-session-page .project-bar::-webkit-scrollbar{display:none;}
   .sidebar.mobile-session-page .project-chip{min-height:34px;box-sizing:border-box;padding:0 11px;border-radius:17px;background:color-mix(in srgb,var(--surface) 72%,transparent);border-color:color-mix(in srgb,var(--border2) 82%,transparent);font-size:11px;font-weight:680;}
   .sidebar.mobile-session-page .project-chip.active{background:color-mix(in srgb,var(--text) 10%,transparent);border-color:color-mix(in srgb,var(--text) 18%,transparent);color:var(--text);box-shadow:inset 0 1px 0 var(--glass-sheen);}
   .sidebar.mobile-session-page .session-date-group{margin:0;}
