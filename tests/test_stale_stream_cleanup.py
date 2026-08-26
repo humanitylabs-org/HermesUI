@@ -449,6 +449,39 @@ def test_stale_stream_cleanup_does_not_block_on_busy_session_lock():
     assert session.saved_stream_ids == []
 
 
+def test_session_list_stale_reconcile_never_loads_full_transcript(monkeypatch):
+    """A stale sidebar row is normalized in-memory, not repaired on the list path."""
+    rows = [{
+        "session_id": "large-stale-session",
+        "active_stream_id": "dead-stream",
+        "is_streaming": False,
+        "pending_user_message": "old prompt",
+        "has_pending_user_message": True,
+        "pending_attachments": ["old.txt"],
+        "pending_started_at": 123,
+        "pending_user_source": "webui",
+    }]
+    monkeypatch.setattr(
+        routes,
+        "get_session",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("session list must not hydrate a full transcript")
+        ),
+    )
+
+    assert routes._reconcile_stale_stream_state_for_session_rows(rows) is True
+    assert rows == [{
+        "session_id": "large-stale-session",
+        "active_stream_id": None,
+        "is_streaming": False,
+        "pending_user_message": None,
+        "has_pending_user_message": False,
+        "pending_attachments": [],
+        "pending_started_at": None,
+        "pending_user_source": None,
+    }]
+
+
 def test_frontend_drops_inflight_cache_when_server_session_is_idle():
     # #3900/#3899 generalized this block: on an idle server session it now resets
     # the streaming flags (S.busy/S.activeStreamId) AND drops the inflight cache,

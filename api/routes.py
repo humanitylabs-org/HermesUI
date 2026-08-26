@@ -2249,9 +2249,7 @@ def _build_session_list_cache_payload(
     diag_stage("all_sessions")
     webui_sessions = _all_sessions_for_sidebar()
     diag_stage("reconcile_stale_stream_state")
-    if _reconcile_stale_stream_state_for_session_rows(webui_sessions):
-        diag_stage("all_sessions_after_stale_stream_reconcile")
-        webui_sessions = _all_sessions_for_sidebar()
+    _reconcile_stale_stream_state_for_session_rows(webui_sessions)
     diag_stage("normalize_cli_rows")
     show_cli_sessions = bool(show_cli_sessions)
     show_previous_messaging_sessions = bool(show_previous_messaging_sessions)
@@ -5454,28 +5452,28 @@ def _resolve_share_session_pair(sid: str, handler):
 
 
 def _reconcile_stale_stream_state_for_session_rows(session_rows) -> bool:
-    """Clear stale persisted stream fields before /api/sessions serializes rows."""
+    """Project stale stream fields as idle without hydrating full transcripts.
+
+    The sidebar is a read path and must stay cheap even when a stale row belongs
+    to a very large conversation. Durable repair still happens when that single
+    session is opened through /api/session; the list projection only prevents a
+    dead spinner/reconnect loop from leaking into the response meanwhile.
+    """
     changed = False
     for row in session_rows:
         if not isinstance(row, dict):
             continue
-        sid = row.get("session_id")
-        if not sid or not row.get("active_stream_id"):
+        if not row.get("active_stream_id"):
             continue
         if row.get("is_streaming") is True:
             continue
-        try:
-            session = get_session(sid, metadata_only=True)
-        except Exception:
-            logger.debug(
-                "Failed to load session %s while reconciling stale stream state",
-                sid,
-                exc_info=True,
-            )
-            continue
-        if session is None:
-            continue
-        changed = _clear_stale_stream_state(session) or changed
+        row["active_stream_id"] = None
+        row["pending_user_message"] = None
+        row["has_pending_user_message"] = False
+        row["pending_attachments"] = []
+        row["pending_started_at"] = None
+        row["pending_user_source"] = None
+        changed = True
     return changed
 
 # ── CSRF: validate Origin/Referer on POST ────────────────────────────────────
