@@ -428,6 +428,27 @@ def test_stale_stream_cleanup_does_not_clobber_concurrent_chat_start(monkeypatch
     assert session.pending_started_at == 456
 
 
+def test_stale_stream_cleanup_does_not_block_on_busy_session_lock():
+    """Sidebar/list reads must not queue behind a long-running session turn."""
+    config.STREAMS.clear()
+    config.ACTIVE_RUNS.clear()
+    config.SESSION_AGENT_LOCKS.clear()
+    session = _FakeSession()
+    session_lock = routes._get_session_agent_lock(session.session_id)
+
+    session_lock.acquire()
+    try:
+        started = time.monotonic()
+        assert routes._clear_stale_stream_state(session) is False
+        elapsed = time.monotonic() - started
+    finally:
+        session_lock.release()
+
+    assert elapsed < 0.5
+    assert session.active_stream_id == "stale-stream"
+    assert session.saved_stream_ids == []
+
+
 def test_frontend_drops_inflight_cache_when_server_session_is_idle():
     # #3900/#3899 generalized this block: on an idle server session it now resets
     # the streaming flags (S.busy/S.activeStreamId) AND drops the inflight cache,

@@ -30,7 +30,7 @@ import http.client
 import socket as _socket
 from collections import defaultdict, deque
 from pathlib import Path
-from contextlib import closing
+from contextlib import closing, contextmanager
 from urllib.parse import parse_qs, quote, unquote, urljoin, urlsplit
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
@@ -2924,6 +2924,24 @@ def _kanban_unknown_endpoint(handler, parsed, method: str) -> bool:
 # under the session lock — it no-ops unless the session still points at the
 # cancelled stream — so clearing early cannot clobber a newer turn (#6623).
 _STALE_CANCELLED_RUN_GRACE_SECONDS = 60.0
+_STALE_STREAM_SESSION_LOCK_TIMEOUT_SECONDS = 0.05
+
+
+@contextmanager
+def _bounded_stale_stream_session_lock(session_id: str):
+    """Never let read-path stale cleanup wait indefinitely on a busy turn.
+
+    Stale-stream repair is opportunistic. If another worker owns the session
+    lock, preserving the stale marker for a later pass is safer than wedging
+    every /api/sessions request behind that worker.
+    """
+    lock = _get_session_agent_lock(session_id)
+    acquired = lock.acquire(timeout=_STALE_STREAM_SESSION_LOCK_TIMEOUT_SECONDS)
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            lock.release()
 
 
 def _cancelled_run_is_stale(run_entry) -> bool:
@@ -3072,7 +3090,13 @@ def _clear_stale_stream_state(session) -> bool:
     # active_stream_id under it. A concurrent chat_start may have already
     # registered a new stream after our STREAMS_LOCK check above; in that
     # case we must NOT clobber its session.active_stream_id.
-    with _get_session_agent_lock(session.session_id):
+    with _bounded_stale_stream_session_lock(session.session_id) as acquired:
+        if not acquired:
+            logger.debug(
+                "_clear_stale_stream_state: session %s lock is busy; deferring cleanup",
+                getattr(session, "session_id", "?"),
+            )
+            return False
         if getattr(session, "active_stream_id", None) != stream_id:
             return False
         if getattr(session, "pending_user_message", None):
