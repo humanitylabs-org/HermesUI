@@ -2684,8 +2684,15 @@ function _initMediaVisibilityObserver(){
     }
   },{root:null,rootMargin:'300px 0px',threshold:0.01});
 }
+function _isVoiceNoteName(name=''){
+  const clean=String(name||'').split(/[?#]/)[0].split('/').pop()||'';
+  return /^voice-input(?:-\d+)?\.(?:webm|ogg|oga|opus)$/i.test(clean);
+}
 function _mediaKindForName(name=''){
   const clean=String(name||'').split('?')[0].toLowerCase();
+  // Browser microphone capture uses Opus inside WebM. Keep generic .webm video
+  // behavior, but render files created by the composer mic as audio-only notes.
+  if(_isVoiceNoteName(clean)) return 'audio';
   if(_VIDEO_EXTS.test(clean)) return 'video';
   if(_AUDIO_EXTS.test(clean)) return 'audio';
   if(_IMAGE_EXTS.test(clean)) return 'image';
@@ -2699,6 +2706,9 @@ function _mediaSpeedControlsHtml(kind, label){
 function _mediaPlayerHtml(kind, src, name, extra=''){
   const safeName=esc(name||'media');
   const safeSrc=esc(src);
+  if(kind==='audio'&&_isVoiceNoteName(name)){
+    return `<div class="msg-voice-note" data-media-kind="audio"><audio class="msg-media-player msg-media-audio msg-voice-note-audio" src="${safeSrc}" controls preload="metadata" title="Voice message" aria-label="Voice message"></audio></div>`;
+  }
   const tag=kind==='video'
     ? `<video class="msg-media-player msg-media-video" src="${safeSrc}" controls preload="metadata" playsinline title="${safeName}"></video>`
     : `<audio class="msg-media-player msg-media-audio" src="${safeSrc}" controls preload="metadata" title="${safeName}"></audio>`;
@@ -8077,6 +8087,21 @@ function renderMd(raw){
 
 function _stripAttachedFilesMarkerForDisplay(text){
   return String(text||'').replace(/\n\n\[Attached files: [^\]]+\]$/,'').trim();
+}
+
+function _stripGeneratedUploadCopyForDisplay(text, attachments){
+  const value=String(text||'').trim();
+  if(!value||!Array.isArray(attachments)||!attachments.length) return value;
+  const names=attachments.map(item=>{
+    const label=typeof item==='string'?item:(item&&(item.name||item.filename||item.path))||'';
+    return String(label).split('/').pop().trim().toLowerCase();
+  }).filter(Boolean);
+  if(!names.length) return value;
+  const lower=value.toLowerCase();
+  if(!names.every(name=>lower.includes(name))) return value;
+  if(/^uploaded:\s*.+$/i.test(value)) return '';
+  const wire=value.match(/^i['’]ve uploaded\s+(\d+)\s+file\(s\):\s*.+$/i);
+  return wire&&Number(wire[1])===names.length?'':value;
 }
 
 function setStatus(t){
@@ -16947,7 +16972,7 @@ function renderMessages(options){
     if(!isUser&&_isMarkerOnlyAssistantCompressionMessage(m)){
       content='**Error:** No response received after context compression. Please retry.';
     }
-    const displayContent=isUser?_stripAttachedFilesMarkerForDisplay(_stripWorkspaceDisplayPrefix(content)):content;
+    const displayContent=isUser?_stripGeneratedUploadCopyForDisplay(_stripAttachedFilesMarkerForDisplay(_stripWorkspaceDisplayPrefix(content)),m.attachments):content;
     const rowDisplayContent=displayContent;
     if(!isUser&&_isAssistantEmptyPlaceholderContent(m, displayContent)){
       content='';
@@ -16990,7 +17015,7 @@ function renderMessages(options){
     const recoveryHtml=recoveryPayload ? _compressionRecoveryHtml(recoveryPayload, (S.session&&S.session.session_id)||'') : '';
     if(recoveryHtml) bodyHtml += recoveryHtml;
     const statusHtml = (!isUser&&m._statusCard) ? _statusCardHtml(m._statusCard) : '';
-    const isEditableUser=isUser&&rawIdx===lastUserRawIdx;
+    const isEditableUser=isUser&&String(displayContent||'').trim()!==''&&rawIdx===lastUserRawIdx;
     const editBtn  = isEditableUser ? `<button class="msg-action-btn" title="${t('edit_message')}" onclick="editMessage(this)">${li('pencil',13)}</button>` : '';
     const undoBtn  = isLastAssistant ? `<button class="msg-action-btn" title="${t('undo_exchange')}" onclick="undoLastExchange()">${li('undo',13)}</button>` : '';
     const retryBtn = isLastAssistant ? `<button class="msg-action-btn" title="${t('regenerate')}" onclick="regenerateResponse(this)">${li('rotate-ccw',13)}</button>` : '';

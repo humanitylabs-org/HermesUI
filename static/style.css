@@ -3120,6 +3120,13 @@
   .msg-media-player{width:100%;display:block;border-radius:8px;}
   .msg-media-video.msg-media-player{max-height:320px;object-fit:contain;background:#000;border:1px solid var(--border2);}
   .msg-media-audio.msg-media-player{height:36px;background:transparent;}
+  /* Composer microphone recordings are voice notes, not generic media-editor
+     artifacts. Keep native audio controls for iOS/PWA reliability while
+     removing the filename and six-button speed toolbar from the chat bubble. */
+  .msg-voice-note{display:flex;align-items:center;width:min(340px,calc(100vw - 88px));max-width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:18px;background:var(--surface);margin:3px 0;overflow:hidden;}
+  .msg-voice-note-audio{min-width:0;width:100%;height:36px;}
+  .msg-row[data-role="user"] .msg-body:empty{display:none;}
+  .msg-row[data-role="user"]:has(> .msg-body:empty) .msg-files{margin-bottom:4px;}
   .msg-media-meta{display:flex;align-items:center;gap:8px;min-width:0;font-size:11px;color:var(--muted);}
   .msg-media-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .media-speed-controls{display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
