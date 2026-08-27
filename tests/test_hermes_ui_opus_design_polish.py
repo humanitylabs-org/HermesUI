@@ -52,7 +52,8 @@ def test_mobile_adjacent_tabs_are_retired_in_favor_of_the_sessions_menu():
     assert "session-swipe-navigation.js" not in INDEX
     assert 'id="mobileSessionTabs"' not in INDEX
     assert 'id="mobilePrimaryMenu"' in INDEX
-    assert ".app-titlebar{display:none!important;}" in CSS
+    assert ".app-titlebar{display:flex!important;height:34px" in CSS
+    assert 'html[data-mobile-session-view="sessions"] .app-titlebar,html[data-tailnet-view="external"] .app-titlebar{display:none!important;}' in CSS
 
 
 def test_conversation_settings_are_grouped_rule_lists_with_clear_verbs():
