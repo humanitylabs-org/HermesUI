@@ -33,7 +33,9 @@ def test_mobile_tabs_and_cross_session_swipe_are_retired_from_the_shell():
 def test_mobile_shell_reclaims_the_former_tab_titlebar_space():
     phone_start = CSS.index("@media(max-width:640px)")
     phone_css = CSS[phone_start:]
-    assert ".app-titlebar{display:none!important;}" in phone_css
+    assert ".app-titlebar{display:flex!important;height:34px" in phone_css
+    assert 'html[data-mobile-session-view="sessions"] .app-titlebar,html[data-tailnet-view="external"] .app-titlebar{display:none!important;}' in phone_css
+    assert ".app-titlebar-icon,.app-titlebar-sub,.app-titlebar-spacer,.app-titlebar-reload" in phone_css
     assert '<header class="app-titlebar" role="banner">' in INDEX
     assert ".app-titlebar{display:flex;align-items:center;justify-content:center;height:38px;" in CSS
 
@@ -79,7 +81,7 @@ def test_mobile_shell_has_no_swipe_down_refresh_gesture():
     assert "pull-to-refresh-indicator" not in UI
     assert "refreshSessionList('pull'" not in UI
     assert "pull-to-refresh-indicator" not in CSS
-    assert "html,body{overscroll-behavior-y:none;}" in CSS
+    assert "html,body{overscroll-behavior:none;}" in CSS
 
 
 def test_destination_composer_is_immediate_and_draft_owned_during_loading():

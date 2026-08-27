@@ -52,7 +52,7 @@ def test_folder_dock_assets_share_one_cache_identity():
     assert token in index_style and token in sw_style
     assert token in index_sessions and token in sw_sessions
 
-    quiet_token = "&mobile-folder-quiet=v1"
+    quiet_token = "&mobile-folder-quiet=v2"
     assert quiet_token in index_style and quiet_token in sw_style
     assert quiet_token not in index_sessions and quiet_token not in sw_sessions
 
@@ -78,20 +78,22 @@ def test_folder_plus_is_an_action_not_a_selectable_filter():
     assert ".project-chip-new svg{" in CSS
     assert "folder-plus" in SESSIONS
     assert "aria-hidden=\"true\"" in SESSIONS
-    assert "width:30px" in CSS
-    assert "min-width:30px" in CSS
+    mobile_start = CSS.index("/* Mobile chat polish:")
+    mobile = CSS[mobile_start:]
+    assert "width:22px" in mobile
+    assert "min-width:22px" in mobile
 
 
 def test_mobile_folder_pills_are_visually_compact_but_keep_a_44px_touch_pitch():
     mobile_start = CSS.index("/* Mobile chat polish:")
     mobile = CSS[mobile_start:CSS.index("@media(max-width:640px) and (hover:hover)", mobile_start)]
-    assert ".sidebar.mobile-session-page .project-bar{gap:14px 8px;padding:7px 0;flex-wrap:wrap" in mobile
+    assert ".sidebar.mobile-session-page .project-bar{gap:22px 8px;padding:7px 0;flex-wrap:wrap" in mobile
     assert "max-height:132px;overflow-y:auto" in mobile
-    assert ".sidebar.mobile-session-page .project-chip{position:relative;min-height:30px" in mobile
-    assert "padding:0 10px;border-radius:15px" in mobile
-    assert "font-size:12px;font-weight:600" in mobile
-    assert ".sidebar.mobile-session-page .project-chip::after{content:\"\";position:absolute;inset:-7px -1px" in mobile
-    assert ".sidebar.mobile-session-page .project-chip-new::after{inset:-7px -6px;}" in mobile
+    assert ".sidebar.mobile-session-page .project-chip{position:relative;min-height:22px" in mobile
+    assert "padding:0 9px;border-radius:11px" in mobile
+    assert "font-size:11.5px;font-weight:600" in mobile
+    assert ".sidebar.mobile-session-page .project-chip::after{content:\"\";position:absolute;inset:-11px -2px" in mobile
+    assert ".sidebar.mobile-session-page .project-chip-new::after{inset:-11px -6px;}" in mobile
 
 
 def test_folder_context_menu_is_clamped_above_mobile_navigation():
