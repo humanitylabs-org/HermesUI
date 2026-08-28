@@ -2560,38 +2560,42 @@
     .mobile-primary-notifications-badge[hidden]{display:none!important;}
     html[data-mobile-session-view="sessions"] .app-titlebar{display:none!important;}
     .mobile-layer-back-swipe-zone,.mobile-app-layer-swipe-zone{display:none;}
-    html[data-mobile-layer="conversation"] .mobile-layer-back-swipe-zone{position:fixed;z-index:219;top:calc(env(safe-area-inset-top,0px) + 42px);left:0;bottom:calc(var(--mobile-nav-clearance) + 8px);display:block;width:40px;background:transparent;touch-action:pan-y;-webkit-tap-highlight-color:transparent;}
-    html[data-tailnet-view="external"] .mobile-app-layer-swipe-zone{position:fixed;z-index:219;top:calc(env(safe-area-inset-top,0px) + 8px);left:0;bottom:calc(var(--mobile-nav-clearance) + 8px);display:block;width:40px;background:transparent;touch-action:pan-y;-webkit-tap-highlight-color:transparent;}
-    /* Three real mobile panes: Sessions ↔ Conversation ↔ selected Tailnet app.
-       Canonical state stays unchanged while these surfaces track the thumb. */
+    html[data-mobile-layer="conversation"] .mobile-layer-back-swipe-zone,
+    html[data-tailnet-view="external"] .mobile-app-layer-swipe-zone{
+      position:fixed;
+      z-index:219;
+      top:calc(env(safe-area-inset-top,0px) + 8px);
+      left:0;
+      bottom:calc(var(--mobile-nav-clearance) + 8px);
+      display:block;
+      background:transparent;
+      touch-action:pan-y;
+      -webkit-tap-highlight-color:transparent;
+    }
+    html[data-mobile-layer="conversation"] .mobile-layer-back-swipe-zone{width:24px;}
+    html[data-tailnet-view="external"] .mobile-app-layer-swipe-zone{width:40px;}
+    /* Back only: the current card follows the thumb and reveals its already-mounted parent.
+       The bottom menu and Tailnet rail stay fixed, and the app iframe never remounts. */
     html[data-mobile-layer-drag],html[data-mobile-layer-drag] body{overflow-x:clip;}
-    html[data-mobile-layer-drag] .layout{overflow:hidden;}
-    html[data-mobile-layer-drag="conversation-to-sessions"] .main,
-    html[data-mobile-layer-drag="sessions-to-conversation"] .main,
-    html[data-mobile-layer-drag="conversation-to-sessions"] .app-titlebar,
-    html[data-mobile-layer-drag="sessions-to-conversation"] .app-titlebar{transform:translate3d(var(--mobile-layer-drag-progress,0%),0,0);will-change:transform;}
-    html[data-mobile-layer-drag="conversation-to-sessions"]:not([data-tailnet-view="external"]) .sidebar,
-    html[data-mobile-layer-drag="sessions-to-conversation"]:not([data-tailnet-view="external"]) .sidebar{transform:translate3d(calc(-100% + var(--mobile-layer-drag-progress,0%)),0,0);will-change:transform;box-shadow:8px 0 28px rgba(0,0,0,.18);}
-    html[data-mobile-session-view="sessions"][data-mobile-layer-drag] .app-titlebar{display:flex!important;}
-    html[data-mobile-layer-drag="conversation-to-app"] .layout,
-    html[data-mobile-layer-drag="app-to-conversation"] .layout{padding-top:0!important;overflow:hidden;}
-    html[data-mobile-layer-drag="conversation-to-app"] .layout>.main,
-    html[data-mobile-layer-drag="app-to-conversation"] .layout>.main{display:flex!important;transform:translate3d(calc(0% - var(--mobile-layer-drag-progress,0%)),0,0);will-change:transform;}
-    html[data-mobile-layer-drag="conversation-to-app"] .app-titlebar,
-    html[data-tailnet-view="external"][data-mobile-layer-drag="app-to-conversation"] .app-titlebar{display:flex!important;transform:translate3d(calc(0% - var(--mobile-layer-drag-progress,0%)),0,0);will-change:transform;}
-    html[data-mobile-layer-drag="conversation-to-app"] .tailnet-app-workspace,
-    html[data-mobile-layer-drag="app-to-conversation"] .tailnet-app-workspace{display:block!important;position:fixed;z-index:19;top:var(--app-titlebar-safe-top);right:var(--mobile-rail-w);bottom:var(--mobile-nav-clearance);left:0;width:auto!important;max-width:none!important;transform:translate3d(calc(100% - var(--mobile-layer-drag-progress,0%)),0,0);will-change:transform;}
-    html[data-mobile-layer-drag="conversation-to-app"] #tailnetAppFrame[hidden],
-    html[data-mobile-layer-drag="app-to-conversation"] #tailnetAppFrame[hidden]{display:block!important;}
-    html[data-mobile-layer-drag="conversation-to-app"] #tailnetAppFrame,
-    html[data-mobile-layer-drag="app-to-conversation"] #tailnetAppFrame{pointer-events:none;}
-    html[data-mobile-layer-drag-phase="dragging"] .main,
+    html[data-mobile-layer-drag="conversation-to-sessions"] .sidebar{display:flex!important;z-index:200;transform:translate3d(calc(-30% + var(--mobile-layer-drag-parallax,0px)),0,0);will-change:transform;}
+    html[data-mobile-layer-drag="conversation-to-sessions"] .layout>.main{display:flex!important;position:relative;z-index:201;transform:translate3d(var(--mobile-layer-drag-offset,0px),0,0);will-change:transform;box-shadow:-10px 0 28px rgba(0,0,0,.18);}
+    html[data-mobile-layer-drag="conversation-to-sessions"] .app-titlebar{z-index:202;transform:translate3d(var(--mobile-layer-drag-offset,0px),0,0);will-change:transform;}
+    html[data-mobile-layer-drag="app-to-conversation"] .layout,
+    html[data-mobile-layer-drag="app-to-sessions"] .layout{padding-top:0!important;overflow:hidden;}
+    html[data-mobile-layer-drag="app-to-conversation"] .layout>.main{display:flex!important;position:relative;z-index:217;transform:translate3d(calc(-30% + var(--mobile-layer-drag-parallax,0px)),0,0);will-change:transform;}
+    html[data-tailnet-view="external"][data-mobile-layer-drag="app-to-conversation"] .app-titlebar{display:flex!important;z-index:217;transform:translate3d(calc(-30% + var(--mobile-layer-drag-parallax,0px)),0,0);will-change:transform;}
+    html[data-mobile-layer-drag="app-to-sessions"] .sidebar{display:flex!important;z-index:217;transform:translate3d(calc(-30% + var(--mobile-layer-drag-parallax,0px)),0,0)!important;will-change:transform;}
+    html[data-mobile-layer-drag="app-to-conversation"] .tailnet-app-workspace,
+    html[data-mobile-layer-drag="app-to-sessions"] .tailnet-app-workspace{display:block!important;position:fixed;z-index:218;inset:0 var(--mobile-rail-w) var(--mobile-nav-clearance) 0;width:auto!important;max-width:none!important;transform:translate3d(var(--mobile-layer-drag-offset,0px),0,0);will-change:transform;box-shadow:-10px 0 28px rgba(0,0,0,.18);}
+    html[data-mobile-layer-drag="app-to-conversation"] #tailnetAppFrame,
+    html[data-mobile-layer-drag="app-to-sessions"] #tailnetAppFrame{pointer-events:none;}
+    html[data-mobile-layer-drag-phase="dragging"] .sidebar,
+    html[data-mobile-layer-drag-phase="dragging"] .layout>.main,
     html[data-mobile-layer-drag-phase="dragging"] .app-titlebar,
-    html[data-mobile-layer-drag-phase="dragging"]:not([data-tailnet-view="external"]) .sidebar,
     html[data-mobile-layer-drag-phase="dragging"] .tailnet-app-workspace{transition:none;}
-    html[data-mobile-layer-drag-phase="settling"] .main,
+    html[data-mobile-layer-drag-phase="settling"] .sidebar,
+    html[data-mobile-layer-drag-phase="settling"] .layout>.main,
     html[data-mobile-layer-drag-phase="settling"] .app-titlebar,
-    html[data-mobile-layer-drag-phase="settling"]:not([data-tailnet-view="external"]) .sidebar,
     html[data-mobile-layer-drag-phase="settling"] .tailnet-app-workspace{transition:transform var(--mobile-layer-drag-duration,180ms) cubic-bezier(.2,.82,.25,1);}
     .sidebar.mobile-session-page .mobile-sidebar-close{display:none!important;}
     .sidebar.mobile-session-page .panel-view{margin-left:0;}
@@ -2639,7 +2643,7 @@
     }
   }
   @media(max-width:640px) and (prefers-reduced-motion:reduce){
-    .rail.tailnet-app-rail,.mobile-rail-handle,.mobile-rail-handle svg,.rail.tailnet-app-rail .rail-btn,.mobile-primary-action,.mobile-session-utility,.mobile-session-utility-switch,.mobile-session-utility-knob,.project-chip,html[data-mobile-layer-drag-phase="settling"] .main,html[data-mobile-layer-drag-phase="settling"] .app-titlebar,html[data-mobile-layer-drag-phase="settling"]:not([data-tailnet-view="external"]) .sidebar,html[data-mobile-layer-drag-phase="settling"] .tailnet-app-workspace{transition-duration:.01ms!important;}
+    .rail.tailnet-app-rail,.mobile-rail-handle,.mobile-rail-handle svg,.rail.tailnet-app-rail .rail-btn,.mobile-primary-action,.mobile-session-utility,.mobile-session-utility-switch,.mobile-session-utility-knob,.project-chip,html[data-mobile-layer-drag-phase="settling"] .sidebar,html[data-mobile-layer-drag-phase="settling"] .layout>.main,html[data-mobile-layer-drag-phase="settling"] .app-titlebar,html[data-mobile-layer-drag-phase="settling"] .tailnet-app-workspace{transition-duration:.01ms!important;}
     .rail.tailnet-app-rail .rail-btn:active,.mobile-primary-action:active,.project-chip:active,.project-chip.long-pressing{transform:none;}
     .mobile-rail-handle:active{transform:translateY(-50%);}
   }
