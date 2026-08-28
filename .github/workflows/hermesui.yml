@@ -2,7 +2,15 @@ name: Hermes UI overlay
 
 on:
   pull_request:
+    branches:
+      - integration/hermesui-live-9594387d
   push:
+    branches:
+      - integration/hermesui-live-9594387d
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
