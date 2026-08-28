@@ -34,7 +34,7 @@ jobs:
           node --check static/login.js
           node --check static/panels.js
           node --check static/session-dashboard.js
-          node --check static/session-swipe-navigation.js
+          node --check static/mobile-layer-navigation.js
           node --check static/sessions.js
           node --check static/share.js
           bash -n hermesui/installer/*.sh qa/*.sh
