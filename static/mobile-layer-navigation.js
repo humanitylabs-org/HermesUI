@@ -100,14 +100,28 @@
 
   function resetGesture(){gesture=null;pendingTouchPointerId=null;}
 
+  function markDragPreview(){
+    if(!gesture||!/-to-sessions$/.test(gesture.dragMode))return;
+    const sidebar=document.querySelector('.sidebar');
+    if(!sidebar||sidebar.classList.contains('mobile-session-page'))return;
+    sidebar.dataset.mobileLayerPreview='sessions';
+    sidebar.classList.add('mobile-session-page');
+  }
+
+  function clearDragPreview(){
+    const sidebar=document.querySelector('.sidebar');
+    if(!sidebar||sidebar.dataset.mobileLayerPreview!=='sessions')return;
+    delete sidebar.dataset.mobileLayerPreview;
+    if(root.dataset.mobileSessionView!=='sessions')sidebar.classList.remove('mobile-session-page');
+  }
+
   function clearInteractiveDrag(){
+    clearDragPreview();
     if(settleTimer){window.clearTimeout(settleTimer);settleTimer=0;}
     root.removeAttribute('data-mobile-layer-drag');
     root.removeAttribute('data-mobile-layer-drag-phase');
     root.removeAttribute('data-mobile-layer-busy');
-    root.style.removeProperty('--mobile-layer-drag-progress');
     root.style.removeProperty('--mobile-layer-drag-offset');
-    root.style.removeProperty('--mobile-layer-drag-parallax');
     root.style.removeProperty('--mobile-layer-drag-duration');
   }
 
@@ -131,9 +145,8 @@
     gesture.width=interactiveWidth();
     gesture.progress=0;
     root.style.setProperty('--mobile-layer-drag-duration','0ms');
-    root.style.setProperty('--mobile-layer-drag-progress','0%');
     root.style.setProperty('--mobile-layer-drag-offset','0px');
-    root.style.setProperty('--mobile-layer-drag-parallax','0px');
+    markDragPreview();
     const surface=gesture.dragMode==='conversation-to-sessions'
       ?document.querySelector('.main')
       :document.getElementById('tailnetAppWorkspace');
@@ -146,9 +159,7 @@
     const offset=Math.max(0,Math.min(width,dx));
     const progress=Math.max(0,Math.min(1,offset/width));
     gesture.progress=progress;
-    root.style.setProperty('--mobile-layer-drag-progress',`${progress*100}%`);
     root.style.setProperty('--mobile-layer-drag-offset',`${offset}px`);
-    root.style.setProperty('--mobile-layer-drag-parallax',`${offset*.3}px`);
   }
 
   function recordSample(touch,now){
@@ -314,9 +325,7 @@
       :document.getElementById('tailnetAppWorkspace');
     if(transitionSurface)transitionSurface.getBoundingClientRect();
     requestAnimationFrame(()=>{
-      root.style.setProperty('--mobile-layer-drag-progress',`${target*100}%`);
       root.style.setProperty('--mobile-layer-drag-offset',`${target*finished.width}px`);
-      root.style.setProperty('--mobile-layer-drag-parallax',`${target*finished.width*.3}px`);
     });
 
     let finalized=false;
