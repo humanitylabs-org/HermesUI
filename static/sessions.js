@@ -2640,9 +2640,12 @@ function _sidebarSessionProfileName(session){
 }
 
 let _sessionContentLoadingDepth=0;
-function _setSessionContentLoading(on){
-  _sessionContentLoadingDepth=Math.max(0,_sessionContentLoadingDepth+(on?1:-1));
-  const visible=_sessionContentLoadingDepth>0;
+let _sessionContentLoadingShowTimer=0;
+let _sessionContentLoadingHideTimer=0;
+let _sessionContentLoadingShownAt=0;
+const _SESSION_CONTENT_LOADING_SHOW_DELAY_MS=120;
+const _SESSION_CONTENT_LOADING_MIN_VISIBLE_MS=320;
+function _applySessionContentLoading(visible){
   const messages=document.getElementById('messages');
   const skeleton=document.getElementById('sessionSwitchSkeleton');
   if(messages){
@@ -2650,7 +2653,44 @@ function _setSessionContentLoading(on){
     messages.setAttribute('aria-busy',visible?'true':'false');
   }
   if(skeleton) skeleton.hidden=!visible;
+  _sessionContentLoadingShownAt=visible?performance.now():0;
 }
+function _scheduleSessionContentLoadingShow(delay=_SESSION_CONTENT_LOADING_SHOW_DELAY_MS){
+  if(_sessionContentLoadingDepth<=0||_sessionContentLoadingShowTimer)return;
+  const messages=document.getElementById('messages');
+  if(messages&&messages.classList.contains('session-switch-loading'))return;
+  _sessionContentLoadingShowTimer=window.setTimeout(()=>{
+    _sessionContentLoadingShowTimer=0;
+    if(_sessionContentLoadingDepth<=0)return;
+    if(document.documentElement.hasAttribute('data-mobile-layer-drag')){
+      _scheduleSessionContentLoadingShow(60);
+      return;
+    }
+    _applySessionContentLoading(true);
+  },Math.max(0,delay));
+}
+function _setSessionContentLoading(on){
+  _sessionContentLoadingDepth=Math.max(0,_sessionContentLoadingDepth+(on?1:-1));
+  if(_sessionContentLoadingDepth>0){
+    if(_sessionContentLoadingHideTimer){window.clearTimeout(_sessionContentLoadingHideTimer);_sessionContentLoadingHideTimer=0;}
+    _scheduleSessionContentLoadingShow();
+    return;
+  }
+  if(_sessionContentLoadingShowTimer){window.clearTimeout(_sessionContentLoadingShowTimer);_sessionContentLoadingShowTimer=0;}
+  const messages=document.getElementById('messages');
+  if(!messages||!messages.classList.contains('session-switch-loading')){
+    _applySessionContentLoading(false);
+    return;
+  }
+  const elapsed=performance.now()-_sessionContentLoadingShownAt;
+  const delay=Math.max(0,_SESSION_CONTENT_LOADING_MIN_VISIBLE_MS-elapsed);
+  const hide=()=>{_sessionContentLoadingHideTimer=0;if(_sessionContentLoadingDepth===0)_applySessionContentLoading(false);};
+  if(delay>0)_sessionContentLoadingHideTimer=window.setTimeout(hide,delay);
+  else hide();
+}
+document.addEventListener('hermesui:mobile-layer-change',()=>{
+  if(_sessionContentLoadingDepth>0)_scheduleSessionContentLoadingShow(0);
+});
 
 async function _ensureSidebarSessionProfile(session){
   const targetProfile=_sidebarSessionProfileName(session);
