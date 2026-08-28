@@ -300,13 +300,17 @@
     syncMobileUtilities();
   }
 
+  function openMobileSessionsFromConversation(){
+    if(!isPhoneWidth()||typeof window.openMobileSessionPage!=='function')return false;
+    setMobileUtilitiesOpen(false);
+    activateHermes();
+    if(!window.openMobileSessionPage())return false;
+    syncMobilePrimaryMenu();
+    return true;
+  }
+
   function bindMobilePrimaryMenu(){
-    if(mobileSessionsButton)mobileSessionsButton.addEventListener('click',()=>{
-      setMobileUtilitiesOpen(false);
-      activateHermes();
-      if(typeof window.openMobileSessionPage==='function')window.openMobileSessionPage();
-      syncMobilePrimaryMenu();
-    });
+    if(mobileSessionsButton)mobileSessionsButton.addEventListener('click',openMobileSessionsFromConversation);
     if(mobileNotificationsButton)mobileNotificationsButton.addEventListener('click',()=>{
       setMobileUtilitiesOpen(false);
       activateNotifications();
@@ -3065,6 +3069,7 @@
   window.hermesMobileTailnetNavigation={
     restoreLastApp:restoreLastMobileTailnetApp,
     openSessions:openMobileSessionsFromTailnet,
+    openSessionsFromConversation:openMobileSessionsFromConversation,
     closeUtilities:closeMobileUtilitiesForLayerGesture,
     hasLastApp:()=>Boolean(readLastMobileTailnetAppId())
   };
