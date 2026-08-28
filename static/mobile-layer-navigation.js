@@ -5,21 +5,14 @@
   const backSwipeZone=document.getElementById('mobileLayerBackSwipeZone');
   const appSwipeZone=document.getElementById('mobileAppLayerSwipeZone');
   const announcer=document.getElementById('mobileLayerAnnouncer');
-  const BACK_EDGE_WIDTH_PX=40;
-  const EDGE_INSET_PX=16;
-  const EDGE_WIDTH_PX=24;
+  const BACK_EDGE_WIDTH_PX=24;
   const AXIS_LOCK_PX=10;
-  const ACTIVATE_PX=24;
-  const COMMIT_PX=72;
-  const FLICK_DISTANCE_PX=40;
-  const FLICK_VELOCITY_PX_MS=.5;
   const INTERACTIVE_COMMIT_RATIO=.34;
-  const INTERACTIVE_FLICK_DISTANCE_PX=28;
+  const INTERACTIVE_FLICK_MIN_PX=28;
   const INTERACTIVE_FLICK_VELOCITY_PX_MS=.35;
   const INTERACTIVE_REVERSE_VELOCITY_PX_MS=.35;
   const DOMINANCE_RATIO=1.6;
-  const COOLDOWN_MS=250;
-  const INTERACTIVE_COOLDOWN_MS=80;
+  const CLICK_SUPPRESSION_MS=250;
   const BLOCKED_ORIGIN_SELECTOR=[
     '.composer-box','textarea','input','select','[contenteditable="true"]',
     '.messages pre','.msg-body pre','code','table','.project-bar','.session-source-tabs',
@@ -28,8 +21,6 @@
   ].join(',');
 
   let gesture=null;
-  let cooldownUntil=0;
-  let utilitiesOpenAtPointerDown=false;
   let settleTimer=0;
   let suppressClickUntil=0;
   let pendingTouchPointerId=null;
@@ -42,14 +33,6 @@
     if(root.dataset.tailnetView==='external')return 'app';
     if(root.dataset.mobileSessionView==='sessions')return 'sessions';
     return 'conversation';
-  }
-
-  function contentRightEdge(){
-    if(root.dataset.mobileRail==='collapsed')return window.innerWidth;
-    const rail=document.querySelector('.tailnet-app-rail');
-    if(!rail)return window.innerWidth;
-    const rect=rail.getBoundingClientRect();
-    return rect.width>0&&rect.left>0?rect.left:window.innerWidth;
   }
 
   function verticalGestureBounds(){
@@ -77,28 +60,41 @@
     });
   }
 
+  function hasConversation(){
+    if(typeof window._mobileSessionSelectionRequired==='function')return !window._mobileSessionSelectionRequired();
+    return Boolean(window.S&&window.S.session&&window.S.session.session_id);
+  }
+
+  function conversationIsLoading(){
+    const messages=document.getElementById('messages');
+    return Boolean(messages&&messages.classList.contains('session-switch-loading'));
+  }
+
   function candidateForTouch(touch,target){
-    if(!isPhoneWidth()||Date.now()<cooldownUntil||modalBlocksNavigation()||originBlocked(target))return null;
+    if(!isPhoneWidth()||root.hasAttribute('data-mobile-layer-busy')||modalBlocksNavigation()||originBlocked(target))return null;
     const bounds=verticalGestureBounds();
     if(touch.clientY<bounds.top||touch.clientY>bounds.bottom)return null;
+    const inBackBand=touch.clientX>=0&&touch.clientX<=BACK_EDGE_WIDTH_PX;
+    if(!inBackBand)return null;
     const layer=currentLayer();
     const tailnet=window.hermesMobileTailnetNavigation;
+    if(layer==='conversation'&&target===backSwipeZone){
+      if(conversationIsLoading())return null;
+      if(!tailnet||typeof tailnet.openSessionsFromConversation!=='function')return null;
+      return {layer,destination:'sessions',direction:'back',sign:1,interactive:true,dragMode:'conversation-to-sessions'};
+    }
     if(layer==='app'){
       if(target!==appSwipeZone)return null;
-      const inBackBand=touch.clientX>=0&&touch.clientX<=BACK_EDGE_WIDTH_PX;
-      if(!inBackBand||!hasConversation()||!tailnet||typeof tailnet.canLeaveActiveApp!=='function'||!tailnet.canLeaveActiveApp())return null;
-      return {layer,direction:'back',sign:1,interactive:true,dragMode:'app-to-conversation'};
+      if(!tailnet||typeof tailnet.canLeaveActiveApp!=='function'||!tailnet.canLeaveActiveApp())return null;
+      return {
+        layer,
+        destination:hasConversation()?'conversation':'sessions',
+        direction:'back',
+        sign:1,
+        interactive:true,
+        dragMode:hasConversation()?'app-to-conversation':'app-to-sessions'
+      };
     }
-    const rightEdge=contentRightEdge();
-    const inBackBand=touch.clientX>=0&&touch.clientX<=BACK_EDGE_WIDTH_PX;
-    const forwardBandEnd=rightEdge-EDGE_INSET_PX;
-    const inForwardBand=touch.clientX>=forwardBandEnd-EDGE_WIDTH_PX&&touch.clientX<=forwardBandEnd;
-    if(layer==='conversation'&&target===backSwipeZone&&inBackBand)return {layer,direction:'back',sign:1,interactive:true,dragMode:'conversation-to-sessions'};
-    if(layer==='sessions'&&inForwardBand&&hasConversation())return {layer,direction:'forward',sign:-1,interactive:true,dragMode:'sessions-to-conversation'};
-    if(
-      layer==='conversation'&&inForwardBand&&
-      tailnet&&typeof tailnet.canPreviewLastApp==='function'&&tailnet.canPreviewLastApp()
-    )return {layer,direction:'forward',sign:-1,interactive:true,dragMode:'conversation-to-app'};
     return null;
   }
 
@@ -108,53 +104,51 @@
     if(settleTimer){window.clearTimeout(settleTimer);settleTimer=0;}
     root.removeAttribute('data-mobile-layer-drag');
     root.removeAttribute('data-mobile-layer-drag-phase');
+    root.removeAttribute('data-mobile-layer-busy');
     root.style.removeProperty('--mobile-layer-drag-progress');
+    root.style.removeProperty('--mobile-layer-drag-offset');
+    root.style.removeProperty('--mobile-layer-drag-parallax');
     root.style.removeProperty('--mobile-layer-drag-duration');
   }
 
   function interactiveWidth(){
-    const layout=document.querySelector('.layout');
-    const width=layout&&layout.getBoundingClientRect().width;
-    return Math.max(1,width||contentRightEdge()||window.innerWidth);
+    if(!gesture)return Math.max(1,window.innerWidth||document.documentElement.clientWidth||1);
+    const surface=gesture.dragMode==='conversation-to-sessions'
+      ?document.querySelector('.main')
+      :document.getElementById('tailnetAppWorkspace');
+    const rect=surface&&surface.getBoundingClientRect();
+    return Math.max(1,rect&&rect.width||window.innerWidth||document.documentElement.clientWidth||1);
   }
 
   function beginInteractiveDrag(){
-    if(!gesture||!gesture.interactive||gesture.consumeUtilities)return;
-    gesture.width=interactiveWidth();
-    gesture.originProgress=gesture.layer==='sessions'||gesture.layer==='app'?1:0;
-    gesture.progressSign=gesture.dragMode.includes('app')?-1:1;
-    gesture.progress=gesture.originProgress;
+    if(!gesture||!gesture.interactive)return;
     const active=document.activeElement;
     if(active&&typeof active.matches==='function'&&active.matches('textarea,input,select,[contenteditable="true"]')){
       try{active.blur();}catch(_){}
     }
-    if(window.__sessionSwipeNavigation&&typeof window.__sessionSwipeNavigation.cancel==='function'){
-      try{window.__sessionSwipeNavigation.cancel();}catch(_){}
-    }
-    if(typeof window.switchPanel==='function'){
-      try{void window.switchPanel('chat');}catch(_){}
-    }
     root.dataset.mobileLayerDrag=gesture.dragMode;
     root.dataset.mobileLayerDragPhase='dragging';
+    gesture.width=interactiveWidth();
+    gesture.progress=0;
     root.style.setProperty('--mobile-layer-drag-duration','0ms');
-    root.style.setProperty('--mobile-layer-drag-progress',`${gesture.progress*100}%`);
+    root.style.setProperty('--mobile-layer-drag-progress','0%');
+    root.style.setProperty('--mobile-layer-drag-offset','0px');
+    root.style.setProperty('--mobile-layer-drag-parallax','0px');
+    const surface=gesture.dragMode==='conversation-to-sessions'
+      ?document.querySelector('.main')
+      :document.getElementById('tailnetAppWorkspace');
+    if(surface)surface.getBoundingClientRect();
   }
 
   function updateInteractiveDrag(dx){
-    if(!gesture||!gesture.interactive||gesture.consumeUtilities)return;
+    if(!gesture||!gesture.interactive)return;
     const width=gesture.width||interactiveWidth();
-    const progress=Math.max(0,Math.min(1,gesture.originProgress+gesture.progressSign*dx/width));
+    const offset=Math.max(0,Math.min(width,dx));
+    const progress=Math.max(0,Math.min(1,offset/width));
     gesture.progress=progress;
     root.style.setProperty('--mobile-layer-drag-progress',`${progress*100}%`);
-  }
-
-  function cancelOriginRow(){
-    if(!gesture||!gesture.origin||typeof gesture.origin.closest!=='function')return;
-    const row=gesture.origin.closest('.session-item,.session-child-session');
-    if(!row)return;
-    const cancelEvent=new Event('touchcancel',{bubbles:false,cancelable:false});
-    cancelEvent.mobileLayerSynthetic=true;
-    row.dispatchEvent(cancelEvent);
+    root.style.setProperty('--mobile-layer-drag-offset',`${offset}px`);
+    root.style.setProperty('--mobile-layer-drag-parallax',`${offset*.3}px`);
   }
 
   function recordSample(touch,now){
@@ -162,23 +156,28 @@
     gesture.samples=gesture.samples.filter(sample=>now-sample.t<=120);
   }
 
+  function closeOpenUtilities(){
+    const toggle=document.getElementById('mobileSessionUtilitiesToggle');
+    if(!toggle||toggle.getAttribute('aria-expanded')!=='true')return false;
+    const tailnet=window.hermesMobileTailnetNavigation;
+    return Boolean(tailnet&&typeof tailnet.closeUtilities==='function'&&tailnet.closeUtilities());
+  }
+
   function onTouchStart(event){
     if(gesture){
       if(event.touches.length!==1)onTouchCancel(null);
       return;
     }
-    if(root.dataset.mobileLayerDragPhase==='settling')return;
+    if(root.hasAttribute('data-mobile-layer-busy'))return;
     if(event.touches.length!==1)return resetGesture();
+    if(closeOpenUtilities())return resetGesture();
     const touch=event.touches[0];
     const pointerId=pendingTouchPointerId;
     pendingTouchPointerId=null;
     const candidate=candidateForTouch(touch,event.target);
-    const consumeUtilities=utilitiesOpenAtPointerDown;
-    utilitiesOpenAtPointerDown=false;
     if(!candidate)return resetGesture();
     gesture={
       ...candidate,
-      consumeUtilities,
       origin:event.target,
       startX:touch.clientX,
       startY:touch.clientY,
@@ -189,14 +188,8 @@
       active:false,
       cancelled:false,
       releasing:false,
-      peak:0,
       samples:[{x:touch.clientX,t:performance.now()}]
     };
-
-    if(candidate.interactive){
-      const origin=gesture.origin;
-      window.setTimeout(()=>{if(gesture&&gesture.origin===origin&&!gesture.active)cancelOriginRow();},0);
-    }
   }
 
   function onTouchMove(event){
@@ -210,26 +203,21 @@
     const absX=Math.abs(dx);
     const absY=Math.abs(dy);
 
-    if(dx*gesture.sign<0&&absX>=AXIS_LOCK_PX){gesture.cancelled=true;return;}
+    if(dx<0&&absX>=AXIS_LOCK_PX){gesture.cancelled=true;return;}
     if(!gesture.locked&&Math.hypot(dx,dy)>=AXIS_LOCK_PX){
-      if(absY>=12&&absY>=absX){gesture.cancelled=true;return;}
-      if(absX<=absY){gesture.cancelled=true;return;}
+      if(absY>=absX){gesture.cancelled=true;return;}
       gesture.locked=true;
     }
     if(!gesture.locked)return;
     recordSample(touch,now);
-    gesture.peak=Math.max(gesture.peak,absX);
-    if(!gesture.interactive&&gesture.peak>0&&absX<gesture.peak*.5){gesture.cancelled=true;return;}
-    const activateDistance=gesture.interactive?AXIS_LOCK_PX:ACTIVATE_PX;
-    if(!gesture.active&&absX>=activateDistance&&absX>=DOMINANCE_RATIO*absY){
+    if(!gesture.active&&absX>=AXIS_LOCK_PX&&absX>=DOMINANCE_RATIO*absY){
       gesture.active=true;
-      cancelOriginRow();
       beginInteractiveDrag();
     }
     if(gesture.active){
       event.preventDefault();
       event.stopImmediatePropagation();
-      if(gesture.interactive)updateInteractiveDrag(dx);
+      updateInteractiveDrag(dx);
     }
   }
 
@@ -238,17 +226,7 @@
     const first=gesture.samples[0];
     const last=gesture.samples[gesture.samples.length-1];
     if(now-last.t>120)return 0;
-    const elapsed=Math.max(1,last.t-first.t);
-    return (last.x-first.x)/elapsed;
-  }
-
-  function hasConversation(){
-    if(typeof window._mobileSessionSelectionRequired==='function')return !window._mobileSessionSelectionRequired();
-    return Boolean(window.S&&window.S.session&&window.S.session.session_id);
-  }
-
-  function motionDelay(){
-    try{return window.matchMedia('(prefers-reduced-motion:reduce)').matches?0:230;}catch(_){return 230;}
+    return (last.x-first.x)/Math.max(1,last.t-first.t);
   }
 
   function announceLayer(layer){
@@ -266,70 +244,80 @@
     requestAnimationFrame(()=>{announcer.textContent=message;});
   }
 
-  function focusLayer(layer,delay=motionDelay()){
-    window.setTimeout(()=>{
-      let target=null;
-      if(layer==='sessions')target=document.querySelector('#panelChat>.panel-head');
-      else if(layer==='conversation')target=document.getElementById('appTitlebarTitle');
-      else target=document.getElementById('tailnetAppWorkspace');
-      if(!target)return;
-      if(!target.hasAttribute('tabindex'))target.setAttribute('tabindex','-1');
-      try{target.focus({preventScroll:true});}catch(_){try{target.focus();}catch(__){}}
-    },delay);
+  function focusLayer(layer){
+    let target=null;
+    if(layer==='sessions')target=document.querySelector('#panelChat>.panel-head');
+    else if(layer==='conversation')target=document.getElementById('appTitlebarTitle');
+    else target=document.getElementById('tailnetAppWorkspace');
+    if(!target)return;
+    if(!target.hasAttribute('tabindex'))target.setAttribute('tabindex','-1');
+    try{target.focus({preventScroll:true});}catch(_){try{target.focus();}catch(__){}}
   }
 
-  function finishTransition(layer,{focusDelay=motionDelay(),cooldown=COOLDOWN_MS}={}){
-    cooldownUntil=Date.now()+cooldown;
+  function finishTransition(layer){
     root.dataset.mobileLayer=layer;
     announceLayer(layer);
-    focusLayer(layer,focusDelay);
+    focusLayer(layer);
     document.dispatchEvent(new CustomEvent('hermesui:mobile-layer-change',{detail:{layer}}));
     return true;
   }
 
-  function navigate(direction,{fromGesture=false}={}){
-    if(!isPhoneWidth())return false;
+  function canCommitBack(finished){
+    if(!finished||currentLayer()!==finished.layer)return false;
     const tailnet=window.hermesMobileTailnetNavigation;
-    if(tailnet&&typeof tailnet.closeUtilities==='function'&&tailnet.closeUtilities())return false;
+    if(!tailnet)return false;
+    if(finished.dragMode==='conversation-to-sessions')return typeof tailnet.openSessionsFromConversation==='function';
+    if(typeof tailnet.canLeaveActiveApp!=='function'||!tailnet.canLeaveActiveApp())return false;
+    if(finished.destination==='conversation')return hasConversation()&&typeof tailnet.openConversation==='function';
+    return typeof tailnet.openSessions==='function';
+  }
+
+  function navigate(direction,{destination=''}={}){
+    if(!isPhoneWidth()||direction!=='back')return false;
+    const tailnet=window.hermesMobileTailnetNavigation;
     const layer=currentLayer();
     if(layer==='conversation'&&direction==='back'){
       if(!tailnet||typeof tailnet.openSessionsFromConversation!=='function'||!tailnet.openSessionsFromConversation())return false;
-      return finishTransition('sessions',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
-    }
-    if(layer==='sessions'&&direction==='forward'){
-      if(!hasConversation()||typeof window.closeMobileSidebar!=='function')return false;
-      window.closeMobileSidebar(true);
-      if(currentLayer()==='sessions')return false;
-      return finishTransition('conversation',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
-    }
-    if(layer==='conversation'&&direction==='forward'){
-      if(!tailnet||typeof tailnet.restoreLastApp!=='function'||!tailnet.restoreLastApp())return false;
-      return finishTransition('app',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
+      return finishTransition('sessions');
     }
     if(layer==='app'&&direction==='back'){
-      if(!hasConversation()||!tailnet||typeof tailnet.openConversation!=='function'||!tailnet.openConversation())return false;
-      return finishTransition('conversation',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
+      const target=destination||(hasConversation()?'conversation':'sessions');
+      if(target==='conversation'){
+        if(!hasConversation()||!tailnet||typeof tailnet.openConversation!=='function'||!tailnet.openConversation())return false;
+        return finishTransition('conversation');
+      }
+      if(!tailnet||typeof tailnet.openSessions!=='function'||!tailnet.openSessions())return false;
+      return finishTransition('sessions');
     }
     return false;
   }
 
   function settleInteractive(finished,commits,event){
     if(event){event.preventDefault();event.stopImmediatePropagation();}
-    if(finished.consumeUtilities){clearInteractiveDrag();resetGesture();return;}
-    const current=Number.isFinite(finished.progress)?finished.progress:finished.originProgress;
-    const target=commits?(finished.originProgress===0?1:0):finished.originProgress;
+    if(commits&&!canCommitBack(finished))commits=false;
+    const current=Number.isFinite(finished.progress)?finished.progress:0;
+    const target=commits?1:0;
     const remaining=Math.min(1,Math.abs(target-current));
     let reduced=false;
     try{reduced=window.matchMedia('(prefers-reduced-motion:reduce)').matches;}catch(_){}
-    const duration=reduced?0:Math.round(Math.max(110,Math.min(240,110+130*remaining)));
+    let duration=0;
+    if(!reduced){
+      duration=Math.round(Math.max(140,Math.min(260,140+120*remaining)));
+      if(!commits)duration=Math.min(180,duration);
+    }
+    root.dataset.mobileLayerBusy='true';
     root.dataset.mobileLayerDragPhase='settling';
     root.style.setProperty('--mobile-layer-drag-duration',`${duration}ms`);
-    suppressClickUntil=Date.now()+350;
-    const transitionSurface=finished.dragMode.includes('app')
-      ?document.getElementById('tailnetAppWorkspace')
-      :document.querySelector('.sidebar');
+    if(commits)suppressClickUntil=Date.now()+250;
+    const transitionSurface=finished.dragMode==='conversation-to-sessions'
+      ?document.querySelector('.main')
+      :document.getElementById('tailnetAppWorkspace');
     if(transitionSurface)transitionSurface.getBoundingClientRect();
-    requestAnimationFrame(()=>root.style.setProperty('--mobile-layer-drag-progress',`${target*100}%`));
+    requestAnimationFrame(()=>{
+      root.style.setProperty('--mobile-layer-drag-progress',`${target*100}%`);
+      root.style.setProperty('--mobile-layer-drag-offset',`${target*finished.width}px`);
+      root.style.setProperty('--mobile-layer-drag-parallax',`${target*finished.width*.3}px`);
+    });
 
     let finalized=false;
     const finalize=()=>{
@@ -337,7 +325,7 @@
       finalized=true;
       if(settleTimer){window.clearTimeout(settleTimer);settleTimer=0;}
       if(transitionSurface)transitionSurface.removeEventListener('transitionend',onTransitionEnd);
-      if(commits)navigate(finished.direction,{fromGesture:true});
+      if(commits)navigate(finished.direction,{destination:finished.destination});
       clearInteractiveDrag();
       resetGesture();
     };
@@ -360,36 +348,27 @@
     const velocity=trailingVelocity();
     if(finished.interactive&&finished.active){
       const width=finished.width||interactiveWidth();
-      const distance=Math.max(0,dx*finished.sign);
-      const reverseFling=velocity*finished.sign<=-INTERACTIVE_REVERSE_VELOCITY_PX_MS;
+      const distance=Math.max(0,dx);
+      const reverseFling=velocity<=-INTERACTIVE_REVERSE_VELOCITY_PX_MS;
       const commits=!finished.cancelled&&!reverseFling&&(
         distance>=width*INTERACTIVE_COMMIT_RATIO||
-        (distance>=INTERACTIVE_FLICK_DISTANCE_PX&&velocity*finished.sign>=INTERACTIVE_FLICK_VELOCITY_PX_MS)
+        (distance>=INTERACTIVE_FLICK_MIN_PX&&velocity>=INTERACTIVE_FLICK_VELOCITY_PX_MS)
       );
       settleInteractive(finished,commits,event);
       return;
     }
-    const commits=finished.active&&!finished.cancelled&&dx*finished.sign>0&&Math.abs(dx)>=DOMINANCE_RATIO*Math.abs(dy)&&(
-      Math.abs(dx)>=COMMIT_PX||
-      (Math.abs(dx)>=FLICK_DISTANCE_PX&&Math.abs(velocity)>=FLICK_VELOCITY_PX_MS&&velocity*finished.sign>0)
-    );
     resetGesture();
-    if(!commits)return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if(finished.consumeUtilities)return;
-    navigate(finished.direction,{fromGesture:true});
   }
 
   function onTouchEnd(event){
-    const touch=event.changedTouches&&event.changedTouches[0];
-    finishGestureAt(touch&&touch.clientX,touch&&touch.clientY,event);
+    if(!gesture)return;
+    finishGestureAt(gesture.lastX,gesture.lastY,event);
   }
 
   function onPointerRelease(event){
     if(!gesture||gesture.releasing||event.pointerType!=='touch')return;
     if(gesture.pointerId!==null&&gesture.pointerId!==undefined&&gesture.pointerId!==event.pointerId)return;
-    finishGestureAt(event.clientX,event.clientY,event);
+    finishGestureAt(gesture.lastX,gesture.lastY,event);
   }
 
   function onPointerCancel(event){
@@ -402,7 +381,7 @@
     if(event&&event.mobileLayerSynthetic)return;
     if(!gesture||gesture.releasing)return;
     gesture.releasing=true;
-    if(gesture&&gesture.interactive&&gesture.active){settleInteractive(gesture,false,null);return;}
+    if(gesture.interactive&&gesture.active){settleInteractive(gesture,false,null);return;}
     clearInteractiveDrag();
     resetGesture();
   }
@@ -419,8 +398,6 @@
 
   document.addEventListener('pointerdown',event=>{
     if(event.pointerType==='touch'&&!gesture)pendingTouchPointerId=event.pointerId;
-    const toggle=document.getElementById('mobileSessionUtilitiesToggle');
-    utilitiesOpenAtPointerDown=Boolean(isPhoneWidth()&&event.pointerType==='touch'&&toggle&&toggle.getAttribute('aria-expanded')==='true');
   },{capture:true,passive:true});
   window.addEventListener('pointerup',onPointerRelease,{capture:true,passive:false});
   window.addEventListener('pointercancel',onPointerCancel,{capture:true,passive:true});
@@ -444,16 +421,16 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden){clearInteractiveDrag();resetGesture();}},{passive:true});
   document.addEventListener('hermesui:tailnet-app-selected',()=>{clearInteractiveDrag();resetGesture();syncLayer();});
   const observer=new MutationObserver(()=>{
-    if(gesture){clearInteractiveDrag();resetGesture();}
+    if(gesture&&!root.hasAttribute('data-mobile-layer-busy')){clearInteractiveDrag();resetGesture();}
     syncLayer();
   });
-  observer.observe(root,{attributes:true,attributeFilter:['data-tailnet-view','data-mobile-session-view','data-mobile-rail']});
+  observer.observe(root,{attributes:true,attributeFilter:['data-tailnet-view','data-mobile-session-view']});
   if(document.getElementById('appTitlebarTitle'))document.getElementById('appTitlebarTitle').setAttribute('tabindex','-1');
   if(document.getElementById('tailnetAppWorkspace'))document.getElementById('tailnetAppWorkspace').setAttribute('tabindex','-1');
   window.__mobileLayerNavigation={
     currentLayer,
     navigate,
-    thresholds:{backEdgeWidth:BACK_EDGE_WIDTH_PX,edgeInset:EDGE_INSET_PX,edgeWidth:EDGE_WIDTH_PX,activate:ACTIVATE_PX,interactiveActivate:AXIS_LOCK_PX,interactiveCommitRatio:INTERACTIVE_COMMIT_RATIO,commit:COMMIT_PX,dominance:DOMINANCE_RATIO}
+    thresholds:{backEdgeWidth:BACK_EDGE_WIDTH_PX,interactiveActivate:AXIS_LOCK_PX,interactiveCommitRatio:INTERACTIVE_COMMIT_RATIO,dominance:DOMINANCE_RATIO}
   };
   syncLayer();
 })();

@@ -2541,39 +2541,6 @@
     try{return sessionStorage.getItem(MOBILE_LAST_APP_STORAGE_KEY)||'';}catch(_){return '';}
   }
 
-  function restoreLastMobileTailnetApp(){
-    if(!isPhoneWidth())return false;
-    const id=readLastMobileTailnetAppId();
-    if(!id||id===NOTIFICATIONS_ID)return false;
-    const app=appsById.get(id);
-    if(app){
-      if(lastMobileAppSnapshot.id===id&&lastMobileAppSnapshot.browserFallback){
-        activateBrowserFallback(app,{open:false});
-      }else{
-        const bookmarkGeneration=lastMobileAppSnapshot.id===id?lastMobileAppSnapshot.generation:'';
-        activateApp(app,{bookmarkGeneration});
-      }
-      return true;
-    }
-    if(typeof window.hermesTailnetManagerRestoreApp==='function'){
-      return window.hermesTailnetManagerRestoreApp(id)===true;
-    }
-    return false;
-  }
-
-  function canPreviewLastMobileTailnetApp(){
-    if(!isPhoneWidth()||!frame)return false;
-    const id=readLastMobileTailnetAppId();
-    return Boolean(
-      id&&
-      id!==NOTIFICATIONS_ID&&
-      !lastMobileAppSnapshot.browserFallback&&
-      frame.dataset.tailnetAppId===id&&
-      frame.dataset.browserFallback!=='true'&&
-      frame.dataset.tailnetFrameKey&&
-      frame.getAttribute('src')
-    );
-  }
 
   function canLeaveActiveMobileTailnetApp(){
     if(!isPhoneWidth()||root.dataset.tailnetView!=='external')return false;
@@ -3095,13 +3062,10 @@
   }
 
   window.hermesMobileTailnetNavigation={
-    restoreLastApp:restoreLastMobileTailnetApp,
     openSessions:openMobileSessionsFromTailnet,
     openConversation:openMobileConversationFromTailnet,
     openSessionsFromConversation:openMobileSessionsFromConversation,
     closeUtilities:closeMobileUtilitiesForLayerGesture,
-    hasLastApp:()=>Boolean(readLastMobileTailnetAppId()),
-    canPreviewLastApp:canPreviewLastMobileTailnetApp,
     canLeaveActiveApp:canLeaveActiveMobileTailnetApp
   };
 
