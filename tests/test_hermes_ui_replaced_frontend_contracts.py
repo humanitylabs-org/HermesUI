@@ -60,7 +60,8 @@ def test_help_pane_keeps_docs_and_retargets_issues_to_hermesui():
 def test_phone_shell_intentionally_reclaims_the_desktop_titlebar():
     phone_start = CSS.index("@media(max-width:640px)")
     phone_css = CSS[phone_start:]
-    assert ".app-titlebar{display:none!important;}" in phone_css
+    assert ".app-titlebar{display:flex!important;height:34px" in phone_css
+    assert 'html[data-mobile-session-view="sessions"] .app-titlebar,html[data-tailnet-view="external"] .app-titlebar{display:none!important;}' in phone_css
     assert 'id="mobileSessionTabs"' not in INDEX
 
 

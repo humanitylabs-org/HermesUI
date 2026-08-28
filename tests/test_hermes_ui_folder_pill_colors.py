@@ -50,12 +50,12 @@ def test_colored_folder_pills_keep_distinct_interaction_states_on_desktop_and_mo
 def test_mobile_folder_colors_are_quiet_until_selected():
     mobile_start = CSS.index("/* Mobile chat polish:")
     mobile = CSS[mobile_start:CSS.index("@media(max-width:640px) and (hover:hover)", mobile_start)]
-    assert "background:color-mix(in srgb,var(--project-color) 12%,var(--surface))" in mobile
-    assert "border-color:color-mix(in srgb,var(--project-color) 30%,var(--border2))" in mobile
-    assert "background:color-mix(in srgb,var(--project-color) 30%,var(--surface))" in mobile
-    assert "border-color:color-mix(in srgb,var(--project-color) 72%,var(--border2))" in mobile
-    assert "background:color-mix(in srgb,var(--project-color) 16%,var(--surface))" in mobile
-    assert "background:color-mix(in srgb,var(--project-color) 34%,var(--surface))" in mobile
+    assert "background:color-mix(in srgb,var(--project-color) 7%,var(--surface))" in mobile
+    assert "border-color:color-mix(in srgb,var(--project-color) 18%,var(--border2))" in mobile
+    assert "background:color-mix(in srgb,var(--project-color) 22%,var(--surface))" in mobile
+    assert "border-color:color-mix(in srgb,var(--project-color) 52%,var(--border2))" in mobile
+    assert "background:color-mix(in srgb,var(--project-color) 10%,var(--surface))" in mobile
+    assert "background:color-mix(in srgb,var(--project-color) 26%,var(--surface))" in mobile
     assert "background:var(--project-color)" not in mobile
     assert "font-weight:750" not in mobile
 

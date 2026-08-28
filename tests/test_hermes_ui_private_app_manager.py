@@ -61,7 +61,7 @@ def test_private_rail_has_no_preseeded_app_inventory():
     assert "static/tailnet-apps.json" not in RAIL
     assert "fetch(new URL(CONFIG_PATH" not in RAIL
     assert "privateCount:0" in RAIL
-    assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3&semantic-icons=v1"' in INDEX
+    assert 'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__&cron-notifications=v3&semantic-icons=v1&mobile-layer-nav=v1"' in INDEX
 
 
 def test_approved_routes_keep_stable_detector_identity():
@@ -74,8 +74,8 @@ def test_approved_routes_keep_stable_detector_identity():
 
 
 def test_service_worker_delivers_both_private_app_scripts_without_caching_apis():
-    assert "'./static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&mobile-toggle-switches=v1'" in SW
-    assert "'./static/tailnet-app-manager.js' + VQ + '&cron-notifications=v3&semantic-icons=v1'" in SW
+    assert "'./static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&mobile-toggle-switches=v1&mobile-layer-nav=v1'" in SW
+    assert "'./static/tailnet-app-manager.js' + VQ + '&cron-notifications=v3&semantic-icons=v1&mobile-layer-nav=v1'" in SW
     assert "url.pathname.includes('/api/')" in SW
     assert "return; // let browser handle normally" in SW
 

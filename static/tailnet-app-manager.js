@@ -6,6 +6,7 @@
   const STATUS_PATH='/apps/api/status';
   const PRIVATE_APPS_PATH='/apps/api/private-apps';
   const STORAGE_KEY='hermesui.tailnet-app';
+  const MOBILE_LAST_APP_STORAGE_KEY='hermesui.tailnet.last-app.v1';
   const BLOCKED_PATHS=new Set(['/','/apps','/hermesUI','/frame-check','/tailnet-frame','/hermes-sidepanel']);
   const APP_ICONS={
     apps:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
@@ -115,8 +116,18 @@
     workspace.hidden=false;
     root.setAttribute('data-tailnet-view','external');
     markSelected(app.id);
-    try{sessionStorage.setItem(STORAGE_KEY,app.id);}catch(_){}
+    try{
+      sessionStorage.setItem(STORAGE_KEY,app.id);
+      sessionStorage.setItem(MOBILE_LAST_APP_STORAGE_KEY,app.id);
+    }catch(_){}
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:app.id,label:app.label,mode:'inline'}}));
+  }
+
+  function restoreManagedTailnetApp(id){
+    const app=approvedApps.find(item=>item.id===String(id||''));
+    if(!app)return false;
+    openPrivateApp(app);
+    return true;
   }
 
   function renderApprovedApps(){
@@ -411,6 +422,7 @@
       if(remembered===MANAGER_ID)activateManager();
     });
   }
+  window.hermesTailnetManagerRestoreApp=restoreManagedTailnetApp;
   document.addEventListener('hermesui:tailnet-apps-ready',syncInitialPrivateApps);
   if(root.dataset.tailnetAppsReady==='true')syncInitialPrivateApps();
 })();

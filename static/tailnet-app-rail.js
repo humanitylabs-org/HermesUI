@@ -3,6 +3,7 @@
 
   const MAX_BOOKMARKS_PER_GROUP=20;
   const STORAGE_KEY='hermesui.tailnet-app';
+  const MOBILE_LAST_APP_STORAGE_KEY='hermesui.tailnet.last-app.v1';
   const BOOKMARK_STORAGE_KEY='hermesui.app-selector.bookmarks.v1';
   const BOOKMARK_API_PATH='/apps/api/bookmarks';
   const FRAME_DECISION_STORAGE_KEY='hermesui.app-selector.frame-decisions.v1';
@@ -127,6 +128,7 @@
   let activeBookmarkNavigation=null;
   let savedGroups={company:[],public:[]};
   let activeId='';
+  let lastMobileAppSnapshot={id:'',token:'',generation:'',browserFallback:false};
   let tooltip=null;
   let bookmarkMenu=null;
   let menuBookmark=null;
@@ -2366,6 +2368,13 @@
     document.dispatchEvent(new CustomEvent('hermesui:tailnet-app-selected',{detail:{id:'hermes-ui'}}));
   }
 
+  function rememberMobileTailnetApp(app,{token='',generation='',browserFallback=false}={}){
+    const id=String(app&&app.id||'');
+    if(!id||id===NOTIFICATIONS_ID)return;
+    lastMobileAppSnapshot={id,token:String(token||''),generation:String(generation||''),browserFallback:!!browserFallback};
+    try{sessionStorage.setItem(MOBILE_LAST_APP_STORAGE_KEY,id);}catch(_){}
+  }
+
   function activateApp(app,{bookmarkGeneration=''}={}){
     if(!workspace||!frame)return;
     setMobileUtilitiesOpen(false);
@@ -2406,6 +2415,11 @@
     if(frame)frame.hidden=false;
     workspace.hidden=false;
     root.setAttribute('data-tailnet-view','external');
+    rememberMobileTailnetApp(app,{
+      token,
+      generation:activeBookmarkNavigation&&activeBookmarkNavigation.generation||'',
+      browserFallback:false
+    });
     markSelected(app.id);
     closeSessionsOverlay();
     try{sessionStorage.setItem(STORAGE_KEY,app.id);}catch(_){}
@@ -2482,6 +2496,7 @@
     if(frame)frame.hidden=false;
     workspace.hidden=false;
     root.setAttribute('data-tailnet-view','external');
+    rememberMobileTailnetApp(app,{token:bookmarkToken(app),browserFallback:true});
     markSelected(app.id);
     closeSessionsOverlay();
     if(shouldOpen)scheduleBrowserFallback(app);
@@ -2515,6 +2530,48 @@
     icon.setAttribute('aria-hidden','true');
     icon.innerHTML=ICONS[name]||ICONS.link;
     return icon;
+  }
+
+  function readLastMobileTailnetAppId(){
+    if(lastMobileAppSnapshot.id)return lastMobileAppSnapshot.id;
+    try{return sessionStorage.getItem(MOBILE_LAST_APP_STORAGE_KEY)||'';}catch(_){return '';}
+  }
+
+  function restoreLastMobileTailnetApp(){
+    if(!isPhoneWidth())return false;
+    const id=readLastMobileTailnetAppId();
+    if(!id||id===NOTIFICATIONS_ID)return false;
+    const app=appsById.get(id);
+    if(app){
+      if(lastMobileAppSnapshot.id===id&&lastMobileAppSnapshot.browserFallback){
+        activateBrowserFallback(app,{open:false});
+      }else{
+        const bookmarkGeneration=lastMobileAppSnapshot.id===id?lastMobileAppSnapshot.generation:'';
+        activateApp(app,{bookmarkGeneration});
+      }
+      return true;
+    }
+    if(typeof window.hermesTailnetManagerRestoreApp==='function'){
+      return window.hermesTailnetManagerRestoreApp(id)===true;
+    }
+    return false;
+  }
+
+  function openMobileSessionsFromTailnet(){
+    if(!isPhoneWidth()||root.dataset.tailnetView!=='external')return false;
+    if(activeId===NOTIFICATIONS_ID&&notificationThreadItem){
+      closeNotificationThread();
+      return false;
+    }
+    activateHermes({remember:false});
+    if(typeof window.openMobileSessionPage==='function')window.openMobileSessionPage();
+    return true;
+  }
+
+  function closeMobileUtilitiesForLayerGesture(){
+    if(!mobileUtilityIsOpen())return false;
+    setMobileUtilitiesOpen(false);
+    return true;
   }
 
 
@@ -3004,6 +3061,13 @@
       activeId:activeId||'hermes-ui'
     }}));
   }
+
+  window.hermesMobileTailnetNavigation={
+    restoreLastApp:restoreLastMobileTailnetApp,
+    openSessions:openMobileSessionsFromTailnet,
+    closeUtilities:closeMobileUtilitiesForLayerGesture,
+    hasLastApp:()=>Boolean(readLastMobileTailnetAppId())
+  };
 
   loadApps();
 })();
