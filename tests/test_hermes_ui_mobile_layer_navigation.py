@@ -13,8 +13,8 @@ MANAGER = (ROOT / "static" / "tailnet-app-manager.js").read_text(encoding="utf-8
 def test_mobile_layer_navigation_is_a_separate_cached_shell_asset():
     index_line = next(line for line in INDEX.splitlines() if "static/mobile-layer-navigation.js?v=" in line)
     sw_line = next(line for line in SW.splitlines() if "'./static/mobile-layer-navigation.js' + VQ" in line)
-    assert "&mobile-layer-nav=v2" in index_line
-    assert "&mobile-layer-nav=v2" in sw_line
+    assert "&mobile-layer-nav=v3" in index_line
+    assert "&mobile-layer-nav=v3" in sw_line
     assert 'id="mobileAppLayerSwipeZone"' in INDEX
     assert 'id="mobileLayerBackSwipeZone"' in INDEX
     assert 'id="mobileLayerAnnouncer" aria-live="polite" aria-atomic="true"' in INDEX
@@ -117,12 +117,22 @@ def test_conversation_has_a_parent_owned_physical_edge_swipe_zone():
     assert "target===backSwipeZone||target===appSwipeZone" in LAYER
 
 
+def test_conversation_back_swipe_presses_sessions_once_before_touchend():
+    assert "const CONVERSATION_COMMIT_PX=24;" in LAYER
+    assert "committed:false" in LAYER
+    assert "if(gesture&&gesture.committed){" in LAYER
+    assert "gesture.layer==='conversation'&&gesture.direction==='back'" in LAYER
+    assert "gesture.committed=true;" in LAYER
+    assert "navigate(gesture.direction,{fromGesture:true});" in LAYER
+    assert "if(finished.committed){" in LAYER
+
+
 def test_layer_navigation_cache_identities_match_index_and_worker():
-    for token in ("&mobile-folder-quiet=v2", "&mobile-titlebar=v1", "&mobile-layer-nav=v2"):
+    for token in ("&mobile-folder-quiet=v2", "&mobile-titlebar=v1", "&mobile-layer-nav=v3"):
         assert token in next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
         assert token in next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     for asset in ("tailnet-app-rail.js", "tailnet-app-manager.js"):
         index_line = next(line for line in INDEX.splitlines() if f"static/{asset}?v=" in line)
         sw_line = next(line for line in SW.splitlines() if f"'./static/{asset}' + VQ" in line)
-        assert "&mobile-layer-nav=v2" in index_line
-        assert "&mobile-layer-nav=v2" in sw_line
+        assert "&mobile-layer-nav=v3" in index_line
+        assert "&mobile-layer-nav=v3" in sw_line
