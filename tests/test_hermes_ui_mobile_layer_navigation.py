@@ -13,8 +13,8 @@ MANAGER = (ROOT / "static" / "tailnet-app-manager.js").read_text(encoding="utf-8
 def test_mobile_layer_navigation_is_a_separate_cached_shell_asset():
     index_line = next(line for line in INDEX.splitlines() if "static/mobile-layer-navigation.js?v=" in line)
     sw_line = next(line for line in SW.splitlines() if "'./static/mobile-layer-navigation.js' + VQ" in line)
-    assert "&mobile-layer-nav=v5" in index_line
-    assert "&mobile-layer-nav=v5" in sw_line
+    assert "&mobile-layer-nav=v6" in index_line
+    assert "&mobile-layer-nav=v6" in sw_line
     assert 'id="mobileAppLayerSwipeZone"' in INDEX
     assert 'id="mobileLayerBackSwipeZone"' in INDEX
     assert 'id="mobileLayerAnnouncer" aria-live="polite" aria-atomic="true"' in INDEX
@@ -154,6 +154,19 @@ def test_interactive_swipe_suppresses_touch_tail_and_respects_reduced_motion():
     assert "window.matchMedia('(prefers-reduced-motion:reduce)').matches" in LAYER
     assert 'html[data-mobile-layer-drag-phase="settling"] .main' in CSS
     assert 'transition-duration:.01ms!important;' in CSS
+
+
+def test_interactive_swipe_has_an_exactly_once_pointer_release_fallback():
+    assert "pointerId," in LAYER
+    assert "lastX:touch.clientX" in LAYER
+    assert "lastY:touch.clientY" in LAYER
+    assert "if(!gesture||gesture.releasing)return;" in LAYER
+    assert "gesture.releasing=true;" in LAYER
+    assert "function onPointerRelease(event)" in LAYER
+    assert "finishGestureAt(event.clientX,event.clientY,event);" in LAYER
+    assert "window.addEventListener('pointerup',onPointerRelease,{capture:true,passive:false});" in LAYER
+    assert "window.addEventListener('pointercancel',onPointerCancel,{capture:true,passive:true});" in LAYER
+    assert "GESTURE_TIMEOUT_MS" not in LAYER
 
 
 def test_interactive_swipe_fails_closed_and_cleans_up_on_interruptions():
