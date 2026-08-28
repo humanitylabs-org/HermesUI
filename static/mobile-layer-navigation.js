@@ -2,8 +2,10 @@
   'use strict';
 
   const root=document.documentElement;
+  const backSwipeZone=document.getElementById('mobileLayerBackSwipeZone');
   const appSwipeZone=document.getElementById('mobileAppLayerSwipeZone');
   const announcer=document.getElementById('mobileLayerAnnouncer');
+  const BACK_EDGE_WIDTH_PX=40;
   const EDGE_INSET_PX=16;
   const EDGE_WIDTH_PX=24;
   const AXIS_LOCK_PX=10;
@@ -56,7 +58,7 @@
 
   function originBlocked(target){
     if(!target||typeof target.closest!=='function')return false;
-    if(target===appSwipeZone)return false;
+    if(target===backSwipeZone||target===appSwipeZone)return false;
     return Boolean(target.closest(BLOCKED_ORIGIN_SELECTOR));
   }
 
@@ -78,10 +80,10 @@
       return {layer,direction:'forward',sign:-1};
     }
     const rightEdge=contentRightEdge();
-    const inBackBand=touch.clientX>=EDGE_INSET_PX&&touch.clientX<=EDGE_INSET_PX+EDGE_WIDTH_PX;
+    const inBackBand=touch.clientX>=0&&touch.clientX<=BACK_EDGE_WIDTH_PX;
     const forwardBandEnd=rightEdge-EDGE_INSET_PX;
     const inForwardBand=touch.clientX>=forwardBandEnd-EDGE_WIDTH_PX&&touch.clientX<=forwardBandEnd;
-    if(layer==='conversation'&&inBackBand)return {layer,direction:'back',sign:1};
+    if(layer==='conversation'&&target===backSwipeZone&&inBackBand)return {layer,direction:'back',sign:1};
     if(layer==='sessions'&&inBackBand)return {layer,direction:'back',sign:1};
     if(layer==='sessions'&&inForwardBand)return {layer,direction:'forward',sign:-1};
     return null;
@@ -213,8 +215,7 @@
     if(tailnet&&typeof tailnet.closeUtilities==='function'&&tailnet.closeUtilities())return false;
     const layer=currentLayer();
     if(layer==='conversation'&&direction==='back'){
-      if(typeof window.openMobileSessionPage!=='function')return false;
-      window.openMobileSessionPage();
+      if(!tailnet||typeof tailnet.openSessionsFromConversation!=='function'||!tailnet.openSessionsFromConversation())return false;
       return finishTransition('sessions');
     }
     if(layer==='sessions'&&direction==='forward'){
@@ -284,7 +285,7 @@
   window.__mobileLayerNavigation={
     currentLayer,
     navigate,
-    thresholds:{edgeInset:EDGE_INSET_PX,edgeWidth:EDGE_WIDTH_PX,activate:ACTIVATE_PX,commit:COMMIT_PX,dominance:DOMINANCE_RATIO}
+    thresholds:{backEdgeWidth:BACK_EDGE_WIDTH_PX,edgeInset:EDGE_INSET_PX,edgeWidth:EDGE_WIDTH_PX,activate:ACTIVATE_PX,commit:COMMIT_PX,dominance:DOMINANCE_RATIO}
   };
   syncLayer();
 })();
