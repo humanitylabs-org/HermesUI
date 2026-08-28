@@ -158,7 +158,9 @@ def test_mobile_bottom_menu_owns_sessions_notifications_and_utilities():
     assert 'bottom:calc(var(--mobile-nav-clearance) + 4px)' in CSS
     assert 'border-radius:22px;background:color-mix(in srgb,var(--sidebar) 78%,transparent)' in CSS
     assert '.sidebar.mobile-session-page .session-title{font-size:15px;font-weight:650;' in CSS
-    assert "activateHermes();\n      if(typeof window.openMobileSessionPage==='function')window.openMobileSessionPage();" in JS
+    assert "function openMobileSessionsFromConversation()" in JS
+    assert "activateHermes();\n    if(!window.openMobileSessionPage())return false;" in JS
+    assert "mobileSessionsButton.addEventListener('click',openMobileSessionsFromConversation)" in JS
     assert "mobileNotificationsButton.addEventListener('click'" in JS
     assert "activateMobileUtility(document.getElementById('sessionViewToggle'))" in JS
     assert "activateMobileUtility(document.getElementById('chatSettingsToggle'))" in JS
@@ -657,12 +659,12 @@ def test_mobile_right_rail_is_collapsible_and_hides_redundant_home():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&mobile-toggle-switches=v1&mobile-layer-nav=v1"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&mobile-toggle-switches=v1&mobile-layer-nav=v2"'
         in INDEX
     )
     assert (
         'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__'
-        '&cron-notifications=v3&semantic-icons=v1&mobile-layer-nav=v1"'
+        '&cron-notifications=v3&semantic-icons=v1&mobile-layer-nav=v2"'
         in INDEX
     )
     assert "new URL(PRIVATE_APPS_PATH,location.origin)" in MANAGER

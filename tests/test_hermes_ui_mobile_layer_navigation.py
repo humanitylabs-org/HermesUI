@@ -13,9 +13,10 @@ MANAGER = (ROOT / "static" / "tailnet-app-manager.js").read_text(encoding="utf-8
 def test_mobile_layer_navigation_is_a_separate_cached_shell_asset():
     index_line = next(line for line in INDEX.splitlines() if "static/mobile-layer-navigation.js?v=" in line)
     sw_line = next(line for line in SW.splitlines() if "'./static/mobile-layer-navigation.js' + VQ" in line)
-    assert "&mobile-layer-nav=v1" in index_line
-    assert "&mobile-layer-nav=v1" in sw_line
+    assert "&mobile-layer-nav=v2" in index_line
+    assert "&mobile-layer-nav=v2" in sw_line
     assert 'id="mobileAppLayerSwipeZone"' in INDEX
+    assert 'id="mobileLayerBackSwipeZone"' in INDEX
     assert 'id="mobileLayerAnnouncer" aria-live="polite" aria-atomic="true"' in INDEX
     assert "session-swipe-navigation.js" not in INDEX
     assert "session-swipe-navigation.js" not in SW
@@ -23,7 +24,8 @@ def test_mobile_layer_navigation_is_a_separate_cached_shell_asset():
 
 def test_mobile_layer_order_is_tailnet_sessions_conversation_and_reversible():
     assert "if(layer==='conversation'&&direction==='back')" in LAYER
-    assert "window.openMobileSessionPage();" in LAYER
+    assert "tailnet.openSessionsFromConversation()" in LAYER
+    assert "openSessionsFromConversation:openMobileSessionsFromConversation" in RAIL
     assert "if(layer==='sessions'&&direction==='forward')" in LAYER
     assert "window.closeMobileSidebar(true);" in LAYER
     assert "if(layer==='sessions'&&direction==='back')" in LAYER
@@ -36,6 +38,7 @@ def test_mobile_layer_order_is_tailnet_sessions_conversation_and_reversible():
 
 def test_layer_swipes_are_edge_only_axis_locked_and_do_not_own_horizontal_content():
     for contract in (
+        "const BACK_EDGE_WIDTH_PX=40;",
         "const EDGE_INSET_PX=16;",
         "const EDGE_WIDTH_PX=24;",
         "const AXIS_LOCK_PX=10;",
@@ -48,6 +51,8 @@ def test_layer_swipes_are_edge_only_axis_locked_and_do_not_own_horizontal_conten
         "const COOLDOWN_MS=250;",
     ):
         assert contract in LAYER
+    assert "touch.clientX>=0&&touch.clientX<=BACK_EDGE_WIDTH_PX" in LAYER
+    assert "layer==='conversation'&&target===backSwipeZone&&inBackBand" in LAYER
     for protected in (
         ".composer-box",
         ".messages pre",
@@ -104,12 +109,20 @@ def test_app_iframe_has_a_narrow_parent_owned_forward_swipe_zone():
     assert "return {layer,direction:'forward',sign:-1};" in LAYER
 
 
+def test_conversation_has_a_parent_owned_physical_edge_swipe_zone():
+    assert 'html[data-mobile-layer="conversation"] .mobile-layer-back-swipe-zone{' in CSS
+    assert "left:0" in CSS
+    assert "width:40px" in CSS
+    assert "touch-action:pan-y" in CSS
+    assert "target===backSwipeZone||target===appSwipeZone" in LAYER
+
+
 def test_layer_navigation_cache_identities_match_index_and_worker():
-    for token in ("&mobile-folder-quiet=v2", "&mobile-titlebar=v1", "&mobile-layer-nav=v1"):
+    for token in ("&mobile-folder-quiet=v2", "&mobile-titlebar=v1", "&mobile-layer-nav=v2"):
         assert token in next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
         assert token in next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     for asset in ("tailnet-app-rail.js", "tailnet-app-manager.js"):
         index_line = next(line for line in INDEX.splitlines() if f"static/{asset}?v=" in line)
         sw_line = next(line for line in SW.splitlines() if f"'./static/{asset}' + VQ" in line)
-        assert "&mobile-layer-nav=v1" in index_line
-        assert "&mobile-layer-nav=v1" in sw_line
+        assert "&mobile-layer-nav=v2" in index_line
+        assert "&mobile-layer-nav=v2" in sw_line
