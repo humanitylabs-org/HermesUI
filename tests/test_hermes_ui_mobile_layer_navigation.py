@@ -13,8 +13,8 @@ MANAGER = (ROOT / "static" / "tailnet-app-manager.js").read_text(encoding="utf-8
 def test_mobile_layer_navigation_is_a_separate_cached_shell_asset():
     index_line = next(line for line in INDEX.splitlines() if "static/mobile-layer-navigation.js?v=" in line)
     sw_line = next(line for line in SW.splitlines() if "'./static/mobile-layer-navigation.js' + VQ" in line)
-    assert "&mobile-layer-nav=v3" in index_line
-    assert "&mobile-layer-nav=v3" in sw_line
+    assert "&mobile-layer-nav=v4" in index_line
+    assert "&mobile-layer-nav=v4" in sw_line
     assert 'id="mobileAppLayerSwipeZone"' in INDEX
     assert 'id="mobileLayerBackSwipeZone"' in INDEX
     assert 'id="mobileLayerAnnouncer" aria-live="polite" aria-atomic="true"' in INDEX
@@ -47,7 +47,6 @@ def test_layer_swipes_are_edge_only_axis_locked_and_do_not_own_horizontal_conten
         "const FLICK_DISTANCE_PX=40;",
         "const FLICK_VELOCITY_PX_MS=.5;",
         "const DOMINANCE_RATIO=1.6;",
-        "const GESTURE_TIMEOUT_MS=900;",
         "const COOLDOWN_MS=250;",
     ):
         assert contract in LAYER
@@ -117,18 +116,34 @@ def test_conversation_has_a_parent_owned_physical_edge_swipe_zone():
     assert "target===backSwipeZone||target===appSwipeZone" in LAYER
 
 
-def test_conversation_back_swipe_presses_sessions_once_before_touchend():
-    assert "const CONVERSATION_COMMIT_PX=24;" in LAYER
-    assert "committed:false" in LAYER
-    assert "if(gesture&&gesture.committed){" in LAYER
-    assert "gesture.layer==='conversation'&&gesture.direction==='back'" in LAYER
-    assert "gesture.committed=true;" in LAYER
-    assert "navigate(gesture.direction,{fromGesture:true});" in LAYER
-    assert "if(finished.committed){" in LAYER
+def test_sessions_and_conversation_follow_the_thumb_then_settle():
+    assert "interactive:true,dragMode:'conversation-to-sessions'" in LAYER
+    assert "interactive:true,dragMode:'sessions-to-conversation'" in LAYER
+    assert "GESTURE_TIMEOUT_MS" not in LAYER
+    assert "gesture.originProgress=gesture.layer==='sessions'?1:0;" in LAYER
+    assert "const progress=Math.max(0,Math.min(1,gesture.originProgress+dx/width));" in LAYER
+    assert "root.style.setProperty('--mobile-layer-drag-progress',`${progress*100}%`)" in LAYER
+    assert "distance>=width*INTERACTIVE_COMMIT_RATIO" in LAYER
+    assert "const reverseFling=velocity*finished.sign<=-INTERACTIVE_REVERSE_VELOCITY_PX_MS;" in LAYER
+    assert "settleInteractive(finished,commits,event)" in LAYER
+    assert "if(commits)navigate(finished.direction,{fromGesture:true});" in LAYER
+    assert "html[data-mobile-layer-drag] .main" in CSS
+    assert 'html[data-mobile-layer-drag]:not([data-tailnet-view="external"]) .sidebar{' in CSS
+    assert 'html[data-mobile-layer-drag-phase="settling"] .main' in CSS
+    assert 'html[data-mobile-session-view="sessions"][data-mobile-layer-drag] .app-titlebar{display:flex!important;}' in CSS
+
+
+def test_interactive_swipe_suppresses_touch_tail_and_respects_reduced_motion():
+    assert "suppressClickUntil=Date.now()+350;" in LAYER
+    assert "Date.now()>=suppressClickUntil" in LAYER
+    assert "event.stopImmediatePropagation();" in LAYER
+    assert "window.matchMedia('(prefers-reduced-motion:reduce)').matches" in LAYER
+    assert 'html[data-mobile-layer-drag-phase="settling"] .main' in CSS
+    assert 'transition-duration:.01ms!important;' in CSS
 
 
 def test_layer_navigation_cache_identities_match_index_and_worker():
-    for token in ("&mobile-folder-quiet=v2", "&mobile-titlebar=v1", "&mobile-layer-nav=v3"):
+    for token in ("&mobile-folder-quiet=v2", "&mobile-titlebar=v1", "&mobile-layer-nav=v4"):
         assert token in next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
         assert token in next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     for asset in ("tailnet-app-rail.js", "tailnet-app-manager.js"):
