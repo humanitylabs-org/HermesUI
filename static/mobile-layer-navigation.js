@@ -10,6 +10,7 @@
   const EDGE_WIDTH_PX=24;
   const AXIS_LOCK_PX=10;
   const ACTIVATE_PX=24;
+  const CONVERSATION_COMMIT_PX=24;
   const COMMIT_PX=72;
   const FLICK_DISTANCE_PX=40;
   const FLICK_VELOCITY_PX_MS=.5;
@@ -121,6 +122,7 @@
       startAt:performance.now(),
       locked:false,
       active:false,
+      committed:false,
       cancelled:false,
       peak:0,
       samples:[{x:touch.clientX,t:performance.now()}]
@@ -128,6 +130,11 @@
   }
 
   function onTouchMove(event){
+    if(gesture&&gesture.committed){
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     if(!gesture||gesture.cancelled||event.touches.length!==1)return;
     const touch=event.touches[0];
     const now=performance.now();
@@ -153,6 +160,14 @@
     if(gesture.active){
       event.preventDefault();
       event.stopImmediatePropagation();
+      if(
+        !gesture.committed&&
+        gesture.layer==='conversation'&&gesture.direction==='back'&&
+        absX>=CONVERSATION_COMMIT_PX
+      ){
+        gesture.committed=true;
+        if(!gesture.consumeUtilities)navigate(gesture.direction,{fromGesture:true});
+      }
     }
   }
 
@@ -238,6 +253,13 @@
   function onTouchEnd(event){
     if(!gesture)return;
     const finished=gesture;
+    if(finished.committed){
+      resetGesture();
+      cooldownUntil=Date.now()+COOLDOWN_MS;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     const touch=event.changedTouches&&event.changedTouches[0];
     const dx=touch?touch.clientX-finished.startX:0;
     const dy=touch?touch.clientY-finished.startY:0;
@@ -285,7 +307,7 @@
   window.__mobileLayerNavigation={
     currentLayer,
     navigate,
-    thresholds:{backEdgeWidth:BACK_EDGE_WIDTH_PX,edgeInset:EDGE_INSET_PX,edgeWidth:EDGE_WIDTH_PX,activate:ACTIVATE_PX,commit:COMMIT_PX,dominance:DOMINANCE_RATIO}
+    thresholds:{backEdgeWidth:BACK_EDGE_WIDTH_PX,edgeInset:EDGE_INSET_PX,edgeWidth:EDGE_WIDTH_PX,activate:ACTIVATE_PX,conversationCommit:CONVERSATION_COMMIT_PX,commit:COMMIT_PX,dominance:DOMINANCE_RATIO}
   };
   syncLayer();
 })();
