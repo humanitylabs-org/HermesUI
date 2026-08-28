@@ -14,10 +14,12 @@
   const NOTIFICATIONS_ID='cron-notifications';
   const NOTIFICATION_STATE_KEY='hermesui.cron-notifications.v1';
   const NOTIFICATION_ITEMS_CACHE_KEY='hermesui.cron-notification-items.v1';
+  const NOTIFICATION_THREAD_VIEWED_KEY='hermesui.cron-reply-viewed.v1';
   const THEME_STORAGE_KEY='hermes-theme';
   const MOBILE_RAIL_STORAGE_KEY='hermesui.mobile-rail.v1';
   const NOTIFICATION_OUTPUT_LIMIT=4;
   const NOTIFICATION_LIST_LIMIT=40;
+  const NOTIFICATION_THREAD_HYDRATION_CONCURRENCY=3;
   const SCHEDULED_JOB_LONG_PRESS_MS=450;
   const SCHEDULED_JOB_GROUPS=[
     {key:'running',label:'Running'},
@@ -42,6 +44,7 @@
     public:{label:'web bookmark',plural:'web bookmarks',icon:'globe'}
   };
   const ICONS={
+    chat:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10M7 12h7m-9 8 3.1-3H18a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3H6a3 3 0 0 0-3 3v8a3 3 0 0 0 2 2.82V20Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     pipeline:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M16 4v16M3 10h18"/></svg>',
     apps:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
     draw:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></svg>',
@@ -164,6 +167,10 @@
   let notificationThreadFiles=[];
   let notificationThreadModel={model:'',model_provider:null};
   let notificationThreadModelExplicit=false;
+  let notificationThreadViewed=readNotificationThreadViewed();
+  const notificationThreadProjectionCache=new Map();
+  const notificationThreadProjectionInflight=new Map();
+  let notificationThreadProjectionBatch=null;
   const notificationReplySessions=new Map();
   const CRON_REPLY_TITLE_PREFIX='[cron-reply:';
 
@@ -934,6 +941,7 @@
       notificationsStatus.hidden=false;
       notificationsStatus.textContent=notificationStatusText(items.filter(notificationIsUnread).length,items.length);
     }
+    renderCronNotifications();
   }
 
   function setNotificationsMode(value){
@@ -1031,12 +1039,18 @@
       return;
     }
     notificationsStatus.textContent=notificationStatusText(unreadCount,items.length);
+    queueNotificationThreadProjectionHydration(items);
     if(!visibleItems.length)return;
     visibleItems.forEach((item,index)=>{
       const unread=notificationIsUnread(item);
+      const projection=notificationThreadProjectionCache.get(item.key)||null;
+      const threadCount=projection&&projection.count>0?projection.count:0;
+      const threadUnread=threadCount>0&&notificationThreadHasUnread(projection);
       const article=document.createElement('article');
       article.className=`tailnet-notification${unread?' is-unread':''}${item.status==='error'?' is-error':''}`;
       article.dataset.role='assistant';
+      const summary=document.createElement('div');
+      summary.className='tailnet-notification-summary';
       const role=document.createElement('span');
       role.className='msg-role assistant tailnet-notification-role';
       const icon=document.createElement('span');
@@ -1046,10 +1060,7 @@
       const name=document.createElement('span');
       name.className='msg-role-name';
       name.textContent=item.name;
-      const meta=document.createElement('span');
-      meta.className='msg-time tailnet-notification-meta';
-      meta.textContent=relativeNotificationTime(item.modified);
-      role.append(icon,name,meta);
+      role.append(icon,name);
       const button=document.createElement('button');
       button.type='button';
       button.className='tailnet-notification-toggle';
@@ -1061,6 +1072,50 @@
       response.className='tailnet-notification-response';
       response.textContent=notificationPreview(item.response)||(item.status==='error'?'Failed run':'Scheduled-job response');
       button.append(role,response);
+      const metaControls=document.createElement('div');
+      metaControls.className='tailnet-notification-meta-controls';
+      const meta=document.createElement('span');
+      meta.className='msg-time tailnet-notification-meta';
+      meta.textContent=relativeNotificationTime(item.modified);
+      metaControls.appendChild(meta);
+      if(threadCount){
+        const threadButton=document.createElement('button');
+        threadButton.type='button';
+        threadButton.className=`tailnet-notification-thread-link${threadUnread?' is-unread':''}`;
+        const replyLabel=threadCount===1?'reply':'replies';
+        threadButton.setAttribute('aria-label',`${threadCount} ${replyLabel}${threadUnread?', 1 unread':''} — open reply thread`);
+        const threadVisual=document.createElement('span');
+        threadVisual.className='tailnet-notification-thread-visual';
+        threadVisual.innerHTML=ICONS.chat;
+        threadVisual.setAttribute('aria-hidden','true');
+        if(threadUnread){
+          const dot=document.createElement('span');
+          dot.className='tailnet-notification-thread-dot';
+          threadVisual.appendChild(dot);
+        }
+        const count=document.createElement('span');
+        count.className='tailnet-notification-thread-count';
+        count.textContent=threadCount>9?'9+':String(threadCount);
+        count.setAttribute('aria-hidden','true');
+        threadButton.append(threadVisual,count);
+        threadButton.addEventListener('click',event=>{
+          event.preventDefault();
+          event.stopPropagation();
+          acknowledgeNotificationThreadProjection(item,projection);
+          void openNotificationThread(item);
+        });
+        metaControls.appendChild(threadButton);
+      }
+      const disclosure=document.createElement('button');
+      disclosure.type='button';
+      disclosure.className='tailnet-notification-disclosure';
+      disclosure.setAttribute('aria-controls',richId);
+      disclosure.setAttribute('aria-expanded','false');
+      disclosure.setAttribute('aria-label',`Open notification from ${item.name}`);
+      const disclosureIcon=document.createElement('span');
+      disclosureIcon.textContent='›';
+      disclosureIcon.setAttribute('aria-hidden','true');
+      disclosure.appendChild(disclosureIcon);
       const rich=document.createElement('div');
       rich.id=richId;
       rich.className='tailnet-notification-rich';
@@ -1076,10 +1131,12 @@
         void openNotificationThread(item);
       });
       rich.append(richBody,reply);
-      button.addEventListener('click',()=>{
-        const open=article.classList.toggle('is-open');
+      const setOpen=open=>{
+        article.classList.toggle('is-open',open);
         button.setAttribute('aria-expanded',String(open));
+        disclosure.setAttribute('aria-expanded',String(open));
         button.setAttribute('aria-label',`${open?'Close':'Open'} notification from ${item.name}`);
+        disclosure.setAttribute('aria-label',`${open?'Close':'Open'} notification from ${item.name}`);
         rich.hidden=!open;
         if(open)hydrateNotificationRich(richBody,item);
         if(open&&notificationIsUnread(item)){
@@ -1087,8 +1144,11 @@
           article.classList.remove('is-unread');
         }
         if(!open&&notificationFilter==='unread'&&!notificationIsUnread(item))renderCronNotifications();
-      });
-      article.append(button,rich);
+      };
+      button.addEventListener('click',()=>setOpen(!article.classList.contains('is-open')));
+      disclosure.addEventListener('click',()=>setOpen(!article.classList.contains('is-open')));
+      summary.append(button,metaControls,disclosure);
+      article.append(summary,rich);
       notificationsList.appendChild(article);
     });
   }
@@ -1618,21 +1678,85 @@
     }
   }
 
-  function knownReplySessions(){
-    const rows=[];
-    notificationReplySessions.forEach(session=>rows.push(session));
-    try{
-      if(typeof _containedCronReplySessions!=='undefined'&&Array.isArray(_containedCronReplySessions))rows.push(..._containedCronReplySessions);
-      if(typeof _allSessions!=='undefined'&&Array.isArray(_allSessions))rows.push(..._allSessions);
-    }catch(_){}
-    const deduped=new Map();
-    rows.forEach(session=>{if(session&&session.session_id)deduped.set(session.session_id,session);});
+  function containedReplySessions() {
+    const rows = [];
+    notificationReplySessions.forEach(session => rows.push(session));
+    try {
+      if (typeof _containedCronReplySessions !== 'undefined' && Array.isArray(_containedCronReplySessions)) {
+        rows.push(..._containedCronReplySessions);
+      }
+    } catch (_) {}
+    const deduped = new Map();
+    rows.forEach(session => {
+      if (session && session.session_id) deduped.set(session.session_id, session);
+    });
     return Array.from(deduped.values());
+  }
+
+  function containedReplySessionForItem(item) {
+    const marker = notificationReplyMarker(item);
+    return containedReplySessions().find(session => String(session.title || '').startsWith(marker)) || null;
+  }
+
+  function readNotificationThreadViewed() {
+    const viewed = {};
+    try {
+      const parsed = JSON.parse(localStorage.getItem(NOTIFICATION_THREAD_VIEWED_KEY) || '{}');
+      const entries = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? Object.entries(parsed)
+        : [];
+      entries.slice(-200).forEach(([sid, value]) => {
+        const assistantCount = Number(value && value.assistant_count);
+        const seenAt = Number(value && value.seen_at);
+        if (sid && Number.isFinite(assistantCount) && assistantCount >= 0) {
+          viewed[sid] = {
+            assistant_count: assistantCount,
+            seen_at: Number.isFinite(seenAt) ? seenAt : 0,
+          };
+        }
+      });
+    } catch (_) {}
+    return viewed;
+  }
+
+  function writeNotificationThreadViewed() {
+    const entries = Object.entries(notificationThreadViewed)
+      .sort(([, left], [, right]) => Number(right && right.seen_at || 0) - Number(left && left.seen_at || 0))
+      .slice(0, 200);
+    notificationThreadViewed = Object.fromEntries(entries);
+    try {
+      localStorage.setItem(NOTIFICATION_THREAD_VIEWED_KEY, JSON.stringify(notificationThreadViewed));
+    } catch (_) {}
+  }
+
+  function notificationThreadRawCount(session) {
+    const messages = Array.isArray(session && session.messages) ? session.messages : [];
+    const raw = Number(session && session.message_count);
+    return Number.isFinite(raw) ? raw : messages.length;
+  }
+
+  function notificationThreadSessionIsStreaming(session) {
+    return !!(session && (
+      session.active_stream_id
+      || session.is_streaming
+      || session.pending_user_message
+      || session.has_pending_user_message
+    ));
+  }
+
+  function notificationThreadProjectionFingerprint(session) {
+    return [
+      String(session && session.session_id || ''),
+      notificationThreadRawCount(session),
+      Number(session && (session.last_message_at || session.updated_at) || 0),
+      String(session && session.active_stream_id || ''),
+      String(session && session.parent_session_id || ''),
+    ].join(':');
   }
 
   async function findReplySession(item){
     const marker=notificationReplyMarker(item);
-    const local=knownReplySessions().find(session=>String(session.title||'').startsWith(marker));
+    const local=containedReplySessions().find(session=>String(session.title||'').startsWith(marker));
     if(local)return local;
     try{
       const payload=await api('/api/sessions');
@@ -1707,6 +1831,125 @@
     return index>=0?source.slice(index+marker.length).trim():source;
   }
 
+  function projectNotificationThreadMessages(session,baseMessages=[]){
+    const messages=Array.isArray(session&&session.messages)?session.messages:[];
+    const baseLength=Array.isArray(baseMessages)?baseMessages.length:0;
+    return messages.slice(baseLength).reduce((rows,message)=>{
+      if(!message||!['user','assistant'].includes(message.role))return rows;
+      const raw=threadMessageText(message);
+      const text=(message.role==='user'?stripNotificationContext(raw):raw).trim();
+      if(!text)return rows;
+      rows.push({role:message.role,text,message});
+      return rows;
+    },[]);
+  }
+
+  function storeNotificationThreadProjection(item,session,baseMessages=[],fingerprint=''){
+    if(!item||!session||!session.session_id)return null;
+    const rows=projectNotificationThreadMessages(session,baseMessages);
+    const projection={
+      itemKey:String(item.key||''),
+      sessionId:String(session.session_id),
+      fingerprint:fingerprint||notificationThreadProjectionFingerprint(session),
+      count:rows.length,
+      assistantCount:rows.filter(row=>row.role==='assistant').length,
+      rawCount:notificationThreadRawCount(session),
+      streaming:notificationThreadSessionIsStreaming(session)
+    };
+    notificationThreadProjectionCache.set(item.key,projection);
+    const existing=notificationReplySessions.get(item.key)||{};
+    notificationReplySessions.set(item.key,{
+      session_id:session.session_id,
+      title:session.title||existing.title||'',
+      parent_session_id:session.parent_session_id||existing.parent_session_id||null,
+      contextMode:session.contextMode||existing.contextMode||''
+    });
+    return projection;
+  }
+
+  function rememberNotificationThreadViewed(projection){
+    if(!projection||!projection.sessionId)return;
+    notificationThreadViewed[projection.sessionId]={
+      assistant_count:Number(projection.assistantCount)||0,
+      seen_at:Date.now()
+    };
+    writeNotificationThreadViewed();
+  }
+
+  function notificationThreadHasUnread(projection){
+    if(!projection)return false;
+    const viewed=notificationThreadViewed[projection.sessionId];
+    if(!viewed){
+      rememberNotificationThreadViewed(projection);
+      return false;
+    }
+    if(projection.streaming)return false;
+    try{
+      if(typeof _hasSessionCompletionUnread==='function'&&_hasSessionCompletionUnread(projection.sessionId))return true;
+    }catch(_){}
+    return Number(projection.assistantCount)>Number(viewed.assistant_count||0);
+  }
+
+  function acknowledgeNotificationThreadProjection(item,projection=notificationThreadProjectionCache.get(item&&item.key)){
+    if(!projection)return;
+    rememberNotificationThreadViewed(projection);
+    try{
+      if(typeof _setSessionViewedCount==='function')_setSessionViewedCount(projection.sessionId,projection.rawCount);
+    }catch(_){}
+  }
+
+  async function hydrateNotificationThreadProjection(item,summary){
+    const fingerprint=notificationThreadProjectionFingerprint(summary);
+    const inflightKey=`${item.key}:${fingerprint}`;
+    if(notificationThreadProjectionInflight.has(inflightKey))return notificationThreadProjectionInflight.get(inflightKey);
+    const request=(async()=>{
+      const payload=await api(`/api/session?session_id=${encodeURIComponent(summary.session_id)}&messages=1&resolve_model=0&msg_limit=1000`,{timeoutMs:120000});
+      const session=payload&&payload.session?payload.session:payload;
+      if(!session||!session.session_id)return false;
+      let baseMessages=[];
+      if(session.parent_session_id){
+        try{
+          const parentPayload=await api(`/api/session?session_id=${encodeURIComponent(session.parent_session_id)}&messages=1&resolve_model=0&msg_limit=1000`,{timeoutMs:120000});
+          const parent=parentPayload&&parentPayload.session?parentPayload.session:parentPayload;
+          const parentMessages=Array.isArray(parent&&parent.messages)?parent.messages:[];
+          const messages=Array.isArray(session.messages)?session.messages:[];
+          baseMessages=messages.slice(0,commonThreadPrefix(messages,parentMessages));
+        }catch(_){}
+      }
+      const before=notificationThreadProjectionCache.get(item.key);
+      const projection=storeNotificationThreadProjection(item,session,baseMessages,fingerprint);
+      if(!projection)return false;
+      return !before
+        ||before.sessionId!==projection.sessionId
+        ||before.count!==projection.count
+        ||before.assistantCount!==projection.assistantCount
+        ||before.streaming!==projection.streaming;
+    })().catch(()=>false).finally(()=>notificationThreadProjectionInflight.delete(inflightKey));
+    notificationThreadProjectionInflight.set(inflightKey,request);
+    return request;
+  }
+
+  function queueNotificationThreadProjectionHydration(items){
+    if(notificationThreadProjectionBatch)return;
+    const jobs=items.map(item=>{
+      const summary=containedReplySessionForItem(item);
+      if(!summary)return null;
+      const fingerprint=notificationThreadProjectionFingerprint(summary);
+      const cached=notificationThreadProjectionCache.get(item.key);
+      if(cached&&cached.fingerprint===fingerprint)return null;
+      if(notificationThreadRawCount(summary)<=0)return null;
+      return {item,summary};
+    }).filter(Boolean);
+    if(!jobs.length)return;
+    notificationThreadProjectionBatch=mapWithConcurrency(
+      jobs,
+      NOTIFICATION_THREAD_HYDRATION_CONCURRENCY,
+      job=>hydrateNotificationThreadProjection(job.item,job.summary)
+    ).then(results=>{
+      if(results.some(Boolean)&&!notificationThreadItem&&notificationsMode==='notifications')renderCronNotifications();
+    }).finally(()=>{notificationThreadProjectionBatch=null;});
+  }
+
   function commonThreadPrefix(messages,parentMessages){
     const limit=Math.min(messages.length,parentMessages.length);
     let count=0;
@@ -1770,8 +2013,7 @@
   function renderThreadMessages(){
     if(!notificationThreadMessages)return;
     notificationThreadMessages.replaceChildren();
-    const allMessages=Array.isArray(notificationThreadSession&&notificationThreadSession.messages)?notificationThreadSession.messages:[];
-    const messages=allMessages.slice(notificationThreadBaseMessages.length).filter(message=>message&&['user','assistant'].includes(message.role));
+    const messages=projectNotificationThreadMessages(notificationThreadSession,notificationThreadBaseMessages);
     let assistantLabelShown=false;
     const appendMessage=(role,text,options={})=>{
       if(!options.allowEmpty&&!String(text||'').trim())return null;
@@ -1785,9 +2027,8 @@
       empty.textContent='Reply here without leaving Notifications.';
       notificationThreadMessages.appendChild(empty);
     }
-    messages.forEach(message=>{
-      const text=message.role==='user'?stripNotificationContext(threadMessageText(message)):threadMessageText(message);
-      appendMessage(message.role,text);
+    messages.forEach(({role,text})=>{
+      appendMessage(role,text);
     });
     notificationThreadLiveMessages.forEach(text=>appendMessage('assistant',text,{live:true}));
     if(notificationThreadDraft)appendMessage('assistant',notificationThreadDraft,{live:true});
@@ -2068,6 +2309,10 @@
         notificationThreadSource=parent;
       }catch(_){}
     }
+    const projection=notificationThreadItem
+      ?storeNotificationThreadProjection(notificationThreadItem,session,notificationThreadBaseMessages)
+      :null;
+    if(projection)acknowledgeNotificationThreadProjection(notificationThreadItem,projection);
     renderThreadMessages();
     const fullContext=!!session.parent_session_id;
     if(notificationThreadContext)notificationThreadContext.textContent=fullContext?'Full run context':'Notification output context';
@@ -2078,6 +2323,7 @@
   }
 
   async function openNotificationThread(item){
+    acknowledgeNotificationThreadProjection(item);
     notificationThreadItem=item;
     notificationThreadSession=null;
     notificationThreadBaseMessages=[];

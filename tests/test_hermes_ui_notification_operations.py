@@ -14,7 +14,20 @@ PANELS = (ROOT / "static" / "panels.js").read_text(encoding="utf-8")
 
 def _function_body(src: str, signature: str) -> str:
     start = src.index(signature)
-    brace = src.index("){", start) + 1
+    open_paren = src.index("(", start)
+    paren_depth = 0
+    close_paren = None
+    for idx in range(open_paren, len(src)):
+        char = src[idx]
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+            if paren_depth == 0:
+                close_paren = idx
+                break
+    assert close_paren is not None, f"could not extract function parameters for {signature!r}"
+    brace = src.index("{", close_paren)
     depth = 0
     for idx in range(brace, len(src)):
         char = src[idx]
@@ -197,6 +210,169 @@ def test_contained_reply_threads_use_persisted_sessions_and_normal_chat_streams(
     assert "[End notification context]" in RAIL
 
 
+def test_reply_session_lookup_ignores_normal_sidebar_sessions():
+    helper_names = ["function containedReplySessions"]
+    if "function knownReplySessions" in RAIL:
+        helper_names.append("function knownReplySessions")
+    helper_names.append("async function findReplySession")
+    helpers = "\n".join(_function_body(RAIL, signature) for signature in helper_names)
+    script = f"""
+const notificationReplySessions=new Map();
+const _containedCronReplySessions=[];
+const _allSessions=[{{session_id:'sidebar-collision',title:'[cron-reply:run-1] ordinary chat'}}];
+let apiCalls=0;
+function notificationReplyMarker(){{return '[cron-reply:run-1]';}}
+async function api(){{apiCalls+=1;return {{sessions:[]}};}}
+{helpers}
+findReplySession({{key:'job:run-1'}}).then(session=>{{
+  process.stdout.write(JSON.stringify({{sessionId:session&&session.session_id||'',apiCalls}}));
+}});
+"""
+    proc = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+    result = json.loads(proc.stdout)
+    assert result == {"sessionId": "", "apiCalls": 1}
+
+
+def test_reply_thread_projection_counts_only_visible_thread_messages():
+    helpers = "\n".join(
+        _function_body(RAIL, signature)
+        for signature in (
+            "function threadMessageText",
+            "function stripNotificationContext",
+            "function projectNotificationThreadMessages",
+            "function commonThreadPrefix",
+        )
+    )
+    script = f"""
+{helpers}
+const parent=[
+  {{role:'user',content:'Original cron prompt'}},
+  {{role:'assistant',content:'Original cron result'}}
+];
+const session={{messages:[
+  ...parent,
+  {{role:'system',content:'protocol only'}},
+  {{role:'user',content:'[Notification context]\\nOutput only\\n[End notification context]'}},
+  {{role:'user',content:'[Notification context]\\nOutput only\\n[End notification context]\\n\\nCan you explain this?'}},
+  {{role:'assistant',content:'   '}},
+  {{role:'tool',content:'hidden tool payload'}},
+  {{role:'assistant',content:'Here is the explanation.'}}
+]}};
+const prefix=session.messages.slice(0,commonThreadPrefix(session.messages,parent));
+const projected=projectNotificationThreadMessages(session,prefix);
+process.stdout.write(JSON.stringify(projected.map(row=>({{role:row.role,text:row.text}}))));
+"""
+    proc = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+    assert json.loads(proc.stdout) == [
+        {"role": "user", "text": "Can you explain this?"},
+        {"role": "assistant", "text": "Here is the explanation."},
+    ]
+
+
+def test_reply_thread_unread_tracks_completed_assistant_growth_only():
+    helpers = "\n".join(
+        _function_body(RAIL, signature)
+        for signature in (
+            "function writeNotificationThreadViewed",
+            "function rememberNotificationThreadViewed",
+            "function notificationThreadHasUnread",
+            "function acknowledgeNotificationThreadProjection",
+        )
+    )
+    script = f"""
+const stored=new Map();
+const localStorage={{setItem:(key,value)=>stored.set(key,value)}};
+const NOTIFICATION_THREAD_VIEWED_KEY='test.viewed';
+let notificationThreadViewed={{}};
+const notificationThreadProjectionCache=new Map();
+{helpers}
+const baseline={{sessionId:'reply-1',count:2,assistantCount:1,rawCount:2,streaming:false}};
+const ownSend={{...baseline,count:3,rawCount:3}};
+const completed={{...baseline,count:4,assistantCount:2,rawCount:4}};
+const streaming={{...completed,assistantCount:3,streaming:true}};
+const first=notificationThreadHasUnread(baseline);
+const own=notificationThreadHasUnread(ownSend);
+const incoming=notificationThreadHasUnread(completed);
+const active=notificationThreadHasUnread(streaming);
+acknowledgeNotificationThreadProjection({{key:'job:run-1'}},completed);
+const afterOpen=notificationThreadHasUnread(completed);
+const initialStreaming=notificationThreadHasUnread({{...baseline,sessionId:'reply-2',streaming:true}});
+const streamCompletion=notificationThreadHasUnread({{...completed,sessionId:'reply-2'}});
+process.stdout.write(JSON.stringify({{first,own,incoming,active,afterOpen,initialStreaming,streamCompletion,stored:stored.has(NOTIFICATION_THREAD_VIEWED_KEY)}}));
+"""
+    proc = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+    assert json.loads(proc.stdout) == {
+        "first": False,
+        "own": False,
+        "incoming": True,
+        "active": False,
+        "afterOpen": False,
+        "initialStreaming": False,
+        "streamCompletion": True,
+        "stored": True,
+    }
+
+
+def test_live_contained_summary_invalidates_a_stored_streaming_projection():
+    helpers = "\n".join(
+        _function_body(RAIL, signature)
+        for signature in (
+            "function containedReplySessions",
+            "function containedReplySessionForItem",
+            "function notificationThreadRawCount",
+            "function notificationThreadSessionIsStreaming",
+            "function notificationThreadProjectionFingerprint",
+            "function threadMessageText",
+            "function stripNotificationContext",
+            "function projectNotificationThreadMessages",
+            "function storeNotificationThreadProjection",
+            "function queueNotificationThreadProjectionHydration",
+        )
+    )
+    script = f"""
+const item={{key:'job:run-1'}};
+const notificationReplySessions=new Map();
+const notificationThreadProjectionCache=new Map();
+let notificationThreadProjectionBatch=null;
+let notificationThreadItem=null;
+let notificationsMode='notifications';
+const NOTIFICATION_THREAD_HYDRATION_CONCURRENCY=3;
+let _containedCronReplySessions=[{{
+  session_id:'reply-1',title:'[cron-reply:run-1] Reply',message_count:4,
+  updated_at:100,active_stream_id:'stream-1'
+}}];
+const scheduled=[];
+function notificationReplyMarker(){{return '[cron-reply:run-1]';}}
+function mapWithConcurrency(jobs){{scheduled.push(jobs.map(job=>job.summary.session_id));return Promise.resolve(jobs.map(()=>false));}}
+function hydrateNotificationThreadProjection(){{return Promise.resolve(false);}}
+function renderCronNotifications(){{}}
+{helpers}
+const original=_containedCronReplySessions[0];
+storeNotificationThreadProjection(item,{{
+  ...original,
+  messages:[{{role:'user',content:'Question'}},{{role:'assistant',content:'Working reply'}}]
+}},[],notificationThreadProjectionFingerprint(original));
+_containedCronReplySessions=[{{
+  ...original,message_count:6,updated_at:200,active_stream_id:null
+}}];
+queueNotificationThreadProjectionHydration([item]);
+process.stdout.write(JSON.stringify({{scheduled}}));
+"""
+    proc = subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+    assert json.loads(proc.stdout) == {"scheduled": [["reply-1"]]}
+
+
+def test_collapsed_reply_indicator_is_a_separate_direct_thread_control():
+    assert "threadButton.className=`tailnet-notification-thread-link${threadUnread?' is-unread':''}`" in RAIL
+    assert "count.textContent=threadCount>9?'9+':String(threadCount)" in RAIL
+    assert "event.stopPropagation();" in RAIL
+    assert "void openNotificationThread(item);" in RAIL
+    assert "summary.append(button,metaControls,disclosure)" in RAIL
+    assert ".tailnet-notification-thread-link{appearance:none;position:relative" in STYLE
+    assert "width:44px;height:44px" in STYLE
+    assert ":root.dark .tailnet-notification-thread-link.is-unread{color:#a78bfa;}" in STYLE
+
+
 def test_contained_reply_stream_projection_handles_real_event_contract():
     helper = _function_body(RAIL, "function projectNotificationThreadStreamEvent")
     script = f"""
@@ -300,6 +476,7 @@ def test_notification_reply_renders_one_wizard_label_and_skips_empty_messages():
         for signature in (
             "function threadMessageText",
             "function stripNotificationContext",
+            "function projectNotificationThreadMessages",
             "function appendNotificationThreadMessage",
             "function renderThreadMessages",
         )
@@ -340,8 +517,8 @@ process.stdout.write(JSON.stringify({{labels,bodies,rowCount:notificationThreadM
 
 
 def test_active_frequency_assets_share_one_cache_identity():
-    style_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&mobile-modern-nav=v1&notification-hierarchy=v1"
-    rail_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1"
+    style_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&mobile-modern-nav=v1&notification-hierarchy=v1&notification-reply-indicators=v1"
+    rail_suffix = "&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&notification-reply-indicators=v1"
     index_style = next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
     sw_style = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     index_rail = next(line for line in INDEX.splitlines() if "static/tailnet-app-rail.js?v=" in line)
