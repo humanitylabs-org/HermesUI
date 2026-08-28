@@ -74,6 +74,10 @@ def test_session_switch_loading_survives_without_the_swipe_module():
     assert "__sessionSwipeNavigation" not in SESSIONS
     assert ".messages.session-switch-loading > .session-dashboard" in CSS
     assert "animation:skeletonSheen 1.25s ease-in-out infinite" in CSS
+    assert "document.addEventListener('hermesui:mobile-layer-change'" not in SESSIONS
+    assert "function _makeSessionSwipeAffordance(" in SESSIONS
+    assert ".session-swipe-affordance" in CSS
+    assert "--session-swipe-offset" in CSS
 
 
 def test_mobile_shell_has_no_swipe_down_refresh_gesture():
