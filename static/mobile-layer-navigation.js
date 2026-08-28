@@ -81,17 +81,23 @@
     const bounds=verticalGestureBounds();
     if(touch.clientY<bounds.top||touch.clientY>bounds.bottom)return null;
     const layer=currentLayer();
+    const tailnet=window.hermesMobileTailnetNavigation;
     if(layer==='app'){
       if(target!==appSwipeZone)return null;
-      return {layer,direction:'forward',sign:-1};
+      const inBackBand=touch.clientX>=0&&touch.clientX<=BACK_EDGE_WIDTH_PX;
+      if(!inBackBand||!hasConversation()||!tailnet||typeof tailnet.canLeaveActiveApp!=='function'||!tailnet.canLeaveActiveApp())return null;
+      return {layer,direction:'back',sign:1,interactive:true,dragMode:'app-to-conversation'};
     }
     const rightEdge=contentRightEdge();
     const inBackBand=touch.clientX>=0&&touch.clientX<=BACK_EDGE_WIDTH_PX;
     const forwardBandEnd=rightEdge-EDGE_INSET_PX;
     const inForwardBand=touch.clientX>=forwardBandEnd-EDGE_WIDTH_PX&&touch.clientX<=forwardBandEnd;
     if(layer==='conversation'&&target===backSwipeZone&&inBackBand)return {layer,direction:'back',sign:1,interactive:true,dragMode:'conversation-to-sessions'};
-    if(layer==='sessions'&&inBackBand)return {layer,direction:'back',sign:1};
     if(layer==='sessions'&&inForwardBand&&hasConversation())return {layer,direction:'forward',sign:-1,interactive:true,dragMode:'sessions-to-conversation'};
+    if(
+      layer==='conversation'&&inForwardBand&&
+      tailnet&&typeof tailnet.canPreviewLastApp==='function'&&tailnet.canPreviewLastApp()
+    )return {layer,direction:'forward',sign:-1,interactive:true,dragMode:'conversation-to-app'};
     return null;
   }
 
@@ -106,15 +112,16 @@
   }
 
   function interactiveWidth(){
-    const sidebar=document.querySelector('.sidebar');
-    const width=sidebar&&sidebar.getBoundingClientRect().width;
+    const layout=document.querySelector('.layout');
+    const width=layout&&layout.getBoundingClientRect().width;
     return Math.max(1,width||contentRightEdge()||window.innerWidth);
   }
 
   function beginInteractiveDrag(){
     if(!gesture||!gesture.interactive||gesture.consumeUtilities)return;
     gesture.width=interactiveWidth();
-    gesture.originProgress=gesture.layer==='sessions'?1:0;
+    gesture.originProgress=gesture.layer==='sessions'||gesture.layer==='app'?1:0;
+    gesture.progressSign=gesture.dragMode.includes('app')?-1:1;
     gesture.progress=gesture.originProgress;
     const active=document.activeElement;
     if(active&&typeof active.matches==='function'&&active.matches('textarea,input,select,[contenteditable="true"]')){
@@ -123,7 +130,7 @@
     if(window.__sessionSwipeNavigation&&typeof window.__sessionSwipeNavigation.cancel==='function'){
       try{window.__sessionSwipeNavigation.cancel();}catch(_){}
     }
-    if(gesture.layer==='conversation'&&typeof window.switchPanel==='function'){
+    if(typeof window.switchPanel==='function'){
       try{void window.switchPanel('chat');}catch(_){}
     }
     root.dataset.mobileLayerDrag=gesture.dragMode;
@@ -135,7 +142,7 @@
   function updateInteractiveDrag(dx){
     if(!gesture||!gesture.interactive||gesture.consumeUtilities)return;
     const width=gesture.width||interactiveWidth();
-    const progress=Math.max(0,Math.min(1,gesture.originProgress+dx/width));
+    const progress=Math.max(0,Math.min(1,gesture.originProgress+gesture.progressSign*dx/width));
     gesture.progress=progress;
     root.style.setProperty('--mobile-layer-drag-progress',`${progress*100}%`);
   }
@@ -155,7 +162,11 @@
   }
 
   function onTouchStart(event){
-    if(gesture||root.dataset.mobileLayerDragPhase==='settling')return;
+    if(gesture){
+      if(event.touches.length!==1)onTouchCancel(null);
+      return;
+    }
+    if(root.dataset.mobileLayerDragPhase==='settling')return;
     if(event.touches.length!==1)return resetGesture();
     const touch=event.touches[0];
     const candidate=candidateForTouch(touch,event.target);
@@ -281,13 +292,13 @@
       if(currentLayer()==='sessions')return false;
       return finishTransition('conversation',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
     }
-    if(layer==='sessions'&&direction==='back'){
+    if(layer==='conversation'&&direction==='forward'){
       if(!tailnet||typeof tailnet.restoreLastApp!=='function'||!tailnet.restoreLastApp())return false;
       return finishTransition('app',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
     }
-    if(layer==='app'&&direction==='forward'){
-      if(!tailnet||typeof tailnet.openSessions!=='function'||!tailnet.openSessions())return false;
-      return finishTransition('sessions',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
+    if(layer==='app'&&direction==='back'){
+      if(!hasConversation()||!tailnet||typeof tailnet.openConversation!=='function'||!tailnet.openConversation())return false;
+      return finishTransition('conversation',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
     }
     return false;
   }
@@ -296,7 +307,7 @@
     if(event){event.preventDefault();event.stopImmediatePropagation();}
     if(finished.consumeUtilities){clearInteractiveDrag();resetGesture();return;}
     const current=Number.isFinite(finished.progress)?finished.progress:finished.originProgress;
-    const target=commits?(finished.layer==='conversation'?1:0):finished.originProgress;
+    const target=commits?(finished.originProgress===0?1:0):finished.originProgress;
     const remaining=Math.min(1,Math.abs(target-current));
     let reduced=false;
     try{reduced=window.matchMedia('(prefers-reduced-motion:reduce)').matches;}catch(_){}
@@ -304,8 +315,10 @@
     root.dataset.mobileLayerDragPhase='settling';
     root.style.setProperty('--mobile-layer-drag-duration',`${duration}ms`);
     suppressClickUntil=Date.now()+350;
-    const sidebar=document.querySelector('.sidebar');
-    if(sidebar)sidebar.getBoundingClientRect();
+    const transitionSurface=finished.dragMode.includes('app')
+      ?document.getElementById('tailnetAppWorkspace')
+      :document.querySelector('.sidebar');
+    if(transitionSurface)transitionSurface.getBoundingClientRect();
     requestAnimationFrame(()=>root.style.setProperty('--mobile-layer-drag-progress',`${target*100}%`));
 
     let finalized=false;
@@ -313,15 +326,15 @@
       if(finalized)return;
       finalized=true;
       if(settleTimer){window.clearTimeout(settleTimer);settleTimer=0;}
-      if(sidebar)sidebar.removeEventListener('transitionend',onTransitionEnd);
+      if(transitionSurface)transitionSurface.removeEventListener('transitionend',onTransitionEnd);
       if(commits)navigate(finished.direction,{fromGesture:true});
       clearInteractiveDrag();
       resetGesture();
     };
     const onTransitionEnd=transitionEvent=>{
-      if(transitionEvent.target===sidebar&&transitionEvent.propertyName==='transform')finalize();
+      if(transitionEvent.target===transitionSurface&&transitionEvent.propertyName==='transform')finalize();
     };
-    if(sidebar)sidebar.addEventListener('transitionend',onTransitionEnd);
+    if(transitionSurface)transitionSurface.addEventListener('transitionend',onTransitionEnd);
     if(duration===0)requestAnimationFrame(finalize);
     else settleTimer=window.setTimeout(finalize,duration+80);
   }
@@ -392,11 +405,14 @@
     event.preventDefault();
     event.stopImmediatePropagation();
   },{capture:true});
-  window.addEventListener('resize',syncLayer,{passive:true});
+  window.addEventListener('resize',()=>{clearInteractiveDrag();resetGesture();syncLayer();},{passive:true});
   window.addEventListener('pagehide',()=>{clearInteractiveDrag();resetGesture();},{passive:true});
   document.addEventListener('visibilitychange',()=>{if(document.hidden){clearInteractiveDrag();resetGesture();}},{passive:true});
-  document.addEventListener('hermesui:tailnet-app-selected',syncLayer);
-  const observer=new MutationObserver(syncLayer);
+  document.addEventListener('hermesui:tailnet-app-selected',()=>{clearInteractiveDrag();resetGesture();syncLayer();});
+  const observer=new MutationObserver(()=>{
+    if(gesture){clearInteractiveDrag();resetGesture();}
+    syncLayer();
+  });
   observer.observe(root,{attributes:true,attributeFilter:['data-tailnet-view','data-mobile-session-view','data-mobile-rail']});
   if(document.getElementById('appTitlebarTitle'))document.getElementById('appTitlebarTitle').setAttribute('tabindex','-1');
   if(document.getElementById('tailnetAppWorkspace'))document.getElementById('tailnetAppWorkspace').setAttribute('tabindex','-1');
