@@ -659,12 +659,12 @@ def test_mobile_right_rail_is_collapsible_and_hides_redundant_home():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&mobile-toggle-switches=v1&mobile-layer-nav=v2"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&mobile-toggle-switches=v1&mobile-layer-nav=v3"'
         in INDEX
     )
     assert (
         'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__'
-        '&cron-notifications=v3&semantic-icons=v1&mobile-layer-nav=v2"'
+        '&cron-notifications=v3&semantic-icons=v1&mobile-layer-nav=v3"'
         in INDEX
     )
     assert "new URL(PRIVATE_APPS_PATH,location.origin)" in MANAGER
