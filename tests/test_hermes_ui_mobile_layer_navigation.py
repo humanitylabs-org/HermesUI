@@ -9,13 +9,14 @@ LAYER = (ROOT / "static" / "mobile-layer-navigation.js").read_text(encoding="utf
 RAIL = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
 MANAGER = (ROOT / "static" / "tailnet-app-manager.js").read_text(encoding="utf-8")
 SESSIONS = (ROOT / "static" / "sessions.js").read_text(encoding="utf-8")
+BOOT = (ROOT / "static" / "boot.js").read_text(encoding="utf-8")
 
 
 def test_mobile_layer_navigation_is_a_separate_cached_shell_asset():
     index_line = next(line for line in INDEX.splitlines() if "static/mobile-layer-navigation.js?v=" in line)
     sw_line = next(line for line in SW.splitlines() if "'./static/mobile-layer-navigation.js' + VQ" in line)
-    assert "&mobile-layer-nav=v7" in index_line
-    assert "&mobile-layer-nav=v7" in sw_line
+    assert "&mobile-layer-nav=v8" in index_line
+    assert "&mobile-layer-nav=v8" in sw_line
     assert 'id="mobileAppLayerSwipeZone"' in INDEX
     assert 'id="mobileLayerBackSwipeZone"' in INDEX
     assert 'id="mobileLayerAnnouncer" aria-live="polite" aria-atomic="true"' in INDEX
@@ -110,17 +111,20 @@ def test_each_live_surface_has_one_narrow_back_edge_zone():
     assert "if(target===backSwipeZone||target===appSwipeZone)return false;" in LAYER
 
 
-def test_current_card_tracks_the_thumb_while_the_parent_uses_subtle_parallax():
+def test_only_the_outgoing_card_tracks_the_thumb_over_a_stationary_parent():
     assert "interactive:true,dragMode:'conversation-to-sessions'" in LAYER
     assert "dragMode:hasConversation()?'app-to-conversation':'app-to-sessions'" in LAYER
     assert "const offset=Math.max(0,Math.min(width,dx));" in LAYER
     assert "const progress=Math.max(0,Math.min(1,offset/width));" in LAYER
     assert "root.style.setProperty('--mobile-layer-drag-offset',`${offset}px`)" in LAYER
-    assert "root.style.setProperty('--mobile-layer-drag-parallax',`${offset*.3}px`)" in LAYER
+    assert "--mobile-layer-drag-parallax" not in LAYER
+    assert "--mobile-layer-drag-parallax" not in CSS
+    assert "--mobile-layer-drag-progress" not in LAYER
     assert "distance>=width*INTERACTIVE_COMMIT_RATIO" in LAYER
     assert "const reverseFling=velocity<=-INTERACTIVE_REVERSE_VELOCITY_PX_MS;" in LAYER
     assert 'html[data-mobile-layer-drag="conversation-to-sessions"] .sidebar' in CSS
-    assert "translate3d(calc(-30% + var(--mobile-layer-drag-parallax,0px)),0,0)" in CSS
+    assert "translate3d(calc(-30%" not in CSS
+    assert 'html[data-mobile-layer-drag="conversation-to-sessions"] .sidebar{display:flex!important;z-index:200;transform:none;' in CSS
     assert 'html[data-mobile-layer-drag="conversation-to-sessions"] .layout>.main' in CSS
     assert 'html[data-mobile-layer-drag="conversation-to-sessions"] .app-titlebar' in CSS
     assert 'html[data-mobile-layer-drag="app-to-conversation"] .tailnet-app-workspace' in CSS
@@ -133,13 +137,24 @@ def test_current_card_tracks_the_thumb_while_the_parent_uses_subtle_parallax():
     assert "__sessionSwipeNavigation" not in LAYER
 
 
+def test_back_gesture_previews_the_exact_sessions_page_used_by_the_button():
+    assert "function markDragPreview()" in LAYER
+    assert "function clearDragPreview()" in LAYER
+    assert "sidebar.dataset.mobileLayerPreview='sessions';" in LAYER
+    assert "sidebar.classList.add('mobile-session-page');" in LAYER
+    assert "if(root.dataset.mobileSessionView!=='sessions')sidebar.classList.remove('mobile-session-page');" in LAYER
+    assert "const entering=document.documentElement.dataset.mobileSessionView!=='sessions';" in BOOT
+    assert "window.switchPanel('chat')" not in LAYER
+
+
 def test_interactive_back_swipe_settles_once_and_respects_reduced_motion():
     assert "root.dataset.mobileLayerBusy='true';" in LAYER
     assert "root.removeAttribute('data-mobile-layer-busy');" in LAYER
     assert "if(commits)suppressClickUntil=Date.now()+250;" in LAYER
     assert "Date.now()>=suppressClickUntil" in LAYER
     assert "window.matchMedia('(prefers-reduced-motion:reduce)').matches" in LAYER
-    assert 'html[data-mobile-layer-drag-phase="settling"] .sidebar' in CSS
+    assert 'html[data-mobile-layer-drag-phase="settling"] .sidebar' not in CSS
+    assert 'html[data-mobile-layer-drag-phase="settling"] .layout>.main' in CSS
     assert 'transition-duration:.01ms!important;' in CSS
     assert "pointerId," in LAYER
     assert "if(!gesture||gesture.releasing)return;" in LAYER
@@ -162,20 +177,24 @@ def test_session_loading_skeleton_never_repaints_mid_back_gesture():
     assert "const _SESSION_CONTENT_LOADING_MIN_VISIBLE_MS=320;" in SESSIONS
     assert "if(document.documentElement.hasAttribute('data-mobile-layer-drag'))" in SESSIONS
     assert "_scheduleSessionContentLoadingShow(60);" in SESSIONS
-    assert "document.addEventListener('hermesui:mobile-layer-change'" in SESSIONS
+    assert "document.addEventListener('hermesui:mobile-layer-change'" not in SESSIONS
     assert "if(conversationIsLoading())return null;" in LAYER
     assert ".session-switch-skeleton" in CSS
     assert "data-mobile-session-loading" not in CSS
 
 
 def test_layer_navigation_cache_identities_match_index_and_worker():
-    for token in ("&mobile-folder-quiet=v2", "&mobile-titlebar=v1", "&mobile-layer-nav=v6"):
+    for token in ("&mobile-folder-quiet=v2", "&mobile-titlebar=v1", "&mobile-layer-nav=v7"):
         assert token in next(line for line in INDEX.splitlines() if "static/style.css?v=" in line)
         assert token in next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
     sessions_index = next(line for line in INDEX.splitlines() if "static/sessions.js?v=" in line)
     sessions_sw = next(line for line in SW.splitlines() if "'./static/sessions.js' + VQ" in line)
-    assert "&mobile-back-loading=v2" in sessions_index
-    assert "&mobile-back-loading=v2" in sessions_sw
+    assert "&mobile-back-loading=v3" in sessions_index
+    assert "&mobile-back-loading=v3" in sessions_sw
+    boot_index = next(line for line in INDEX.splitlines() if "static/boot.js?v=" in line)
+    boot_sw = next(line for line in SW.splitlines() if "'./static/boot.js' + VQ" in line)
+    assert "&mobile-back-instant=v1" in boot_index
+    assert "&mobile-back-instant=v1" in boot_sw
     for asset, token in (("tailnet-app-rail.js", "v5"), ("tailnet-app-manager.js", "v3")):
         index_line = next(line for line in INDEX.splitlines() if f"static/{asset}?v=" in line)
         sw_line = next(line for line in SW.splitlines() if f"'./static/{asset}' + VQ" in line)

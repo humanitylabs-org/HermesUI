@@ -2688,10 +2688,6 @@ function _setSessionContentLoading(on){
   if(delay>0)_sessionContentLoadingHideTimer=window.setTimeout(hide,delay);
   else hide();
 }
-document.addEventListener('hermesui:mobile-layer-change',()=>{
-  if(_sessionContentLoadingDepth>0)_scheduleSessionContentLoadingShow(0);
-});
-
 async function _ensureSidebarSessionProfile(session){
   const targetProfile=_sidebarSessionProfileName(session);
   if(!_showAllProfiles||!targetProfile) return false;

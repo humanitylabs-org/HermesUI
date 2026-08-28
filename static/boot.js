@@ -411,7 +411,7 @@ function openMobileSessionPage(){
   if(!isPhone)return false;
   // Sessions is a real mobile page, not a drawer with a second back button.
   // The chat panel switch is synchronous even though switchPanel is async.
-  const entering=!sidebar.classList.contains('mobile-session-page');
+  const entering=document.documentElement.dataset.mobileSessionView!=='sessions';
   if(entering){try{if(typeof switchPanel==='function')switchPanel('chat');}catch(_){}}
   sidebar.classList.remove('mobile-panel-drawer');
   sidebar.classList.add('mobile-session-page','mobile-open');

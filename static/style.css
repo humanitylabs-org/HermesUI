@@ -2574,26 +2574,24 @@
     }
     html[data-mobile-layer="conversation"] .mobile-layer-back-swipe-zone{width:24px;}
     html[data-tailnet-view="external"] .mobile-app-layer-swipe-zone{width:40px;}
-    /* Back only: the current card follows the thumb and reveals its already-mounted parent.
+    /* Back only: the current card follows the thumb over its complete, stationary parent.
        The bottom menu and Tailnet rail stay fixed, and the app iframe never remounts. */
     html[data-mobile-layer-drag],html[data-mobile-layer-drag] body{overflow-x:clip;}
-    html[data-mobile-layer-drag="conversation-to-sessions"] .sidebar{display:flex!important;z-index:200;transform:translate3d(calc(-30% + var(--mobile-layer-drag-parallax,0px)),0,0);will-change:transform;}
+    html[data-mobile-layer-drag="conversation-to-sessions"] .sidebar{display:flex!important;z-index:200;transform:none;pointer-events:none;}
     html[data-mobile-layer-drag="conversation-to-sessions"] .layout>.main{display:flex!important;position:relative;z-index:201;transform:translate3d(var(--mobile-layer-drag-offset,0px),0,0);will-change:transform;box-shadow:-10px 0 28px rgba(0,0,0,.18);}
     html[data-mobile-layer-drag="conversation-to-sessions"] .app-titlebar{z-index:202;transform:translate3d(var(--mobile-layer-drag-offset,0px),0,0);will-change:transform;}
     html[data-mobile-layer-drag="app-to-conversation"] .layout,
     html[data-mobile-layer-drag="app-to-sessions"] .layout{padding-top:0!important;overflow:hidden;}
-    html[data-mobile-layer-drag="app-to-conversation"] .layout>.main{display:flex!important;position:relative;z-index:217;transform:translate3d(calc(-30% + var(--mobile-layer-drag-parallax,0px)),0,0);will-change:transform;}
-    html[data-tailnet-view="external"][data-mobile-layer-drag="app-to-conversation"] .app-titlebar{display:flex!important;z-index:217;transform:translate3d(calc(-30% + var(--mobile-layer-drag-parallax,0px)),0,0);will-change:transform;}
-    html[data-mobile-layer-drag="app-to-sessions"] .sidebar{display:flex!important;z-index:217;transform:translate3d(calc(-30% + var(--mobile-layer-drag-parallax,0px)),0,0)!important;will-change:transform;}
+    html[data-mobile-layer-drag="app-to-conversation"] .layout>.main{display:flex!important;position:relative;z-index:217;transform:none;pointer-events:none;}
+    html[data-tailnet-view="external"][data-mobile-layer-drag="app-to-conversation"] .app-titlebar{display:flex!important;z-index:217;transform:none;pointer-events:none;}
+    html[data-mobile-layer-drag="app-to-sessions"] .sidebar{display:flex!important;z-index:217;transform:none!important;pointer-events:none;}
     html[data-mobile-layer-drag="app-to-conversation"] .tailnet-app-workspace,
     html[data-mobile-layer-drag="app-to-sessions"] .tailnet-app-workspace{display:block!important;position:fixed;z-index:218;inset:0 var(--mobile-rail-w) var(--mobile-nav-clearance) 0;width:auto!important;max-width:none!important;transform:translate3d(var(--mobile-layer-drag-offset,0px),0,0);will-change:transform;box-shadow:-10px 0 28px rgba(0,0,0,.18);}
     html[data-mobile-layer-drag="app-to-conversation"] #tailnetAppFrame,
     html[data-mobile-layer-drag="app-to-sessions"] #tailnetAppFrame{pointer-events:none;}
-    html[data-mobile-layer-drag-phase="dragging"] .sidebar,
     html[data-mobile-layer-drag-phase="dragging"] .layout>.main,
     html[data-mobile-layer-drag-phase="dragging"] .app-titlebar,
     html[data-mobile-layer-drag-phase="dragging"] .tailnet-app-workspace{transition:none;}
-    html[data-mobile-layer-drag-phase="settling"] .sidebar,
     html[data-mobile-layer-drag-phase="settling"] .layout>.main,
     html[data-mobile-layer-drag-phase="settling"] .app-titlebar,
     html[data-mobile-layer-drag-phase="settling"] .tailnet-app-workspace{transition:transform var(--mobile-layer-drag-duration,180ms) cubic-bezier(.2,.82,.25,1);}
@@ -2643,7 +2641,7 @@
     }
   }
   @media(max-width:640px) and (prefers-reduced-motion:reduce){
-    .rail.tailnet-app-rail,.mobile-rail-handle,.mobile-rail-handle svg,.rail.tailnet-app-rail .rail-btn,.mobile-primary-action,.mobile-session-utility,.mobile-session-utility-switch,.mobile-session-utility-knob,.project-chip,html[data-mobile-layer-drag-phase="settling"] .sidebar,html[data-mobile-layer-drag-phase="settling"] .layout>.main,html[data-mobile-layer-drag-phase="settling"] .app-titlebar,html[data-mobile-layer-drag-phase="settling"] .tailnet-app-workspace{transition-duration:.01ms!important;}
+    .rail.tailnet-app-rail,.mobile-rail-handle,.mobile-rail-handle svg,.rail.tailnet-app-rail .rail-btn,.mobile-primary-action,.mobile-session-utility,.mobile-session-utility-switch,.mobile-session-utility-knob,.project-chip,html[data-mobile-layer-drag-phase="settling"] .layout>.main,html[data-mobile-layer-drag-phase="settling"] .app-titlebar,html[data-mobile-layer-drag-phase="settling"] .tailnet-app-workspace{transition-duration:.01ms!important;}
     .rail.tailnet-app-rail .rail-btn:active,.mobile-primary-action:active,.project-chip:active,.project-chip.long-pressing{transform:none;}
     .mobile-rail-handle:active{transform:translateY(-50%);}
   }
