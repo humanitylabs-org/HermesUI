@@ -32,6 +32,7 @@
   let utilitiesOpenAtPointerDown=false;
   let settleTimer=0;
   let suppressClickUntil=0;
+  let pendingTouchPointerId=null;
 
   function isPhoneWidth(){
     try{return window.matchMedia('(max-width:640px)').matches;}catch(_){return window.innerWidth<=640;}
@@ -101,7 +102,7 @@
     return null;
   }
 
-  function resetGesture(){gesture=null;}
+  function resetGesture(){gesture=null;pendingTouchPointerId=null;}
 
   function clearInteractiveDrag(){
     if(settleTimer){window.clearTimeout(settleTimer);settleTimer=0;}
@@ -169,6 +170,8 @@
     if(root.dataset.mobileLayerDragPhase==='settling')return;
     if(event.touches.length!==1)return resetGesture();
     const touch=event.touches[0];
+    const pointerId=pendingTouchPointerId;
+    pendingTouchPointerId=null;
     const candidate=candidateForTouch(touch,event.target);
     const consumeUtilities=utilitiesOpenAtPointerDown;
     utilitiesOpenAtPointerDown=false;
@@ -179,12 +182,17 @@
       origin:event.target,
       startX:touch.clientX,
       startY:touch.clientY,
+      lastX:touch.clientX,
+      lastY:touch.clientY,
+      pointerId,
       locked:false,
       active:false,
       cancelled:false,
+      releasing:false,
       peak:0,
       samples:[{x:touch.clientX,t:performance.now()}]
     };
+
     if(candidate.interactive){
       const origin=gesture.origin;
       window.setTimeout(()=>{if(gesture&&gesture.origin===origin&&!gesture.active)cancelOriginRow();},0);
@@ -195,6 +203,8 @@
     if(!gesture||gesture.cancelled||event.touches.length!==1)return;
     const touch=event.touches[0];
     const now=performance.now();
+    gesture.lastX=touch.clientX;
+    gesture.lastY=touch.clientY;
     const dx=touch.clientX-gesture.startX;
     const dy=touch.clientY-gesture.startY;
     const absX=Math.abs(dx);
@@ -339,12 +349,14 @@
     else settleTimer=window.setTimeout(finalize,duration+80);
   }
 
-  function onTouchEnd(event){
-    if(!gesture)return;
+  function finishGestureAt(clientX,clientY,event){
+    if(!gesture||gesture.releasing)return;
+    gesture.releasing=true;
     const finished=gesture;
-    const touch=event.changedTouches&&event.changedTouches[0];
-    const dx=touch?touch.clientX-finished.startX:0;
-    const dy=touch?touch.clientY-finished.startY:0;
+    const endX=Number.isFinite(clientX)?clientX:finished.lastX;
+    const endY=Number.isFinite(clientY)?clientY:finished.lastY;
+    const dx=endX-finished.startX;
+    const dy=endY-finished.startY;
     const velocity=trailingVelocity();
     if(finished.interactive&&finished.active){
       const width=finished.width||interactiveWidth();
@@ -369,8 +381,27 @@
     navigate(finished.direction,{fromGesture:true});
   }
 
+  function onTouchEnd(event){
+    const touch=event.changedTouches&&event.changedTouches[0];
+    finishGestureAt(touch&&touch.clientX,touch&&touch.clientY,event);
+  }
+
+  function onPointerRelease(event){
+    if(!gesture||gesture.releasing||event.pointerType!=='touch')return;
+    if(gesture.pointerId!==null&&gesture.pointerId!==undefined&&gesture.pointerId!==event.pointerId)return;
+    finishGestureAt(event.clientX,event.clientY,event);
+  }
+
+  function onPointerCancel(event){
+    if(!gesture||gesture.releasing||event.pointerType!=='touch')return;
+    if(gesture.pointerId!==null&&gesture.pointerId!==undefined&&gesture.pointerId!==event.pointerId)return;
+    onTouchCancel(event);
+  }
+
   function onTouchCancel(event){
     if(event&&event.mobileLayerSynthetic)return;
+    if(!gesture||gesture.releasing)return;
+    gesture.releasing=true;
     if(gesture&&gesture.interactive&&gesture.active){settleInteractive(gesture,false,null);return;}
     clearInteractiveDrag();
     resetGesture();
@@ -387,9 +418,12 @@
   }
 
   document.addEventListener('pointerdown',event=>{
+    if(event.pointerType==='touch'&&!gesture)pendingTouchPointerId=event.pointerId;
     const toggle=document.getElementById('mobileSessionUtilitiesToggle');
     utilitiesOpenAtPointerDown=Boolean(isPhoneWidth()&&event.pointerType==='touch'&&toggle&&toggle.getAttribute('aria-expanded')==='true');
   },{capture:true,passive:true});
+  window.addEventListener('pointerup',onPointerRelease,{capture:true,passive:false});
+  window.addEventListener('pointercancel',onPointerCancel,{capture:true,passive:true});
   document.addEventListener('touchstart',onTouchStart,{capture:true,passive:true});
   document.addEventListener('touchmove',onTouchMove,{capture:true,passive:false});
   document.addEventListener('touchend',onTouchEnd,{capture:true,passive:false});
