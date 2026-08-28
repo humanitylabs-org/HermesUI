@@ -10,13 +10,16 @@
   const EDGE_WIDTH_PX=24;
   const AXIS_LOCK_PX=10;
   const ACTIVATE_PX=24;
-  const CONVERSATION_COMMIT_PX=24;
   const COMMIT_PX=72;
   const FLICK_DISTANCE_PX=40;
   const FLICK_VELOCITY_PX_MS=.5;
+  const INTERACTIVE_COMMIT_RATIO=.34;
+  const INTERACTIVE_FLICK_DISTANCE_PX=28;
+  const INTERACTIVE_FLICK_VELOCITY_PX_MS=.35;
+  const INTERACTIVE_REVERSE_VELOCITY_PX_MS=.35;
   const DOMINANCE_RATIO=1.6;
-  const GESTURE_TIMEOUT_MS=900;
   const COOLDOWN_MS=250;
+  const INTERACTIVE_COOLDOWN_MS=80;
   const BLOCKED_ORIGIN_SELECTOR=[
     '.composer-box','textarea','input','select','[contenteditable="true"]',
     '.messages pre','.msg-body pre','code','table','.project-bar','.session-source-tabs',
@@ -27,6 +30,8 @@
   let gesture=null;
   let cooldownUntil=0;
   let utilitiesOpenAtPointerDown=false;
+  let settleTimer=0;
+  let suppressClickUntil=0;
 
   function isPhoneWidth(){
     try{return window.matchMedia('(max-width:640px)').matches;}catch(_){return window.innerWidth<=640;}
@@ -84,13 +89,56 @@
     const inBackBand=touch.clientX>=0&&touch.clientX<=BACK_EDGE_WIDTH_PX;
     const forwardBandEnd=rightEdge-EDGE_INSET_PX;
     const inForwardBand=touch.clientX>=forwardBandEnd-EDGE_WIDTH_PX&&touch.clientX<=forwardBandEnd;
-    if(layer==='conversation'&&target===backSwipeZone&&inBackBand)return {layer,direction:'back',sign:1};
+    if(layer==='conversation'&&target===backSwipeZone&&inBackBand)return {layer,direction:'back',sign:1,interactive:true,dragMode:'conversation-to-sessions'};
     if(layer==='sessions'&&inBackBand)return {layer,direction:'back',sign:1};
-    if(layer==='sessions'&&inForwardBand)return {layer,direction:'forward',sign:-1};
+    if(layer==='sessions'&&inForwardBand&&hasConversation())return {layer,direction:'forward',sign:-1,interactive:true,dragMode:'sessions-to-conversation'};
     return null;
   }
 
   function resetGesture(){gesture=null;}
+
+  function clearInteractiveDrag(){
+    if(settleTimer){window.clearTimeout(settleTimer);settleTimer=0;}
+    root.removeAttribute('data-mobile-layer-drag');
+    root.removeAttribute('data-mobile-layer-drag-phase');
+    root.style.removeProperty('--mobile-layer-drag-progress');
+    root.style.removeProperty('--mobile-layer-drag-duration');
+  }
+
+  function interactiveWidth(){
+    const sidebar=document.querySelector('.sidebar');
+    const width=sidebar&&sidebar.getBoundingClientRect().width;
+    return Math.max(1,width||contentRightEdge()||window.innerWidth);
+  }
+
+  function beginInteractiveDrag(){
+    if(!gesture||!gesture.interactive||gesture.consumeUtilities)return;
+    gesture.width=interactiveWidth();
+    gesture.originProgress=gesture.layer==='sessions'?1:0;
+    gesture.progress=gesture.originProgress;
+    const active=document.activeElement;
+    if(active&&typeof active.matches==='function'&&active.matches('textarea,input,select,[contenteditable="true"]')){
+      try{active.blur();}catch(_){}
+    }
+    if(window.__sessionSwipeNavigation&&typeof window.__sessionSwipeNavigation.cancel==='function'){
+      try{window.__sessionSwipeNavigation.cancel();}catch(_){}
+    }
+    if(gesture.layer==='conversation'&&typeof window.switchPanel==='function'){
+      try{void window.switchPanel('chat');}catch(_){}
+    }
+    root.dataset.mobileLayerDrag=gesture.dragMode;
+    root.dataset.mobileLayerDragPhase='dragging';
+    root.style.setProperty('--mobile-layer-drag-duration','0ms');
+    root.style.setProperty('--mobile-layer-drag-progress',`${gesture.progress*100}%`);
+  }
+
+  function updateInteractiveDrag(dx){
+    if(!gesture||!gesture.interactive||gesture.consumeUtilities)return;
+    const width=gesture.width||interactiveWidth();
+    const progress=Math.max(0,Math.min(1,gesture.originProgress+dx/width));
+    gesture.progress=progress;
+    root.style.setProperty('--mobile-layer-drag-progress',`${progress*100}%`);
+  }
 
   function cancelOriginRow(){
     if(!gesture||!gesture.origin||typeof gesture.origin.closest!=='function')return;
@@ -107,6 +155,7 @@
   }
 
   function onTouchStart(event){
+    if(gesture||root.dataset.mobileLayerDragPhase==='settling')return;
     if(event.touches.length!==1)return resetGesture();
     const touch=event.touches[0];
     const candidate=candidateForTouch(touch,event.target);
@@ -119,22 +168,19 @@
       origin:event.target,
       startX:touch.clientX,
       startY:touch.clientY,
-      startAt:performance.now(),
       locked:false,
       active:false,
-      committed:false,
       cancelled:false,
       peak:0,
       samples:[{x:touch.clientX,t:performance.now()}]
     };
+    if(candidate.interactive){
+      const origin=gesture.origin;
+      window.setTimeout(()=>{if(gesture&&gesture.origin===origin&&!gesture.active)cancelOriginRow();},0);
+    }
   }
 
   function onTouchMove(event){
-    if(gesture&&gesture.committed){
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      return;
-    }
     if(!gesture||gesture.cancelled||event.touches.length!==1)return;
     const touch=event.touches[0];
     const now=performance.now();
@@ -142,7 +188,7 @@
     const dy=touch.clientY-gesture.startY;
     const absX=Math.abs(dx);
     const absY=Math.abs(dy);
-    if(now-gesture.startAt>GESTURE_TIMEOUT_MS){gesture.cancelled=true;return;}
+
     if(dx*gesture.sign<0&&absX>=AXIS_LOCK_PX){gesture.cancelled=true;return;}
     if(!gesture.locked&&Math.hypot(dx,dy)>=AXIS_LOCK_PX){
       if(absY>=12&&absY>=absX){gesture.cancelled=true;return;}
@@ -152,29 +198,25 @@
     if(!gesture.locked)return;
     recordSample(touch,now);
     gesture.peak=Math.max(gesture.peak,absX);
-    if(gesture.peak>0&&absX<gesture.peak*.5){gesture.cancelled=true;return;}
-    if(!gesture.active&&absX>=ACTIVATE_PX&&absX>=DOMINANCE_RATIO*absY){
+    if(!gesture.interactive&&gesture.peak>0&&absX<gesture.peak*.5){gesture.cancelled=true;return;}
+    const activateDistance=gesture.interactive?AXIS_LOCK_PX:ACTIVATE_PX;
+    if(!gesture.active&&absX>=activateDistance&&absX>=DOMINANCE_RATIO*absY){
       gesture.active=true;
       cancelOriginRow();
+      beginInteractiveDrag();
     }
     if(gesture.active){
       event.preventDefault();
       event.stopImmediatePropagation();
-      if(
-        !gesture.committed&&
-        gesture.layer==='conversation'&&gesture.direction==='back'&&
-        absX>=CONVERSATION_COMMIT_PX
-      ){
-        gesture.committed=true;
-        if(!gesture.consumeUtilities)navigate(gesture.direction,{fromGesture:true});
-      }
+      if(gesture.interactive)updateInteractiveDrag(dx);
     }
   }
 
-  function trailingVelocity(){
+  function trailingVelocity(now=performance.now()){
     if(!gesture||gesture.samples.length<2)return 0;
     const first=gesture.samples[0];
     const last=gesture.samples[gesture.samples.length-1];
+    if(now-last.t>120)return 0;
     const elapsed=Math.max(1,last.t-first.t);
     return (last.x-first.x)/elapsed;
   }
@@ -203,7 +245,7 @@
     requestAnimationFrame(()=>{announcer.textContent=message;});
   }
 
-  function focusLayer(layer){
+  function focusLayer(layer,delay=motionDelay()){
     window.setTimeout(()=>{
       let target=null;
       if(layer==='sessions')target=document.querySelector('#panelChat>.panel-head');
@@ -212,14 +254,14 @@
       if(!target)return;
       if(!target.hasAttribute('tabindex'))target.setAttribute('tabindex','-1');
       try{target.focus({preventScroll:true});}catch(_){try{target.focus();}catch(__){}}
-    },motionDelay());
+    },delay);
   }
 
-  function finishTransition(layer){
-    cooldownUntil=Date.now()+COOLDOWN_MS;
+  function finishTransition(layer,{focusDelay=motionDelay(),cooldown=COOLDOWN_MS}={}){
+    cooldownUntil=Date.now()+cooldown;
     root.dataset.mobileLayer=layer;
     announceLayer(layer);
-    focusLayer(layer);
+    focusLayer(layer,focusDelay);
     document.dispatchEvent(new CustomEvent('hermesui:mobile-layer-change',{detail:{layer}}));
     return true;
   }
@@ -231,39 +273,77 @@
     const layer=currentLayer();
     if(layer==='conversation'&&direction==='back'){
       if(!tailnet||typeof tailnet.openSessionsFromConversation!=='function'||!tailnet.openSessionsFromConversation())return false;
-      return finishTransition('sessions');
+      return finishTransition('sessions',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
     }
     if(layer==='sessions'&&direction==='forward'){
       if(!hasConversation()||typeof window.closeMobileSidebar!=='function')return false;
       window.closeMobileSidebar(true);
       if(currentLayer()==='sessions')return false;
-      return finishTransition('conversation');
+      return finishTransition('conversation',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
     }
     if(layer==='sessions'&&direction==='back'){
       if(!tailnet||typeof tailnet.restoreLastApp!=='function'||!tailnet.restoreLastApp())return false;
-      return finishTransition('app');
+      return finishTransition('app',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
     }
     if(layer==='app'&&direction==='forward'){
       if(!tailnet||typeof tailnet.openSessions!=='function'||!tailnet.openSessions())return false;
-      return finishTransition('sessions');
+      return finishTransition('sessions',{focusDelay:fromGesture?0:motionDelay(),cooldown:fromGesture?INTERACTIVE_COOLDOWN_MS:COOLDOWN_MS});
     }
     return false;
+  }
+
+  function settleInteractive(finished,commits,event){
+    if(event){event.preventDefault();event.stopImmediatePropagation();}
+    if(finished.consumeUtilities){clearInteractiveDrag();resetGesture();return;}
+    const current=Number.isFinite(finished.progress)?finished.progress:finished.originProgress;
+    const target=commits?(finished.layer==='conversation'?1:0):finished.originProgress;
+    const remaining=Math.min(1,Math.abs(target-current));
+    let reduced=false;
+    try{reduced=window.matchMedia('(prefers-reduced-motion:reduce)').matches;}catch(_){}
+    const duration=reduced?0:Math.round(Math.max(110,Math.min(240,110+130*remaining)));
+    root.dataset.mobileLayerDragPhase='settling';
+    root.style.setProperty('--mobile-layer-drag-duration',`${duration}ms`);
+    suppressClickUntil=Date.now()+350;
+    const sidebar=document.querySelector('.sidebar');
+    if(sidebar)sidebar.getBoundingClientRect();
+    requestAnimationFrame(()=>root.style.setProperty('--mobile-layer-drag-progress',`${target*100}%`));
+
+    let finalized=false;
+    const finalize=()=>{
+      if(finalized)return;
+      finalized=true;
+      if(settleTimer){window.clearTimeout(settleTimer);settleTimer=0;}
+      if(sidebar)sidebar.removeEventListener('transitionend',onTransitionEnd);
+      if(commits)navigate(finished.direction,{fromGesture:true});
+      clearInteractiveDrag();
+      resetGesture();
+    };
+    const onTransitionEnd=transitionEvent=>{
+      if(transitionEvent.target===sidebar&&transitionEvent.propertyName==='transform')finalize();
+    };
+    if(sidebar)sidebar.addEventListener('transitionend',onTransitionEnd);
+    if(duration===0)requestAnimationFrame(finalize);
+    else settleTimer=window.setTimeout(finalize,duration+80);
   }
 
   function onTouchEnd(event){
     if(!gesture)return;
     const finished=gesture;
-    if(finished.committed){
-      resetGesture();
-      cooldownUntil=Date.now()+COOLDOWN_MS;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      return;
-    }
     const touch=event.changedTouches&&event.changedTouches[0];
     const dx=touch?touch.clientX-finished.startX:0;
     const dy=touch?touch.clientY-finished.startY:0;
     const velocity=trailingVelocity();
+    if(finished.interactive&&finished.active){
+      const width=finished.width||interactiveWidth();
+      const distance=Math.max(0,dx*finished.sign);
+      const reverseFling=velocity*finished.sign<=-INTERACTIVE_REVERSE_VELOCITY_PX_MS;
+      const commits=!finished.cancelled&&!reverseFling&&(
+        distance>=width*INTERACTIVE_COMMIT_RATIO||
+        (distance>=INTERACTIVE_FLICK_DISTANCE_PX&&velocity*finished.sign>=INTERACTIVE_FLICK_VELOCITY_PX_MS)
+      );
+      settleInteractive(finished,commits,event);
+      return;
+    }
     const commits=finished.active&&!finished.cancelled&&dx*finished.sign>0&&Math.abs(dx)>=DOMINANCE_RATIO*Math.abs(dy)&&(
       Math.abs(dx)>=COMMIT_PX||
       (Math.abs(dx)>=FLICK_DISTANCE_PX&&Math.abs(velocity)>=FLICK_VELOCITY_PX_MS&&velocity*finished.sign>0)
@@ -278,12 +358,15 @@
 
   function onTouchCancel(event){
     if(event&&event.mobileLayerSynthetic)return;
+    if(gesture&&gesture.interactive&&gesture.active){settleInteractive(gesture,false,null);return;}
+    clearInteractiveDrag();
     resetGesture();
   }
 
   function syncLayer(){
     if(!isPhoneWidth()){
       root.removeAttribute('data-mobile-layer');
+      clearInteractiveDrag();
       resetGesture();
       return;
     }
@@ -298,7 +381,20 @@
   document.addEventListener('touchmove',onTouchMove,{capture:true,passive:false});
   document.addEventListener('touchend',onTouchEnd,{capture:true,passive:false});
   document.addEventListener('touchcancel',onTouchCancel,{capture:true,passive:true});
+  document.addEventListener('click',event=>{
+    if(!isPhoneWidth()||Date.now()>=suppressClickUntil)return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    suppressClickUntil=0;
+  },{capture:true});
+  document.addEventListener('contextmenu',event=>{
+    if(!isPhoneWidth()||(!gesture&&Date.now()>=suppressClickUntil))return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  },{capture:true});
   window.addEventListener('resize',syncLayer,{passive:true});
+  window.addEventListener('pagehide',()=>{clearInteractiveDrag();resetGesture();},{passive:true});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){clearInteractiveDrag();resetGesture();}},{passive:true});
   document.addEventListener('hermesui:tailnet-app-selected',syncLayer);
   const observer=new MutationObserver(syncLayer);
   observer.observe(root,{attributes:true,attributeFilter:['data-tailnet-view','data-mobile-session-view','data-mobile-rail']});
@@ -307,7 +403,7 @@
   window.__mobileLayerNavigation={
     currentLayer,
     navigate,
-    thresholds:{backEdgeWidth:BACK_EDGE_WIDTH_PX,edgeInset:EDGE_INSET_PX,edgeWidth:EDGE_WIDTH_PX,activate:ACTIVATE_PX,conversationCommit:CONVERSATION_COMMIT_PX,commit:COMMIT_PX,dominance:DOMINANCE_RATIO}
+    thresholds:{backEdgeWidth:BACK_EDGE_WIDTH_PX,edgeInset:EDGE_INSET_PX,edgeWidth:EDGE_WIDTH_PX,activate:ACTIVATE_PX,interactiveActivate:AXIS_LOCK_PX,interactiveCommitRatio:INTERACTIVE_COMMIT_RATIO,commit:COMMIT_PX,dominance:DOMINANCE_RATIO}
   };
   syncLayer();
 })();
