@@ -141,6 +141,32 @@ def _upload_destination(session_id: str, safe_name: str) -> Path:
     return dest
 
 
+def _atomic_upload_write(destination: Path, file_bytes: bytes) -> None:
+    """Publish one upload only after its complete bytes are durable."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            prefix=f'.{destination.name}.upload-',
+            dir=destination.parent,
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            temp_file.write(file_bytes)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        os.replace(temp_path, destination)
+        temp_path = None
+        dir_fd = os.open(destination.parent, os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0))
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
 def _session_attachment_dir(session_id: str, *, root: Path | None = None) -> Path:
     root = (root or _attachment_root()).resolve()
     dest_dir = (root / _re.sub(r'[^\w.\-]', '_', str(session_id or 'session'))[:120]).resolve()
@@ -217,23 +243,29 @@ def handle_upload(handler):
         filename, file_bytes = files['file']
         if not filename:
             return j(handler, {'error': 'No filename in upload'}, status=400)
-        try:
-            s = get_session(session_id)
-        except KeyError:
-            return j(handler, {'error': 'Session not found'}, status=404)
-        if _reject_invisible_session(handler, s):
-            return True
-        safe_name = _sanitize_upload_name(filename)
-        dest = _upload_destination(session_id, safe_name)
-        dest.write_bytes(file_bytes)
-        mime = mimetypes.guess_type(safe_name)[0] or 'application/octet-stream'
-        return j(handler, {
-            'filename': dest.name,
-            'path': str(dest),
-            'size': dest.stat().st_size,
-            'mime': mime,
-            'is_image': mime.startswith('image/'),
-        })
+        from api.session_cold_archive import session_storage_lock
+
+        with session_storage_lock(session_id):
+            try:
+                s = get_session(session_id)
+            except KeyError:
+                return j(handler, {'error': 'Session not found'}, status=404)
+            if getattr(s, 'archived', False):
+                return j(handler, {'error': 'Restore the archived session before uploading files'}, status=409)
+            if _reject_invisible_session(handler, s):
+                return True
+            safe_name = _sanitize_upload_name(filename)
+            dest = _upload_destination(session_id, safe_name)
+            _atomic_upload_write(dest, file_bytes)
+            mime = mimetypes.guess_type(safe_name)[0] or 'application/octet-stream'
+            result = {
+                'filename': dest.name,
+                'path': str(dest),
+                'size': dest.stat().st_size,
+                'mime': mime,
+                'is_image': mime.startswith('image/'),
+            }
+        return j(handler, result)
     except ValueError as e:
         return j(handler, {'error': str(e)}, status=400)
     except Exception:
@@ -395,15 +427,20 @@ def handle_upload_extract(handler):
         filename, file_bytes = files['file']
         if not filename:
             return j(handler, {'error': 'No filename in upload'}, status=400)
-        try:
-            s = get_session(session_id)
-        except KeyError:
-            return j(handler, {'error': 'Session not found'}, status=404)
-        if _reject_invisible_session(handler, s):
-            return True
-        session_dir = _session_attachment_dir(session_id)
-        session_dir.mkdir(parents=True, exist_ok=True)
-        result = extract_archive(file_bytes, filename, session_dir)
+        from api.session_cold_archive import session_storage_lock
+
+        with session_storage_lock(session_id):
+            try:
+                s = get_session(session_id)
+            except KeyError:
+                return j(handler, {'error': 'Session not found'}, status=404)
+            if getattr(s, 'archived', False):
+                return j(handler, {'error': 'Restore the archived session before uploading files'}, status=409)
+            if _reject_invisible_session(handler, s):
+                return True
+            session_dir = _session_attachment_dir(session_id)
+            session_dir.mkdir(parents=True, exist_ok=True)
+            result = extract_archive(file_bytes, filename, session_dir)
         return j(handler, {'ok': True, **result})
     except ValueError as e:
         return j(handler, {'error': str(e)}, status=400)

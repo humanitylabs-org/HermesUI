@@ -277,26 +277,35 @@ class TestIssue765FollowupHardening:
     an exception fires before the checkpoint thread is created.
     """
 
-    def test_same_session_concurrent_saves_use_distinct_temp_files(self, monkeypatch):
-        """Two concurrent saves of the same session must not collide on one tmp path.
+    def test_same_session_concurrent_saves_are_serialized_with_distinct_temp_files(self, monkeypatch):
+        """Two same-session saves serialize without reusing a tmp path.
 
-        The key regression guard here is that each save call should reach os.replace()
-        with a distinct source tmp path. With the old shared `<sid>.tmp` scheme, both
-        threads would target the same path and the second replace would deterministically
-        fail once the first consume/remove happened.
+        Cold-archive transitions now share a per-session storage lock with save().
+        That stronger contract deliberately prevents simultaneous replacement while
+        retaining the original unique-temp-file protection.
         """
         s = _make_session("same_sid")
         s.save(skip_index=True)  # seed the file on disk
 
         original_replace = models.os.replace
-        barrier = threading.Barrier(2)
         replace_sources = []
         errors = []
+        active_replaces = 0
+        max_active_replaces = 0
+        replace_guard = threading.Lock()
 
         def _replace_with_barrier(src, dst):
-            replace_sources.append(str(src))
-            barrier.wait(timeout=5)
-            return original_replace(src, dst)
+            nonlocal active_replaces, max_active_replaces
+            with replace_guard:
+                replace_sources.append(str(src))
+                active_replaces += 1
+                max_active_replaces = max(max_active_replaces, active_replaces)
+            try:
+                time.sleep(0.05)
+                return original_replace(src, dst)
+            finally:
+                with replace_guard:
+                    active_replaces -= 1
 
         monkeypatch.setattr(models.os, "replace", _replace_with_barrier)
 
@@ -316,9 +325,10 @@ class TestIssue765FollowupHardening:
         assert not errors, f"Concurrent same-session saves should not fail: {errors}"
         assert len(replace_sources) >= 2, f"Expected replace calls, got {replace_sources}"
         assert len(set(replace_sources)) == 2, (
-            "Concurrent same-session saves must use distinct temp files even if Windows-safe "
+            "Same-session saves must use distinct temp files even if Windows-safe "
             f"replace retries one of them; got {replace_sources}"
         )
+        assert max_active_replaces == 1, "Same-session publication must be serialized"
         data = json.loads(s.path.read_text(encoding="utf-8"))
         assert data["session_id"] == "same_sid"
 

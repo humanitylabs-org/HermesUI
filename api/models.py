@@ -746,13 +746,13 @@ def _load_webui_deleted_session_tombstone() -> frozenset[str]:
     )
 
 
-def _save_webui_deleted_session_tombstone(ids) -> None:
+def _save_webui_deleted_session_tombstone(ids) -> bool:
     try:
         sorted_ids = sorted(set(
             str(sid).strip() for sid in (ids or []) if str(sid or "").strip()
         ))
     except TypeError:
-        return
+        return False
     if len(sorted_ids) > WEBUI_DELETED_SESSION_TOMBSTONE_CAP:
         sorted_ids = sorted_ids[-WEBUI_DELETED_SESSION_TOMBSTONE_CAP:]
     payload = {
@@ -771,6 +771,12 @@ def _save_webui_deleted_session_tombstone(ids) -> None:
             f.flush()
             os.fsync(f.fileno())
         os.replace(_tmp, p)
+        dir_fd = os.open(p.parent, os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0))
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+        return True
     except Exception:
         logger.debug("Failed to save webui deleted-session tombstone", exc_info=True)
         if _tmp is not None:
@@ -778,18 +784,23 @@ def _save_webui_deleted_session_tombstone(ids) -> None:
                 _tmp.unlink(missing_ok=True)
             except Exception:
                 pass
+        return False
 
 
-def _record_webui_deleted_session_tombstone(sid: str) -> None:
+def _record_webui_deleted_session_tombstone(sid: str) -> bool:
     sid = str(sid or "").strip()
     if not sid:
-        return
+        return False
     with _WEBUI_DELETED_SESSION_TOMBSTONE_LOCK:
         current = set(_load_webui_deleted_session_tombstone())
         if sid in current:
-            return
+            return True
         current.add(sid)
-        _save_webui_deleted_session_tombstone(current)
+        if not _save_webui_deleted_session_tombstone(current):
+            raise OSError(f"Failed to persist deleted-session tombstone for {sid}")
+        if sid not in _load_webui_deleted_session_tombstone():
+            raise OSError(f"Deleted-session tombstone verification failed for {sid}")
+        return True
 
 
 def _clear_webui_deleted_session_tombstone(sid: str) -> None:
@@ -1360,37 +1371,18 @@ class Session:
             except (TypeError, ValueError):
                 parsed_message_count = None
         self._metadata_message_count = parsed_message_count if parsed_message_count is not None and parsed_message_count >= 0 else None
+        _cold_archive = kwargs.get('cold_archive')
+        self._cold_archive_ref = _cold_archive if isinstance(_cold_archive, dict) else None
+        self._cold_archived = bool(self._cold_archive_ref)
+        self.cold_archive_generation = kwargs.get('cold_archive_generation')
 
     @property
     def path(self):
         return SESSION_DIR / f'{self.session_id}.json'
 
-    def save(self, touch_updated_at: bool = True, skip_index: bool = False) -> None:
-        if not is_safe_session_id(self.session_id):
-            raise ValueError(f"Unsafe session_id {self.session_id!r}; refusing to write outside session store")
-        # ── #1558 P0 guard ──────────────────────────────────────────────
-        # Refuse to save a session that was loaded with metadata_only=True.
-        # Such sessions have messages=[] (it's the whole point of the partial
-        # load), and save() unconditionally writes self.messages to disk via
-        # an atomic os.replace(). Saving a metadata-only stub thus wipes the
-        # full conversation history — which is exactly the v0.50.279
-        # _clear_stale_stream_state() regression that lost users 1000+
-        # message conversations. Any caller that needs to mutate persisted
-        # fields on a metadata-only session must reload with
-        # metadata_only=False first.
-        if getattr(self, '_loaded_metadata_only', False):
-            raise RuntimeError(
-                f"Refusing to save metadata-only session {self.session_id!r}: "
-                f"would atomically overwrite on-disk messages with []. "
-                f"Reload with metadata_only=False before mutating state. "
-                f"See #1558."
-            )
-        if touch_updated_at:
-            self.updated_at = time.time()
-        # Write metadata fields first so load_metadata_only() can read them
-        # without parsing the full messages array (which may be 400KB+).
-        # Fields are listed in the order they should appear in the JSON file.
-        METADATA_FIELDS = [
+    def _persistence_dict(self) -> dict:
+        """Return the complete on-disk representation in stable field order."""
+        metadata_fields = [
             'session_id', 'title', 'workspace', 'created_workspace', 'model', 'model_provider', 'model_explicit_pick_signature', 'created_at', 'updated_at',
             'pinned', 'archived', 'project_id', 'profile',
             'input_tokens', 'output_tokens', 'estimated_cost',
@@ -1417,31 +1409,67 @@ class Session:
             'process_wakeup_pause',
             'share_token', 'share_created_at',
         ]
-        meta = {k: getattr(self, k, None) for k in METADATA_FIELDS}
-        # #5854: message_count and a compact anchor-scene fingerprint go in the
-        # metadata prefix (BEFORE messages) so load_metadata_only() and the
-        # sidebar-poll freshness check never have to parse the full (250-480KB)
-        # scene bodies. message_count is placed BEFORE anchor_scene_index so a
-        # legacy-format reader that stops at a scene key still finds the count.
-        # The full anchor_activity_scenes bodies serialize AFTER messages.
+        meta = {key: getattr(self, key, None) for key in metadata_fields}
         meta['message_count'] = len(self.messages or [])
         meta['anchor_scene_index'] = _anchor_scene_index_from_records(self.anchor_activity_scenes)
-        # Keep the in-memory fingerprint aligned with what we just persisted, so a
-        # later metadata-only reload of THIS object (or any fingerprint reader)
-        # sees the current value rather than a stale load-time snapshot (#5854
-        # defense-in-depth; the cached-side freshness check reads real records,
-        # not this, so this is belt-and-suspenders).
         self._anchor_scene_index = dict(meta['anchor_scene_index'])
         meta['messages'] = self.messages
         meta['tool_calls'] = self.tool_calls
-        meta['anchor_activity_scenes'] = self.anchor_activity_scenes if isinstance(self.anchor_activity_scenes, dict) else {}
-        # Fields not in METADATA_FIELDS (e.g. last_usage) go at the end. Exclude
-        # the keys we placed explicitly above so they aren't emitted twice.
-        _placed = {'message_count', 'anchor_scene_index', 'messages', 'tool_calls', 'anchor_activity_scenes'}
-        extra = {k: v for k, v in self.__dict__.items()
-                 if k not in METADATA_FIELDS and k not in _placed
-                 and not k.startswith('_')}
-        payload = json.dumps({**meta, **extra}, ensure_ascii=False, indent=2)
+        meta['anchor_activity_scenes'] = (
+            self.anchor_activity_scenes if isinstance(self.anchor_activity_scenes, dict) else {}
+        )
+        placed = {
+            'message_count', 'anchor_scene_index', 'messages', 'tool_calls',
+            'anchor_activity_scenes', 'cold_archive',
+        }
+        extra = {
+            key: value for key, value in self.__dict__.items()
+            if key not in metadata_fields and key not in placed and not key.startswith('_')
+        }
+        return {**meta, **extra}
+
+    def save(self, touch_updated_at: bool = True, skip_index: bool = False) -> None:
+        from api.session_cold_archive import prepare_session_save, session_storage_lock
+
+        with session_storage_lock(self.session_id):
+            prepare_session_save(self)
+            self._save_locked(touch_updated_at=touch_updated_at, skip_index=skip_index)
+
+    def _save_locked(self, touch_updated_at: bool = True, skip_index: bool = False) -> None:
+        if not is_safe_session_id(self.session_id):
+            raise ValueError(f"Unsafe session_id {self.session_id!r}; refusing to write outside session store")
+        if self.session_id in _load_webui_deleted_session_tombstone():
+            raise RuntimeError(
+                f"Refusing to save deleted session {self.session_id!r}; "
+                "an explicit create/import must clear its durable tombstone first"
+            )
+        # ── #1558 P0 guard ──────────────────────────────────────────────
+        # Refuse to save a session that was loaded with metadata_only=True.
+        # Such sessions have messages=[] (it's the whole point of the partial
+        # load), and save() unconditionally writes self.messages to disk via
+        # an atomic os.replace(). Saving a metadata-only stub thus wipes the
+        # full conversation history — which is exactly the v0.50.279
+        # _clear_stale_stream_state() regression that lost users 1000+
+        # message conversations. Any caller that needs to mutate persisted
+        # fields on a metadata-only session must reload with
+        # metadata_only=False first.
+        if getattr(self, '_loaded_metadata_only', False):
+            raise RuntimeError(
+                f"Refusing to save metadata-only session {self.session_id!r}: "
+                f"would atomically overwrite on-disk messages with []. "
+                f"Reload with metadata_only=False before mutating state. "
+                f"See #1558."
+            )
+        if getattr(self, '_cold_archived', False):
+            from api.session_cold_archive import update_cold_archived_session
+
+            update_cold_archived_session(self, touch_updated_at=touch_updated_at)
+            if not skip_index:
+                _write_session_index(updates=[self])
+            return
+        if touch_updated_at:
+            self.updated_at = time.time()
+        payload = json.dumps(self._persistence_dict(), ensure_ascii=False, indent=2)
 
         # ── #1558 backup safeguard ──────────────────────────────────────
         # Before overwriting the session file, copy the previous version to
@@ -1538,7 +1566,6 @@ class Session:
         if self.messages:
             try:
                 _clear_webui_zero_message_orphan_tombstone(self.session_id)
-                _clear_webui_deleted_session_tombstone(self.session_id)
             except Exception:
                 logger.debug(
                     "Failed to clear webui tombstone for %s",
@@ -1561,6 +1588,10 @@ class Session:
         # during the parse (TOCTOU guard against an atomic replace mid-read).
         _pre_read_sig = _sidecar_stat_signature(p)
         data = json.loads(p.read_text(encoding='utf-8'))
+        if isinstance(data.get('cold_archive'), dict):
+            from api.session_cold_archive import load_cold_archived_session
+
+            return load_cold_archived_session(sid, stub=data)
         data['messages'], _collapsed_partials = _collapse_adjacent_duplicate_partials(data.get('messages'))
         session = cls(**data)
         if _collapsed_partials:
@@ -1621,6 +1652,22 @@ class Session:
             parsed['messages'] = []
             parsed['tool_calls'] = []
             session = cls(**parsed)
+            if getattr(session, '_cold_archived', False):
+                marker = getattr(session, '_cold_archive_ref', None) or {}
+                if marker.get('cleanup_complete') is not True:
+                    try:
+                        from api.session_cold_archive import repair_pending_hot_cleanup
+
+                        repair_pending_hot_cleanup(str(sid))
+                        marker = dict(marker)
+                        marker['cleanup_complete'] = True
+                        session._cold_archive_ref = marker
+                    except Exception:
+                        logger.warning(
+                            "cold archive cleanup repair remains pending for %s",
+                            sid,
+                            exc_info=True,
+                        )
             sidecar_message_count = _parse_nonnegative_int(parsed.get('message_count'))
             index_message_count = None
             if sidecar_message_count is None:
@@ -4753,6 +4800,13 @@ def _resolve_session(sid, metadata_only=False, *, promote_cache=True, cache_on_m
                 logger.debug(
                     "state.db newer-sidecar sync failed on cache hit for session %s", sid, exc_info=True,
                 )
+        if not metadata_only and getattr(cached, '_cold_archived', False):
+            # Opening a cold conversation is a bounded read, not a promotion
+            # back into the hot LRU. Drop any legacy/full cached instance now;
+            # the request still owns ``cached`` long enough to serialize it.
+            with LOCK:
+                if SESSIONS.get(sid) is cached:
+                    SESSIONS.pop(sid, None)
         return cached
     if metadata_only:
         s = Session.load_metadata_only(sid)
@@ -4761,7 +4815,7 @@ def _resolve_session(sid, metadata_only=False, *, promote_cache=True, cache_on_m
     else:
         s = Session.load(sid)
     if s:
-        if cache_on_miss:
+        if cache_on_miss and not getattr(s, '_cold_archived', False):
             with LOCK:
                 SESSIONS[sid] = s
                 if promote_cache:

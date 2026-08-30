@@ -15163,67 +15163,64 @@ def handle_post(handler, parsed) -> bool:
         except Exception:
             logger.debug("Failed to resolve profile for deleted session %s", sid, exc_info=True)
             event_profile = None
-        # Serialize with recovery, but bound contention so a browser timeout
-        # cannot be followed by a delayed server-side delete.
+        # Serialize sidecar, attachments, journals, and cold-package deletion
+        # with every Session.save()/upload/cold-read operation. The durable
+        # tombstone is committed first so any queued stale writer fails closed.
         session_lock = _get_session_agent_lock(sid)
         if not session_lock.acquire(timeout=5):
             return bad(handler, "Session busy, try again", 503)
         try:
-            with LOCK:
-                SESSIONS.pop(sid, None)
-            try:
-                p = (SESSION_DIR / f"{sid}.json").resolve()
-                p.relative_to(SESSION_DIR.resolve())
-            except Exception:
-                return bad(handler, "Invalid session_id", 400)
-            sidecar_deleted = False
-            try:
-                p.unlink(missing_ok=True)
-            except Exception:
-                logger.debug("Failed to unlink session file %s", p)
-            sidecar_deleted = not p.exists()
-            try:
-                prune_session_from_index(sid)
-            except Exception:
-                logger.debug("Failed to prune deleted session from index: %s", sid, exc_info=True)
-            try:
-                p.with_suffix('.json.bak').unlink(missing_ok=True)
-            except Exception:
-                logger.debug("Failed to unlink session backup file %s", p.with_suffix('.json.bak'))
-            if sidecar_deleted and not is_messaging_session:
+            from api.session_cold_archive import (
+                _clean_hot_artifacts,
+                delete_cold_archive_artifacts,
+                session_storage_lock,
+            )
+
+            with session_storage_lock(sid):
+                with LOCK:
+                    SESSIONS.pop(sid, None)
                 try:
-                    _record_webui_deleted_session_tombstone(sid)
+                    p = (SESSION_DIR / f"{sid}.json").resolve()
+                    p.relative_to(SESSION_DIR.resolve())
                 except Exception:
-                    logger.debug("Failed to tombstone deleted WebUI session %s", sid, exc_info=True)
+                    return bad(handler, "Invalid session_id", 400)
+
+                if not is_messaging_session:
+                    try:
+                        tombstone_result = _record_webui_deleted_session_tombstone(sid)
+                        if tombstone_result is False:
+                            raise OSError("deleted-session tombstone was not committed")
+                    except Exception as exc:
+                        logger.warning("Failed to tombstone deleted WebUI session %s", sid, exc_info=True)
+                        return bad(handler, _sanitize_error(exc), 500)
+
+                try:
+                    p.unlink(missing_ok=True)
+                except Exception as exc:
+                    logger.warning("Failed to unlink session file %s", p, exc_info=True)
+                    return bad(handler, _sanitize_error(exc), 500)
+                if p.exists():
+                    return bad(handler, "Session deletion did not remove the hot sidecar", 500)
+                try:
+                    prune_session_from_index(sid)
+                except Exception:
+                    logger.debug("Failed to prune deleted session from index: %s", sid, exc_info=True)
+                try:
+                    _clean_hot_artifacts(sid)
+                    delete_cold_archive_artifacts(sid)
+                except Exception as exc:
+                    logger.warning("Session storage cleanup incomplete for %s", sid, exc_info=True)
+                    return bad(handler, _sanitize_error(exc), 500)
         finally:
             session_lock.release()
         # Evict outside the mutation lock: lifecycle commit may perform provider
-        # I/O and must not hold a per-session Session lock.
+        # I/O and must not hold a per-session Session lock. The tombstone prevents
+        # an eviction-time stale save from resurrecting the deleted sidecar.
         from api.config import _evict_session_agent
-        _evict_session_agent(sid)
         try:
-            from api.upload import _session_attachment_dir
-
-            shutil.rmtree(_session_attachment_dir(sid), ignore_errors=True)
+            _evict_session_agent(sid)
         except Exception:
-            logger.debug("Failed to clean attachment dir for deleted session %s", sid)
-        # Remove the turn-journal shards and the run-journal directory so a
-        # deleted conversation is not recoverable from disk. The session JSON +
-        # state.db rows are cleared above, but these journals retain the user's
-        # messages (turn journal) and the full request/response payloads (run
-        # journal) in plaintext. (#3802)
-        try:
-            from api.turn_journal import delete_turn_journal
-
-            delete_turn_journal(sid)
-        except Exception:
-            logger.debug("Failed to delete turn journal for deleted session %s", sid)
-        try:
-            from api.run_journal import delete_run_journal
-
-            delete_run_journal(sid)
-        except Exception:
-            logger.debug("Failed to delete run journal for deleted session %s", sid)
+            logger.warning("Failed to evict deleted session agent %s", sid, exc_info=True)
         # The weak lock registry releases this entry automatically after all
         # holders and waiters drop their strong references.
         # Prune the completion-dedup entry too. The reaper sweeps it once the
@@ -16352,15 +16349,55 @@ def handle_post(handler, parsed) -> bool:
                 s.thread_id = cli_meta.get("thread_id")
                 s.session_key = cli_meta.get("session_key")
                 s.platform = cli_meta.get("platform")
-        with _get_session_agent_lock(sid):
-            s.archived = bool(body.get("archived", True))
-            s.save(touch_updated_at=False)
+        archive_requested = bool(body.get("archived", True))
+        session_lock = _get_session_agent_lock(sid)
+        if not session_lock.acquire(timeout=5):
+            return bad(handler, "Session busy, try again", 503)
+        cold_transition = False
+        try:
+            from api.session_cold_archive import (
+                ActiveSessionArchiveError,
+                ColdArchiveError,
+                cold_archive_session,
+                restore_cold_archived_session,
+            )
+
+            if archive_requested:
+                cold_transition = cold_archive_session(s)
+            else:
+                s = restore_cold_archived_session(s)
+            response_session = s.compact()
+        except ActiveSessionArchiveError as exc:
+            return bad(handler, str(exc), 409)
+        except ColdArchiveError as exc:
+            logger.warning("cold archive operation failed for %s: %s", sid, exc)
+            return bad(handler, str(exc), 500)
+        except Exception as exc:
+            logger.exception("cold archive operation crashed for %s", sid)
+            return bad(handler, _sanitize_error(exc), 500)
+        finally:
+            session_lock.release()
+        if cold_transition:
+            # The worker-side cache may retain the full transcript even after
+            # the hot sidecar became a tiny stub. Evict outside the mutation
+            # lock because lifecycle cleanup may perform provider I/O.
+            with LOCK:
+                SESSIONS.pop(sid, None)
+            from api.config import _evict_session_agent
+
+            try:
+                _evict_session_agent(sid)
+            except Exception:
+                logger.warning("Failed to evict archived session agent %s", sid, exc_info=True)
+        else:
+            with LOCK:
+                SESSIONS[sid] = s
         publish_session_list_changed(
             "session_archive",
             profile=getattr(s, "profile", None),
             session_id=getattr(s, "session_id", sid),
         )
-        return j(handler, {"ok": True, "session": s.compact(), **_worktree_retained_payload(s)})
+        return j(handler, {"ok": True, "session": response_session, **_worktree_retained_payload(s)})
 
     # ── Session move to project (POST) ──
     if parsed.path == "/api/session/move":

@@ -36,6 +36,31 @@ PINNED_NONSTATIC_SHA256 = {
     # existing provider-agnostic Auxiliary Models settings UI. The LLM call
     # itself remains in the Tailnet-only controller and never mutates a session.
     "api/config.py": "1dccfd1400f3f53be0c6ca09cb18f631ce8ca23ea991f5ca12b64091e0d03379",
+    # Native WebUI archive now performs a versioned cold-storage transition.
+    # The exact owned contract is documented in
+    # hermesui/session-cold-archive-contract.md and covered by the downstream
+    # test_hermes_ui_true_cold_archive.py suite. Imported channel memory keeps
+    # upstream metadata-only behavior.
+    "api/models.py": "2d33916801f7fe876436c90d3cd9154b4fb6f91c82c14f84603eead2e54d5185",
+    "api/routes.py": "0be44676bf3908d731da16aba3a593f663599356f908988af0ab41d614ceb4ed",
+    "api/session_cold_archive.py": "ec5b3a0b0e6332d9d18f0fb649db34a66cd1b06a19df52717ffea1713c0f559f",
+    "api/upload.py": "9d4eff0a1f15b3606f076baffa9ff8eba024bdd54cfe4a11a3c9e5480d4ec854",
+    # Two inherited lifecycle regressions now assert the cold-archive cache
+    # eviction and fail-closed deletion semantics rather than metadata-only
+    # archive behavior.
+    "tests/test_issue2057_worktree_lifecycle.py": "30e1188a32889b2010f90ef5f7a0ed1508fc41dbdd25dcc6068be469f3681df7",
+    "tests/test_metadata_save_wipe_1558.py": "6040d7d5b6dc2bd2d1056a78f4d6d0e24b8527834c05619c38aa7d8bb5a3494e",
+    # Existing save and static-route regressions are narrowed to the stronger
+    # per-session storage serialization and the longer cold-aware handlers.
+    "tests/test_issue765_streaming_persistence.py": "16db2fdb08dc176984a202360e1a9859d507a5eb986b453a947d57eb7ba0676e",
+    "tests/test_issue2057_worktree_ui_static.py": "ca03980b60b22d515999a26941850cb5fa5841842352fbb5afd3f98ff9837e5a",
+    "tests/test_regressions.py": "d8866c66644a59f81a80c47aca1e881b3635ac8b613425ab3201bee121d0f622",
+    # These inherited regression tests are intentionally carried by the
+    # current hotfix release line and are byte-pinned rather than broadly
+    # opening the upstream test namespace.
+    "tests/test_compact_voice_note_rendering.py": "530ccfba0091c47e363551d62109a145e039ac67078c1d73f1d59d1a46a02f2d",
+    "tests/test_stale_stream_cleanup.py": "63efe65c93e1c855c9f9ac484811e2d3c46e6b4378687a736b44fceae4ed2005",
+    "tests/test_svg_audio_video_rendering.py": "d86f6ad7086c791d7239708eb7a320b826c5298e9cdde804a59d907919bcc84d",
     # Inherited workflows change only downstream branch reachability and the
     # exact test launchers needed for Hermes UI's replacement frontend contracts.
     ".github/workflows/browser-smoke.yml": "637468a8018ea807e5f8c17128e503faad05ecfcd4bf7e39f62a5f7182560cc6",
@@ -106,7 +131,11 @@ def main() -> int:
                 continue
             actual_digest = hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
             if actual_digest != expected_digest:
-                raise RuntimeError(f"pinned downstream support digest is stale: {path}")
+                print(
+                    "Hermes UI boundary failed; upstream backend/runtime file has "
+                    f"a stale pinned digest: {path}"
+                )
+                return 1
 
         manifest = json.loads(OVERLAY.read_text(encoding="utf-8"))
         if manifest.get("schema") != 1 or manifest.get("upstream_commit") != commit:
