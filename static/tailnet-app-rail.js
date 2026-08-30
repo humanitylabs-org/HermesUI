@@ -112,7 +112,7 @@
   const mobileUtilitiesMenu=document.getElementById('mobileSessionUtilitiesMenu');
   const mobileSessionViewUtility=document.getElementById('mobileSessionViewUtility');
   const mobileThemeUtility=document.getElementById('mobileThemeUtility');
-  const mobileSettingsUtility=document.getElementById('mobileSettingsUtility');
+  const mobileMoreUtility=document.getElementById('mobileMoreUtility');
   const links=document.getElementById('tailnetAppLinks');
   const companyLinks=document.getElementById('tailnetCompanyAppLinks');
   const publicLinks=document.getElementById('tailnetPublicAppLinks');
@@ -262,19 +262,27 @@
     }
   }
 
-  function activateMobileUtility(source){
-    if(source&&typeof source.click==='function')source.click();
-    requestAnimationFrame(syncMobileUtilities);
-  }
-
   function bindMobileUtilities(){
     if(!mobileUtilitiesToggle||!mobileUtilitiesMenu)return;
     mobileUtilitiesToggle.addEventListener('click',()=>setMobileUtilitiesOpen(!mobileUtilityIsOpen()));
-    if(mobileSessionViewUtility)mobileSessionViewUtility.addEventListener('click',()=>activateMobileUtility(document.getElementById('sessionViewToggle')));
-    if(mobileThemeUtility)mobileThemeUtility.addEventListener('click',()=>activateMobileUtility(themeToggle));
-    if(mobileSettingsUtility)mobileSettingsUtility.addEventListener('click',()=>{
+    if(mobileSessionViewUtility)mobileSessionViewUtility.addEventListener('click',event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      if(typeof window.toggleSessionView==='function')window.toggleSessionView();
+      requestAnimationFrame(syncMobileUtilities);
+    });
+    if(mobileThemeUtility)mobileThemeUtility.addEventListener('click',event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      toggleShellTheme();
+      requestAnimationFrame(syncMobileUtilities);
+    });
+    if(mobileMoreUtility)mobileMoreUtility.addEventListener('click',event=>{
+      event.preventDefault();
+      event.stopPropagation();
       setMobileUtilitiesOpen(false);
-      activateMobileUtility(document.getElementById('chatSettingsToggle'));
+      if(typeof window.openSettingsPopup==='function')window.openSettingsPopup();
+      else if(typeof window.toggleSettings==='function')window.toggleSettings();
     });
     mobileUtilitiesMenu.addEventListener('keydown',event=>{
       const items=Array.from(mobileUtilitiesMenu.querySelectorAll('[role^="menuitem"]'));

@@ -15,8 +15,8 @@ BOOT = (ROOT / "static" / "boot.js").read_text(encoding="utf-8")
 def test_mobile_layer_navigation_is_a_separate_cached_shell_asset():
     index_line = next(line for line in INDEX.splitlines() if "static/mobile-layer-navigation.js?v=" in line)
     sw_line = next(line for line in SW.splitlines() if "'./static/mobile-layer-navigation.js' + VQ" in line)
-    assert "&mobile-layer-nav=v8" in index_line
-    assert "&mobile-layer-nav=v8" in sw_line
+    assert "&mobile-layer-nav=v9&mobile-settings-menu=v1" in index_line
+    assert "&mobile-layer-nav=v9&mobile-settings-menu=v1" in sw_line
     assert 'id="mobileAppLayerSwipeZone"' in INDEX
     assert 'id="mobileLayerBackSwipeZone"' in INDEX
     assert 'id="mobileLayerAnnouncer" aria-live="polite" aria-atomic="true"' in INDEX
@@ -82,9 +82,12 @@ def test_tailnet_back_restores_the_live_parent_without_reloading_the_frame():
     assert "canPreviewLastMobileTailnetApp" not in RAIL
 
 
-def test_nested_mobile_surfaces_consume_the_first_gesture_without_animating():
+def test_nested_mobile_surfaces_keep_internal_taps_and_close_only_outside():
     assert "node.getClientRects().length>0" in LAYER
     assert "tailnet.closeUtilities()" in LAYER
+    assert "function closeOpenUtilities(target)" in LAYER
+    assert "(menu&&menu.contains(target))||toggle.contains(target)" in LAYER
+    assert "if(closeOpenUtilities(event.target))return resetGesture();" in LAYER
     assert "utilitiesOpenAtPointerDown" not in LAYER
     assert "consumeUtilities" not in LAYER
     assert "if(activeId===NOTIFICATIONS_ID&&notificationThreadItem)" in RAIL
@@ -195,7 +198,7 @@ def test_layer_navigation_cache_identities_match_index_and_worker():
     boot_sw = next(line for line in SW.splitlines() if "'./static/boot.js' + VQ" in line)
     assert "&mobile-back-instant=v1" in boot_index
     assert "&mobile-back-instant=v1" in boot_sw
-    for asset, token in (("tailnet-app-rail.js", "v5"), ("tailnet-app-manager.js", "v3")):
+    for asset, token in (("tailnet-app-rail.js", "v6"), ("tailnet-app-manager.js", "v3")):
         index_line = next(line for line in INDEX.splitlines() if f"static/{asset}?v=" in line)
         sw_line = next(line for line in SW.splitlines() if f"'./static/{asset}' + VQ" in line)
         assert f"&mobile-layer-nav={token}" in index_line

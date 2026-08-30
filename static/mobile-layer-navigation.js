@@ -167,9 +167,11 @@
     gesture.samples=gesture.samples.filter(sample=>now-sample.t<=120);
   }
 
-  function closeOpenUtilities(){
+  function closeOpenUtilities(target){
     const toggle=document.getElementById('mobileSessionUtilitiesToggle');
     if(!toggle||toggle.getAttribute('aria-expanded')!=='true')return false;
+    const menu=document.getElementById('mobileSessionUtilitiesMenu');
+    if(target instanceof Node&&((menu&&menu.contains(target))||toggle.contains(target)))return false;
     const tailnet=window.hermesMobileTailnetNavigation;
     return Boolean(tailnet&&typeof tailnet.closeUtilities==='function'&&tailnet.closeUtilities());
   }
@@ -181,7 +183,7 @@
     }
     if(root.hasAttribute('data-mobile-layer-busy'))return;
     if(event.touches.length!==1)return resetGesture();
-    if(closeOpenUtilities())return resetGesture();
+    if(closeOpenUtilities(event.target))return resetGesture();
     const touch=event.touches[0];
     const pointerId=pendingTouchPointerId;
     pendingTouchPointerId=null;

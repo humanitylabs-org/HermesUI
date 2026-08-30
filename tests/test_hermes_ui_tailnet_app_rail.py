@@ -145,11 +145,15 @@ def test_mobile_bottom_menu_owns_sessions_notifications_and_utilities():
     assert 'id="mobileSessionUtilitiesToggle"' not in rail
     assert 'id="mobileNotificationsButton"' not in rail
     assert 'aria-haspopup="menu"' in INDEX
+    assert 'aria-label="Settings"' in INDEX[utilities:utilities + 1200]
+    assert '<span class="mobile-primary-action-label">Settings</span>' in INDEX[utilities:utilities + 1200]
     assert 'id="mobileSessionUtilitiesMenu" role="menu"' in INDEX
     assert INDEX.count('role="menuitemcheckbox"') == 2
     assert 'data-mobile-utility="session-view"' in INDEX
     assert 'data-mobile-utility="theme"' in INDEX
-    assert 'data-mobile-utility="settings"' in INDEX
+    assert 'id="mobileMoreUtility"' in INDEX
+    assert 'data-mobile-utility="more"' in INDEX
+    assert '<span class="mobile-session-utility-label">More</span>' in INDEX
     assert '.tailnet-app-controls{display:none;}' in CSS
     assert '#tailnetNotificationsButton{display:none;}' in CSS
     assert '.mobile-primary-menu{position:fixed;z-index:220;left:max(10px,env(safe-area-inset-left,0px));right:calc(var(--mobile-rail-w) + 10px);bottom:calc(8px + env(safe-area-inset-bottom,0px));display:grid;' in CSS
@@ -162,8 +166,8 @@ def test_mobile_bottom_menu_owns_sessions_notifications_and_utilities():
     assert "activateHermes();\n    if(!window.openMobileSessionPage())return false;" in JS
     assert "mobileSessionsButton.addEventListener('click',openMobileSessionsFromConversation)" in JS
     assert "mobileNotificationsButton.addEventListener('click'" in JS
-    assert "activateMobileUtility(document.getElementById('sessionViewToggle'))" in JS
-    assert "activateMobileUtility(document.getElementById('chatSettingsToggle'))" in JS
+    assert "window.toggleSessionView();" in JS
+    assert "window.openSettingsPopup();" in JS
     assert "event.key!=='Escape'||!mobileUtilityIsOpen()" in JS
     assert "window.innerWidth>640" in JS
     sw_style = next(line for line in SW.splitlines() if "'./static/style.css' + VQ" in line)
@@ -205,6 +209,15 @@ def test_mobile_toggle_rows_explain_state_and_reserve_purple_for_high_signal():
     sw_rail = next(line for line in SW.splitlines() if "'./static/tailnet-app-rail.js' + VQ" in line)
     for asset_line in (index_style, sw_style, index_rail, sw_rail):
         assert '&mobile-toggle-switches=v1' in asset_line
+
+
+def test_mobile_settings_actions_do_not_proxy_click_hidden_desktop_controls():
+    assert "window.toggleSessionView();" in JS
+    assert "toggleShellTheme();" in JS
+    assert "window.openSettingsPopup();" in JS
+    assert "activateMobileUtility(document.getElementById('sessionViewToggle'))" not in JS
+    assert "activateMobileUtility(themeToggle)" not in JS
+    assert "activateMobileUtility(document.getElementById('chatSettingsToggle'))" not in JS
 
 
 def test_cron_notification_rows_are_compact_full_row_disclosures():
@@ -659,7 +672,7 @@ def test_mobile_right_rail_is_collapsible_and_hides_redundant_home():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&mobile-toggle-switches=v1&mobile-layer-nav=v5"'
+        '&overlay=wizard-canvas-v8&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&notification-reply-indicators=v1&mobile-toggle-switches=v1&mobile-layer-nav=v6&mobile-settings-menu=v1"'
         in INDEX
     )
     assert (
