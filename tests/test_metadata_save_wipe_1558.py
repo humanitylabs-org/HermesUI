@@ -131,8 +131,8 @@ def test_clear_stale_stream_state_preserves_messages(temp_session_dir):
     )
 
 
-def test_archive_route_reloads_metadata_only_cached_session(temp_session_dir, monkeypatch):
-    """Archiving must upgrade cached metadata-only stubs before save()."""
+def test_archive_route_reloads_metadata_only_then_evicts_cold_session(temp_session_dir, monkeypatch):
+    """Archiving upgrades cached metadata, then evicts the cold full session."""
     from types import SimpleNamespace
 
     import api.routes as routes
@@ -172,10 +172,15 @@ def test_archive_route_reloads_metadata_only_cached_session(temp_session_dir, mo
     assert reloaded.archived is True
     assert len(reloaded.messages) == 12
 
+    # A true cold archive is deliberately evicted from the live cache; sidebar
+    # enumeration reads only the compact stub and opening hydrates on demand.
     with LOCK:
-        cached = SESSIONS[sid]
-    assert getattr(cached, "_loaded_metadata_only", False) is False
-    assert len(cached.messages) == 12
+        assert sid not in SESSIONS
+    metadata = Session.load_metadata_only(sid)
+    assert metadata is not None
+    assert getattr(metadata, "_loaded_metadata_only", False) is True
+    assert metadata.messages == []
+    assert metadata._metadata_message_count == 12
 
 
 def test_save_writes_bak_when_messages_shrink(temp_session_dir):

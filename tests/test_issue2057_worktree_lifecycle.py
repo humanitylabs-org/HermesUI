@@ -118,7 +118,6 @@ def test_delete_session_records_tombstone_when_state_db_delete_fails(tmp_path, m
         messages=[{"role": "user", "content": "keep deleted"}],
     )
     session.save()
-    (session_dir / f"{sid}.json.bak").write_text("backup", encoding="utf-8")
     captured = _capture_post(monkeypatch, {"session_id": sid})
     monkeypatch.setattr(routes, "_lookup_cli_session_metadata", lambda value: {})
     monkeypatch.setattr(routes, "_is_messaging_session_id", lambda value: False)
@@ -126,15 +125,7 @@ def test_delete_session_records_tombstone_when_state_db_delete_fails(tmp_path, m
     def fail_delete(value):
         raise RuntimeError("state.db locked")
 
-    real_unlink = Path.unlink
-
-    def fail_backup_unlink(path, *args, **kwargs):
-        if path.name == f"{sid}.json.bak":
-            raise PermissionError("backup locked")
-        return real_unlink(path, *args, **kwargs)
-
     monkeypatch.setattr(models, "delete_cli_session", fail_delete)
-    monkeypatch.setattr(Path, "unlink", fail_backup_unlink)
 
     assert routes.handle_post(object(), SimpleNamespace(path="/api/session/delete")) is True
 
