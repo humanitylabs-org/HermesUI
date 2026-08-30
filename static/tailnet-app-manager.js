@@ -363,10 +363,11 @@
       top.append(icon,copy,health);
       const isPinned=pinned.ids.has(app.id)||pinned.sourceKeys.has(app.actionKey);
       const isApproved=approved.has(app.actionKey);
+      const canManageRail=app.canManageRail!==false;
       const actions=document.createElement('div');
       actions.className='tailnet-managed-app-actions';
       if(appIsEligible(app)){
-        if(isPinned)actions.appendChild(button('Added',()=>{}, {active:true,disabled:true,title:`${app.name||app.path} is in the app rail`}));
+        if(isPinned||!canManageRail)actions.appendChild(button('Added',()=>{}, {active:true,disabled:true,title:`${app.name||app.path} is in the app rail`}));
         else if(isApproved)actions.appendChild(button('Remove',()=>void changePrivateApp(app,'remove'),{active:true,title:`Remove ${app.name||app.path} from the app rail`}));
         else actions.appendChild(button('Add',()=>void changePrivateApp(app,'approve'),{primary:true,title:`Add ${app.name||app.path} to the app rail`}));
       }

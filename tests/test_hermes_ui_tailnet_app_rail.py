@@ -664,7 +664,7 @@ def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     )
     assert (
         'src="static/tailnet-app-manager.js?v=__WEBUI_VERSION__'
-        '&cron-notifications=v3&semantic-icons=v1&mobile-layer-nav=v3"'
+        '&cron-notifications=v3&semantic-icons=v1&mobile-layer-nav=v3&cloudflare-paths=v1"'
         in INDEX
     )
     assert "new URL(PRIVATE_APPS_PATH,location.origin)" in MANAGER
