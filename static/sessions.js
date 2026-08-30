@@ -3264,14 +3264,17 @@ const _OLDER_MSG_LIMIT = 30;
 // benefits both views without separate code paths.
 const _SESSION_MESSAGE_CACHE_STORAGE_KEY = 'hermesui.session-message-cache.v1';
 const _SESSION_MESSAGE_CACHE_MAX = 5;
-const _SESSION_MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000;
+const _SESSION_MESSAGE_CACHE_TTL_MS = 30 * 60 * 1000;
 const _SESSION_MESSAGE_CACHE_STORAGE_MAX_CHARS = 1500000;
 const _SESSION_MESSAGE_CACHE_ENTRY_MAX_CHARS = 350000;
 const _SESSION_MESSAGE_CACHE_MEMORY_ENTRY_MAX_CHARS = 1000000;
 const _SESSION_MESSAGE_CACHE_ROW_MAX = 200;
 const _sessionMessageCache = new Map();
+const _sessionMessageWarmups = new Map();
 let _sessionMessageCacheEpoch = 0;
 let _sessionMessageCacheWritesEnabled = true;
+let _sessionMessageWarmupScheduled = false;
+let _sessionMessageWarmupRows = [];
 
 function _sessionMessageCacheCount(session){
   const value=Number(session&&session.message_count);
@@ -3306,6 +3309,9 @@ function _sessionMessageCacheSnapshot(sid,session){
     updated_at:session.updated_at,
     last_message_at:session.last_message_at,
     message_count:_sessionMessageCacheCount(session),
+    archived:!!session.archived,
+    active_stream_id:String(session.active_stream_id||''),
+    is_streaming:!!session.is_streaming,
     messages:Array.isArray(session.messages)?session.messages:[],
     tool_calls:Array.isArray(session.tool_calls)?session.tool_calls:[],
     _messages_truncated:!!session._messages_truncated,
@@ -3328,6 +3334,18 @@ function _sessionMessageCacheBusy(session){
   ));
 }
 
+function _sessionMessageCacheActiveStreamId(session){
+  return String(session&&session.active_stream_id||'').trim();
+}
+
+function _sessionMessageCacheCanStore(session){
+  if(!session||session.archived) return false;
+  // The exact run id is the authority for a live tail. The journal remains the
+  // source of truth for activity emitted after this bounded snapshot.
+  if(_sessionMessageCacheActiveStreamId(session)) return true;
+  return !_sessionMessageCacheBusy(session);
+}
+
 function _persistSessionMessageCache(){
   if(!_sessionMessageCacheWritesEnabled||typeof sessionStorage==='undefined') return;
   try{
@@ -3335,7 +3353,7 @@ function _persistSessionMessageCache(){
     const entries=[];
     for(const [sid,entry] of _sessionMessageCache.entries()){
       if(!entry||(now-Number(entry.storedAt||0))>_SESSION_MESSAGE_CACHE_TTL_MS) continue;
-      if(!entry.data||!entry.data.session||_sessionMessageCacheBusy(entry.data.session)) continue;
+      if(!entry.data||!entry.data.session||!_sessionMessageCacheCanStore(entry.data.session)) continue;
       const serialized=JSON.stringify([sid,entry]);
       if(serialized.length>_SESSION_MESSAGE_CACHE_ENTRY_MAX_CHARS) continue;
       entries.push([sid,entry]);
@@ -3365,7 +3383,7 @@ function _hydrateSessionMessageCache(){
       if(!sid||!entry||!session||String(session.session_id||'')!==sid||!Array.isArray(session.messages)) return;
       if(!Number.isFinite(storedAt)||storedAt<=0||storedAt>now) return;
       if(!revision||entry.revision!==revision||entry.profile!==_sessionMessageCacheProfile(session)) return;
-      if(session.messages.length>_SESSION_MESSAGE_CACHE_ROW_MAX||_sessionMessageCacheBusy(session)) return;
+      if(session.messages.length>_SESSION_MESSAGE_CACHE_ROW_MAX||!_sessionMessageCacheCanStore(session)) return;
       if((now-storedAt)>_SESSION_MESSAGE_CACHE_TTL_MS) return;
       const serialized=JSON.stringify(pair);
       if(serialized.length>_SESSION_MESSAGE_CACHE_ENTRY_MAX_CHARS) return;
@@ -3383,6 +3401,8 @@ function _clearSessionMessageCache(){
   _sessionMessageCacheEpoch+=1;
   _sessionMessageCacheWritesEnabled=false;
   _sessionMessageCache.clear();
+  _sessionMessageWarmups.clear();
+  _sessionMessageWarmupRows=[];
   try{if(typeof sessionStorage!=='undefined')sessionStorage.removeItem(_SESSION_MESSAGE_CACHE_STORAGE_KEY);}catch(_e){}
   // The dashboard script is deferred after sessions.js. Remove its known
   // same-tab private key here as well so an early boot 401 cannot miss it.
@@ -3394,7 +3414,7 @@ function _storeSessionMessageCache(sid,session,expectedEpoch){
   if(expectedEpoch===undefined) expectedEpoch=_sessionMessageCacheEpoch;
   if(!_sessionMessageCacheWritesEnabled||expectedEpoch!==_sessionMessageCacheEpoch) return false;
   sid=String(sid||'');
-  if(!sid||!session||String(session.session_id||'')!==sid||_sessionMessageCacheBusy(session)) return false;
+  if(!sid||!session||String(session.session_id||'')!==sid||!_sessionMessageCacheCanStore(session)) return false;
   const messages=Array.isArray(session.messages)?session.messages:[];
   if(messages.length>_SESSION_MESSAGE_CACHE_ROW_MAX) return false;
   const messageCount=_sessionMessageCacheCount(session);
@@ -3428,18 +3448,30 @@ function _freshSessionMessageCacheEntry(sid,metadata){
   sid=String(sid||'');
   const entry=_sessionMessageCache.get(sid);
   if(!entry) return null;
-  const expectedRevision=_sessionMessageCacheRevision(metadata);
   const expectedProfile=_sessionMessageCacheProfile(metadata);
   const storedAt=Number(entry.storedAt);
   const now=Date.now();
   const expired=!Number.isFinite(storedAt)||storedAt<=0||storedAt>now||(now-storedAt)>_SESSION_MESSAGE_CACHE_TTL_MS;
   const profileMismatch=entry.profile!==expectedProfile;
   const cachedSession=entry.data&&entry.data.session;
-  const authorityMatches=Boolean(
-    expectedRevision&&entry.revision&&expectedRevision===entry.revision&&
-    cachedSession&&String(cachedSession.session_id||'')===sid
+  const expectedRevision=_sessionMessageCacheRevision(metadata);
+  const expectedStreamId=_sessionMessageCacheActiveStreamId(metadata);
+  const cachedStreamId=_sessionMessageCacheActiveStreamId(cachedSession);
+  const expectedCount=_sessionMessageCacheCount(metadata);
+  const sameLiveRun=Boolean(
+    expectedStreamId&&cachedStreamId&&expectedStreamId===cachedStreamId&&
+    (expectedCount===null||entry.messageCount<=expectedCount)
   );
-  if(expired||profileMismatch||_sessionMessageCacheBusy(metadata)||!authorityMatches){
+  const sameIdleRevision=Boolean(
+    !(metadata&&metadata.archived)&&!_sessionMessageCacheBusy(metadata)&&
+    !expectedStreamId&&!cachedStreamId&&expectedRevision&&entry.revision&&
+    expectedRevision===entry.revision
+  );
+  const authorityMatches=Boolean(
+    cachedSession&&String(cachedSession.session_id||'')===sid&&
+    (sameLiveRun||sameIdleRevision)
+  );
+  if(expired||profileMismatch||(metadata&&metadata.archived)||!authorityMatches){
     _sessionMessageCache.delete(sid);
     _persistSessionMessageCache();
     return null;
@@ -3460,38 +3492,90 @@ function _takeFreshSessionMessageCache(sid,metadata){
 }
 
 function _hasWarmSessionMessageCache(sid,session){
-  sid=String(sid||'');
-  const entry=_sessionMessageCache.get(sid);
-  if(!entry) return false;
-  const storedAt=Number(entry.storedAt);
-  const now=Date.now();
-  const expired=!Number.isFinite(storedAt)||storedAt<=0||storedAt>now||(now-storedAt)>_SESSION_MESSAGE_CACHE_TTL_MS;
-  const revision=_sessionMessageCacheRevision(session);
-  const revisionMismatch=!revision||!entry.revision||revision!==entry.revision;
-  const profile=_sessionMessageCacheProfile(session);
-  const profileMismatch=entry.profile!==profile;
-  if(expired||profileMismatch||revisionMismatch){
-    _sessionMessageCache.delete(sid);
-    _persistSessionMessageCache();
-    return false;
-  }
-  return true;
+  return !!_freshSessionMessageCacheEntry(sid,session);
 }
 
 function _cacheActiveSessionMessages(sid){
-  if(!S.session||S.session.session_id!==sid||S.busy||S.activeStreamId) return false;
+  if(!S.session||S.session.session_id!==sid) return false;
   if(!Array.isArray(S.messages)||!S.messages.length) return false;
   // A reader may have expanded a very long transcript. Avoid cloning hundreds
   // of rows during navigation; the next visit will fetch a bounded tail.
   if(S.messages.length>200) return false;
   return _storeSessionMessageCache(sid,{
     ...S.session,
+    active_stream_id:String(S.activeStreamId||S.session.active_stream_id||''),
+    is_streaming:!!(S.busy||S.activeStreamId||S.session.is_streaming),
     messages:S.messages,
     tool_calls:Array.isArray(S.toolCalls)?S.toolCalls:(S.session.tool_calls||[]),
     _messages_truncated:!!_messagesTruncated,
     _messages_offset:Number(_oldestIdx)||0,
     _msg_limit_max:Number(_msgLimitMax)||_MSG_LIMIT_MAX,
   });
+}
+
+async function _warmSessionMessageCacheEntry(row, expectedProfile, expectedEpoch){
+  const sid=String(row&&row.session_id||'');
+  if(!sid||!row||row.archived||expectedEpoch!==_sessionMessageCacheEpoch) return false;
+  if(String(S.activeProfile||'default')!==expectedProfile) return false;
+  if(_hasWarmSessionMessageCache(sid,row)) return true;
+  if(S.session&&S.session.session_id===sid&&Array.isArray(S.messages)&&S.messages.length){
+    if(_cacheActiveSessionMessages(sid)&&_hasWarmSessionMessageCache(sid,row)) return true;
+  }
+  const existing=_sessionMessageWarmups.get(sid);
+  if(existing) return existing;
+  let request;
+  request=(async()=>{
+    try{
+      const data=await api(
+        `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${_INITIAL_MSG_LIMIT}`,
+        {timeoutMs:120000}
+      );
+      if(expectedEpoch!==_sessionMessageCacheEpoch||String(S.activeProfile||'default')!==expectedProfile) return false;
+      const session=data&&data.session;
+      return !!(session&&String(session.session_id||'')===sid&&_storeSessionMessageCache(sid,session,expectedEpoch));
+    }catch(_e){
+      return false;
+    }finally{
+      if(_sessionMessageWarmups.get(sid)===request) _sessionMessageWarmups.delete(sid);
+    }
+  })();
+  _sessionMessageWarmups.set(sid,request);
+  return request;
+}
+
+async function _warmSessionMessageCacheRows(rows, expectedProfile, expectedEpoch){
+  if(!_sessionMessageCacheWritesEnabled||expectedEpoch!==_sessionMessageCacheEpoch) return;
+  if(typeof navigator!=='undefined'&&navigator.connection&&navigator.connection.saveData) return;
+  const candidates=(Array.isArray(rows)?rows:[])
+    .filter(session=>session&&!session.archived&&session.session_id&&_sessionMessageCacheProfile(session)===expectedProfile)
+    .sort((a,b)=>{
+      const busyDelta=Number(_sessionMessageCacheBusy(b))-Number(_sessionMessageCacheBusy(a));
+      if(busyDelta) return busyDelta;
+      return Number(b.last_message_at||b.updated_at||0)-Number(a.last_message_at||a.updated_at||0);
+    })
+    .slice(0,_SESSION_MESSAGE_CACHE_MAX);
+  for(const session of candidates){
+    if(expectedEpoch!==_sessionMessageCacheEpoch||String(S.activeProfile||'default')!==expectedProfile) return;
+    await _warmSessionMessageCacheEntry(session,expectedProfile,expectedEpoch);
+  }
+}
+
+function _scheduleSessionMessageWarmup(rows){
+  if(!_sessionMessageCacheWritesEnabled) return;
+  if(typeof navigator!=='undefined'&&navigator.connection&&navigator.connection.saveData) return;
+  _sessionMessageWarmupRows=Array.isArray(rows)?rows.slice():[];
+  if(_sessionMessageWarmupScheduled) return;
+  _sessionMessageWarmupScheduled=true;
+  const expectedProfile=String(S.activeProfile||'default');
+  const expectedEpoch=_sessionMessageCacheEpoch;
+  const run=()=>{
+    _sessionMessageWarmupScheduled=false;
+    const queued=_sessionMessageWarmupRows;
+    _sessionMessageWarmupRows=[];
+    void _warmSessionMessageCacheRows(queued,expectedProfile,expectedEpoch);
+  };
+  if(typeof requestIdleCallback==='function') requestIdleCallback(run,{timeout:1500});
+  else setTimeout(run,250);
 }
 
 
@@ -3635,6 +3719,13 @@ async function _ensureMessagesLoaded(sid, opts) {
   try {
     if(!opts.force&&typeof _takeFreshSessionMessageCache==='function'){
       data=_takeFreshSessionMessageCache(sid,S.session);
+    }
+    if(!data&&!opts.force){
+      const warmup=_sessionMessageWarmups.get(sid);
+      if(warmup){
+        await warmup;
+        if(_ownsLoad()) data=_takeFreshSessionMessageCache(sid,S.session);
+      }
     }
     if(!data){
       data = await api(
@@ -6049,6 +6140,7 @@ function _applySessionListPayload(sessData, projData, opts){
   }
   _syncSessionAttentionSoundState(_allSessions);
   _pruneLineageReportCacheToVisibleSessions(_allSessions);
+  _scheduleSessionMessageWarmup(_allSessions);
 
   // Capture the recovering-from-error state BEFORE clearing it: the error banner
   // DOM was rendered outside the signature path, so if this payload heals with

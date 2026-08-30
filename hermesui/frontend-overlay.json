@@ -51,7 +51,7 @@
       "upstream_sha256": "c43b7b0885cf3cb285edc7046463076c9bf7a25dd5aa8eeb60198bf5c21524b0"
     },
     {
-      "hermesui_sha256": "c9b1043f15bbd8d60d0deec839c6ab680cc4146d1b83579016c6013bb6cc3590",
+      "hermesui_sha256": "c31f5e11db0ee12a1e58c0041c8ed0cac13ed03d4700413adff33c6e047afc70",
       "path": "static/index.html",
       "upstream_sha256": "4850e0f609c56ef5619dcb023f95398224b053fcca6b1125d4f8a2923f9b2a3c"
     },
@@ -86,7 +86,7 @@
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "601b711e6b0f9772abc1f3b53b11cf1f489d43ae085be1d937423f4d1ffda4e7",
+      "hermesui_sha256": "dfa6bbc28c19d2335b1bdf376a28c8fcd1a9b5a95d369dd765aec519d159650e",
       "path": "static/sessions.js",
       "upstream_sha256": "82fcbe004f5df8de94cf89614cf2a7ba40a324deeec5edd054db7dd6c1505233"
     },
@@ -101,22 +101,22 @@
       "upstream_sha256": "087f2a5d42fa71bceaa650138875d2cb1ed41129ef58f0d749072eec0d395c2f"
     },
     {
-      "hermesui_sha256": "f1b204cc715d7630f5178a056e63b980e9037cb1733779138cb8d5f527b03891",
+      "hermesui_sha256": "2bcbb537e7a4cd62341deff1180734941eb5207dc05d00b828ef1ab032472033",
       "path": "static/style.css",
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },
     {
-      "hermesui_sha256": "6fe8148e328d6cf5a2ca79c34a6dc5058fce318603a0de159abf52cc3167a7ea",
+      "hermesui_sha256": "efceb9ec7919b8dc599571df35b39d9052ef4f47c42116d6f118edb764032ba1",
       "path": "static/sw.js",
       "upstream_sha256": "cfdc35b1dd3f20f9ef8e885008dd76c3bcd2fe3deb61c1708f2e6d88514e2ff8"
     },
     {
-      "hermesui_sha256": "759ad2f96692a4c588a84c1f0f29e039d9f2ec4d188f531b3931e7d3de5a8967",
+      "hermesui_sha256": "5b91593c9a1e605c51713e8877d5e925a0eb7325e6aa64bdc00e97e798c79894",
       "path": "static/tailnet-app-manager.js",
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "b7184b1421d757a315dfb8f77976f68ed0df2698533a7d40fb2f19d57f4118ae",
+      "hermesui_sha256": "03987f36c6887040d46766aa31f191c6665255d7e445cd6af71ff8ff71112cba",
       "path": "static/tailnet-app-rail.js",
       "upstream_sha256": null
     },

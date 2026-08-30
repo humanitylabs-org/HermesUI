@@ -66,7 +66,7 @@ def _run_node(harness: str) -> dict:
     return json.loads(result.stdout.strip())
 
 
-def test_navigation_uses_one_small_tail_and_has_no_speculative_prefetch():
+def test_navigation_uses_one_small_tail_and_prewarms_only_hot_sessions():
     assert "const _INITIAL_MSG_LIMIT = 6;" in SESSIONS_JS
     assert "const _OLDER_MSG_LIMIT = 30;" in SESSIONS_JS
     ensure_start = SESSIONS_JS.index("async function _ensureMessagesLoaded(sid, opts)")
@@ -74,15 +74,10 @@ def test_navigation_uses_one_small_tail_and_has_no_speculative_prefetch():
     ensure = SESSIONS_JS[ensure_start:ensure_end]
     assert "data=_takeFreshSessionMessageCache(sid,S.session);" in ensure
     assert "msg_limit=${boundedReloadLimit}" in ensure
-    for marker in (
-        "_sessionMessagePrefetch",
-        "_prefetchSessionMessages",
-        "_prioritizeSessionWarmCache",
-        "_prioritizeMobileSessionWarmCache",
-        "_scheduleSessionMessagePrefetch",
-        "_SESSION_MESSAGE_PREFETCH_CONCURRENCY",
-    ):
-        assert marker not in SESSIONS_JS
+    assert "async function _warmSessionMessageCacheRows(rows, expectedProfile, expectedEpoch)" in SESSIONS_JS
+    assert "function _scheduleSessionMessageWarmup(rows)" in SESSIONS_JS
+    assert "if(!session||session.archived) return false;" in SESSIONS_JS
+    assert "_scheduleSessionMessageWarmup(_allSessions);" in SESSIONS_JS
 
 
 def test_manual_history_keeps_thirty_row_pages():
@@ -156,7 +151,20 @@ assert.strictEqual(_takeFreshSessionMessageCache('large',{{session_id:'large',pr
 assert.strictEqual(_takeFreshSessionMessageCache('large',{{session_id:'large',profile:'default',updated_at:11}}),null);
 assert.strictEqual(_storeSessionMessageCache('missing-revision',{{session_id:'missing-revision',profile:'default',message_count:1,messages:[]}}),false);
 assert.strictEqual(_storeSessionMessageCache('wrong-key',stable('other',12)),false);
-assert.strictEqual(_storeSessionMessageCache('busy',{{...stable('busy',12),active_stream_id:'run'}}),false);
+assert.strictEqual(_storeSessionMessageCache('busy',{{...stable('busy',12),active_stream_id:'run-a',is_streaming:true}}),true);
+assert.strictEqual(
+  _takeFreshSessionMessageCache('busy',{{...stable('busy',99),active_stream_id:'run-a',is_streaming:true}}).session.messages[0].content,
+  'warm'
+);
+assert.strictEqual(
+  _takeFreshSessionMessageCache('busy',{{...stable('busy',100),active_stream_id:'run-b',is_streaming:true}}),
+  null
+);
+assert.strictEqual(_storeSessionMessageCache('archived',{{...stable('archived',12),archived:true}}),false);
+assert.strictEqual(_storeSessionMessageCache('idle-pending',stable('idle-pending',12)),true);
+assert.strictEqual(_takeFreshSessionMessageCache('idle-pending',{{...stable('idle-pending',12),has_pending_user_message:true}}),null);
+assert.strictEqual(_storeSessionMessageCache('idle-archived',stable('idle-archived',12)),true);
+assert.strictEqual(_takeFreshSessionMessageCache('idle-archived',{{...stable('idle-archived',12),archived:true}}),null);
 for(let i=0;i<6;i++)assert.strictEqual(_storeSessionMessageCache('lru-'+i,stable('lru-'+i,20+i,String(i))),true);
 assert.strictEqual(_sessionMessageCache.size,5);
 assert.strictEqual(_sessionMessageCache.has('lru-0'),false);
@@ -166,6 +174,38 @@ assert.strictEqual(backing.has(_SESSION_MESSAGE_CACHE_STORAGE_KEY),false);
 console.log(JSON.stringify({{ok:true}}));
 """
     assert _run_node(harness) == {"ok": True}
+
+
+def test_warmup_fetches_active_and_idle_rows_but_never_archived_rows():
+    harness = f"""
+const assert=require('assert');
+const backing=new Map();
+const sessionStorage={{getItem:k=>backing.get(k)||null,setItem:(k,v)=>backing.set(k,String(v)),removeItem:k=>backing.delete(k)}};
+const localStorage={{getItem:()=>null,setItem:()=>{{throw new Error('localStorage forbidden')}},removeItem:()=>{{}}}};
+const S={{activeProfile:'default',session:null,messages:[],toolCalls:[],busy:false,activeStreamId:null}};
+const window={{}};
+const navigator={{connection:{{saveData:false}}}};
+let _messagesTruncated=false;let _oldestIdx=0;let _msgLimitMax=500;const _MSG_LIMIT_MAX=500;
+const calls=[];
+async function api(url){{
+  calls.push(url);
+  const sid=new URL('https://example.test'+url).searchParams.get('session_id');
+  const active=sid==='active';
+  return {{session:{{session_id:sid,profile:'default',message_count:1,updated_at:10,active_stream_id:active?'run-a':null,is_streaming:active,messages:[{{role:'assistant',content:sid}}]}}}};
+}}
+{_cache_source()}
+await _warmSessionMessageCacheRows([
+  {{session_id:'active',profile:'default',updated_at:11,active_stream_id:'run-a',is_streaming:true}},
+  {{session_id:'idle',profile:'default',updated_at:10}},
+  {{session_id:'cold',profile:'default',updated_at:10,archived:true}},
+], 'default', _sessionMessageCacheEpoch);
+assert.deepStrictEqual(calls.map(url=>new URL('https://example.test'+url).searchParams.get('session_id')),['active','idle']);
+assert.strictEqual(_sessionMessageCache.has('active'),true);
+assert.strictEqual(_sessionMessageCache.has('idle'),true);
+assert.strictEqual(_sessionMessageCache.has('cold'),false);
+console.log(JSON.stringify({{ok:true,calls:calls.length}}));
+"""
+    assert _run_node(harness) == {"ok": True, "calls": 2}
 
 
 def test_corrupt_cross_session_storage_is_rejected():

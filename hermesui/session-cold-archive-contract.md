@@ -34,3 +34,7 @@ Unarchive verifies the package, restores attachments through a staged atomic ren
 Missing, malformed, incompatible, or checksum-invalid packages fail closed. HermesUI must not claim success, accept unverified transcript bytes, or silently replace a live attachment tree. Duplicate cold data left by a crash after a successful restore is treated as a stale verified generation and cleaned before the next archive. Archive and delete cleanup are idempotent.
 
 No startup migration is performed. Existing archived sessions retain their current representation until an operator explicitly archives them through the updated action.
+
+## Hot-session cache boundary
+
+The browser may prewarm a bounded recent-message tail for up to five unarchived sessions in the active profile. An idle snapshot is reusable only while its list revision is unchanged; a live snapshot is reusable only for the exact same active stream ID, with the run journal remaining authoritative for subsequent activity. Archived rows are never prewarmed or stored in this cache, and data-saver clients skip prewarming entirely.
