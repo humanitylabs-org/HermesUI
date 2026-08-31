@@ -119,13 +119,6 @@
   const privateAdd=document.getElementById('tailnetPrivateAdd');
   const companyAdd=document.getElementById('tailnetCompanyAdd');
   const publicAdd=document.getElementById('tailnetPublicAdd');
-  const privateMarketplace={
-    id:'private-marketplace',
-    label:'Private app library',
-    href:'https://www.aiwizards.com/apps',
-    frameHref:new URL('/tailnet-frame/?app=private-marketplace&library=aiwizards-v2',location.origin).href,
-    icon:'apps'
-  };
   const appsById=new Map();
   let bookmarkActivationGeneration=0;
   let activeBookmarkNavigation=null;
@@ -2642,9 +2635,7 @@
     closeBookmarkMenu();
     const wasBrowserFallback=frame.dataset.browserFallback==='true';
     let targetFrameHref=app.frameHref;
-    let frameKey=app.id===privateMarketplace.id
-      ?'app:private-marketplace:aiwizards-v2'
-      :`app:${app.id}`;
+    let frameKey=`app:${app.id}`;
     if(token){
       let generation=bookmarkGeneration;
       if(
@@ -3279,8 +3270,6 @@
     }
     if(notificationThreadPrompts)notificationThreadPrompts.addEventListener('click',()=>void toggleNotificationThreadPrompts());
     if(notificationThreadModelChip)notificationThreadModelChip.addEventListener('click',()=>void toggleNotificationThreadModelDropdown());
-    appsById.set(privateMarketplace.id,privateMarketplace);
-    privateAdd.addEventListener('click',()=>activateApp(privateMarketplace));
     document.addEventListener('hermesui:tailnet-app-selected',event=>{
       const id=event&&event.detail&&event.detail.id;
       if(id&&id!==NOTIFICATIONS_ID&&notificationThreadItem)closeNotificationThread();

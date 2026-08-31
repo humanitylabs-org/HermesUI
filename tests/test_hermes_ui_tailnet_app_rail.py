@@ -361,7 +361,7 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "link.addEventListener('click'" in JS
     assert "activateApp(app)" in JS
     assert "activateBookmark(app)" in JS
-    assert "privateAdd.addEventListener('click',()=>activateApp(privateMarketplace))" in JS
+    assert "privateAdd.addEventListener" not in JS
     fallback = JS[JS.index("function activateBrowserFallback"):JS.index("function activateBookmark")]
     assert "const shouldOpen=open&&(!alreadyShowing||reopen)" in fallback
     assert "if(!alreadyShowing||reopen)frame.src=app.browserHref" in fallback
@@ -393,12 +393,11 @@ def test_marketplace_storefront_is_the_ai_wizards_panel_app_library():
     assert 'data-tooltip="Marketplace"' in rail
     assert '<path d="M4 10h16l-2-6H6z"/>' in rail
     assert '<span aria-hidden="true">+</span>' not in rail
-    assert "id:'private-marketplace'" in JS
-    assert "href:'https://www.aiwizards.com/apps'" in JS
-    assert "frameHref:new URL('/tailnet-frame/?app=private-marketplace&library=aiwizards-v2',location.origin).href" in JS
-    assert "?'app:private-marketplace:aiwizards-v2'" in JS
-    assert "privateAdd.addEventListener('click',()=>activateApp(privateMarketplace))" in JS
-    assert "if(id==='private-marketplace')return {label:'Private app library',href:'https://www.aiwizards.com/apps'}" in FRAME_BRIDGE
+    assert 'href="https://www.aiwizards.com/apps"' in rail
+    assert 'target="_blank"' in rail
+    assert 'rel="noopener noreferrer"' in rail
+    assert "privateMarketplace" not in JS
+    assert "/tailnet-frame/?app=private-marketplace" not in JS
 
 
 def test_same_origin_frame_bridge_resolves_only_valid_saved_work_and_web_entries():
