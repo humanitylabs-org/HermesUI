@@ -14,6 +14,8 @@ BOOT = (ROOT / "static" / "boot.js").read_text(encoding="utf-8")
 GITIGNORE = (ROOT / ".gitignore").read_text(encoding="utf-8")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 FRAME_BRIDGE = (ROOT / "hermesui" / "support" / "tailnet-frame" / "index.html").read_text(encoding="utf-8")
+STARTER = (ROOT / "hermesui" / "installer" / "systemd-start-owned.py").read_text(encoding="utf-8")
+LAUNCHER_UNIT = (ROOT / "hermesui" / "installer" / "systemd-launcher-unit.py").read_text(encoding="utf-8")
 
 
 def _rail_markup() -> str:
@@ -224,7 +226,7 @@ def test_cron_notification_rows_are_compact_full_row_disclosures():
     assert "const role=document.createElement('span')" in JS
     assert "const icon=document.createElement('span')" in JS
     assert "button.append(role,response)" in JS
-    assert "article.append(button,rich)" in JS
+    assert "article.append(summary,rich)" in JS
     assert ".tailnet-notification{position:relative;padding:0" in CSS
     assert "grid-template-columns:minmax(0,1fr) auto" in CSS
     assert "min-height:62px" in CSS
@@ -361,7 +363,7 @@ def test_private_apps_stay_in_shell_and_only_work_web_use_browser_fallback():
     assert "link.addEventListener('click'" in JS
     assert "activateApp(app)" in JS
     assert "activateBookmark(app)" in JS
-    assert "privateAdd.addEventListener" not in JS
+    assert "privateAdd.addEventListener('click',()=>activateApp(MARKETPLACE_APP))" in JS
     fallback = JS[JS.index("function activateBrowserFallback"):JS.index("function activateBookmark")]
     assert "const shouldOpen=open&&(!alreadyShowing||reopen)" in fallback
     assert "if(!alreadyShowing||reopen)frame.src=app.browserHref" in fallback
@@ -393,10 +395,18 @@ def test_marketplace_storefront_is_the_ai_wizards_panel_app_library():
     assert 'data-tooltip="Marketplace"' in rail
     assert '<path d="M4 10h16l-2-6H6z"/>' in rail
     assert '<span aria-hidden="true">+</span>' not in rail
-    assert 'href="https://www.aiwizards.com/apps"' in rail
-    assert 'target="_blank"' in rail
-    assert 'rel="noopener noreferrer"' in rail
-    assert "privateMarketplace" not in JS
+    assert 'id="tailnetPrivateAdd" type="button"' in rail
+    assert 'data-tailnet-app-id="wizard-marketplace"' in rail
+    assert 'href="https://www.aiwizards.com/apps"' not in rail
+    assert 'target="_blank"' not in rail
+    assert "const MARKETPLACE_ID='wizard-marketplace'" in JS
+    assert "frameHref:'https://www.aiwizards.com/apps'" in JS
+    assert "appsById.set(MARKETPLACE_ID,MARKETPLACE_APP)" in JS
+    assert "privateAdd.addEventListener('click',()=>activateApp(MARKETPLACE_APP))" in JS
+    assert '&marketplace-inline=v1' in next(line for line in INDEX.splitlines() if "static/tailnet-app-rail.js?v=" in line)
+    assert '&marketplace-inline=v1' in next(line for line in SW.splitlines() if "'./static/tailnet-app-rail.js' + VQ" in line)
+    assert "--setenv=HERMES_WEBUI_CSP_FRAME_EXTRA=https://www.aiwizards.com" in STARTER
+    assert "HERMES_WEBUI_CSP_FRAME_EXTRA=https://www.aiwizards.com" in LAUNCHER_UNIT
     assert "/tailnet-frame/?app=private-marketplace" not in JS
 
 
@@ -671,7 +681,7 @@ def test_mobile_right_rail_is_collapsible_and_hides_redundant_home():
 def test_tailnet_rail_script_is_loaded_from_the_mount_aware_base():
     assert (
         'src="static/tailnet-app-rail.js?v=__WEBUI_VERSION__'
-        '&overlay=wizard-canvas-v10&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&notification-reply-indicators=v1&mobile-toggle-switches=v1&mobile-layer-nav=v6&mobile-settings-menu=v1"'
+        '&overlay=wizard-canvas-v10&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&notification-reply-indicators=v1&mobile-toggle-switches=v1&mobile-layer-nav=v6&mobile-settings-menu=v1&marketplace-inline=v1"'
         in INDEX
     )
     assert (

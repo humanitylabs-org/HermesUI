@@ -42,6 +42,7 @@ Environment={quoted('HERMES_WEBUI_HOST=' + host)}
 Environment={quoted('HERMES_WEBUI_PORT=' + str(port))}
 Environment={quoted('HERMES_WEBUI_PRESERVE_ENV=1')}
 Environment={quoted('HERMES_WEBUI_SECURE=1')}
+Environment={quoted('HERMES_WEBUI_CSP_FRAME_EXTRA=https://www.aiwizards.com')}
 Environment={quoted('HERMES_WEBUI_COOKIE_NAME=hermesui_session')}
 Environment={quoted('HERMES_WEBUI_PROFILE_COOKIE_NAME=hermesui_profile')}
 ExecStart=/usr/bin/env python3 {quoted(str(starter))} --unit hermesui.service --repo-root {quoted(str(repo_root))} --home {quoted(str(home))} --port {port}

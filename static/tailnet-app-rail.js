@@ -12,6 +12,13 @@
   const FRAME_BROWSER_DECISION_TTL_MS=5*60*1000;
   const BROWSER_FALLBACK_DELAY_MS=3000;
   const NOTIFICATIONS_ID='cron-notifications';
+  const MARKETPLACE_ID='wizard-marketplace';
+  const MARKETPLACE_APP=Object.freeze({
+    id:MARKETPLACE_ID,
+    label:'Marketplace',
+    href:'https://www.aiwizards.com/apps',
+    frameHref:'https://www.aiwizards.com/apps'
+  });
   const NOTIFICATION_STATE_KEY='hermesui.cron-notifications.v1';
   const NOTIFICATION_ITEMS_CACHE_KEY='hermesui.cron-notification-items.v1';
   const NOTIFICATION_THREAD_VIEWED_KEY='hermesui.cron-reply-viewed.v1';
@@ -3174,12 +3181,14 @@
   async function loadApps(){
     if(!links||!home||!workspace||!frame||!privateAdd||!notificationsButton||!notificationsPanel)return;
     root.setAttribute('data-tailnet-view','hermes');
+    appsById.set(MARKETPLACE_ID,MARKETPLACE_APP);
     bindOverlayInteractions();
     home.addEventListener('click',event=>{
       event.preventDefault();
       activateHermes();
     });
     notificationsButton.addEventListener('click',activateNotifications);
+    privateAdd.addEventListener('click',()=>activateApp(MARKETPLACE_APP));
     bindMobilePrimaryMenu();
     bindMobileRail();
     if(themeToggle)themeToggle.addEventListener('click',toggleShellTheme);

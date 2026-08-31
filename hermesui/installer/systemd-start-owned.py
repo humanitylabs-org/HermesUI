@@ -81,6 +81,7 @@ def build_command(
         f"--setenv=HERMES_WEBUI_PORT={port}",
         "--setenv=HERMES_WEBUI_PRESERVE_ENV=1",
         "--setenv=HERMES_WEBUI_SECURE=1",
+        "--setenv=HERMES_WEBUI_CSP_FRAME_EXTRA=https://www.aiwizards.com",
         "--setenv=HERMES_WEBUI_COOKIE_NAME=hermesui_session",
         "--setenv=HERMES_WEBUI_PROFILE_COOKIE_NAME=hermesui_profile",
         python,
