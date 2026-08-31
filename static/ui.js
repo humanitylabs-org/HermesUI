@@ -6463,9 +6463,22 @@ function _formatActiveElapsedTimer(seconds){
   const s=total%60;
   return`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
+function _workDetailsLabelFromProcessed(value){
+  // Keep the mature processed-time translations as the compatibility source,
+  // but give the transcript disclosure a clearer user-facing name.
+  return String(value||'')
+    .replace(/^Processed\b/,'Work details')
+    .replace(/^Обработано\b/,'Детали работы')
+    .replace(/^已处理/,'工作详情')
+    .replace(/^已處理/,'工作詳情');
+}
+function _workDetailsElapsedLabel(detail){
+  const legacy=detail?t('processed_elapsed',detail):t('processed_elapsed','');
+  return _workDetailsLabelFromProcessed(legacy);
+}
 function _processedElapsedLabel(seconds){
   const text=_formatTurnDuration(seconds);
-  return text?t('processed_elapsed',text):'';
+  return text?_workDetailsLabelFromProcessed(t('processed_elapsed',text)):'';
 }
 const _COMPRESSION_ELAPSED_MAX_SECONDS=5*60;
 let _compressionElapsedTimer=null;
@@ -6529,7 +6542,7 @@ function _activitySettledProcessedLabel(group){
     const legacy=String(durationEl&&durationEl.textContent||'').replace(/^\s*Done in\s+/i,'').trim();
     if(legacy) durationText=legacy;
   }
-  return durationText?t('processed_elapsed',durationText):'';
+  return _workDetailsElapsedLabel(durationText);
 }
 function _activityMarkObserved(group, ts){
   if(!group||group.getAttribute('data-live-tool-call-group')!=='1')return;
@@ -12546,7 +12559,10 @@ function _renderTransparentTurnFooter(turn, opts){
 // finalized into a settled assistant turn (the live attribute is removed in
 // _convertLiveActivityGroupToSettled / when liveAssistantTurn loses its id).
 let _liveActivityUserExpanded;
-const _activityDisclosureStoragePrefix='hermes-activity-disclosure:';
+// v2 discards legacy "open" values that could be written automatically when
+// an inner tool card happened to be open at settle time. From v2 onward this
+// namespace records outer-disclosure clicks only.
+const _activityDisclosureStoragePrefix='hermes-activity-disclosure:v2:';
 function _activityDisclosureStorageKey(activityKey){
   if(!activityKey||!S.session||!S.session.session_id) return null;
   return _activityDisclosureStoragePrefix+S.session.session_id+':'+activityKey;
@@ -12651,6 +12667,10 @@ function _toggleActivityGroup(summary){
   _writeActivityDisclosureState(group.getAttribute('data-activity-disclosure-key'), !collapsed);
   if(typeof _onLiveActivityToggle==='function') _onLiveActivityToggle(group);
 }
+function _onBackgroundUpdateToggle(details){
+  if(!details) return;
+  _writeActivityDisclosureState(details.getAttribute('data-activity-disclosure-key'), !!details.open);
+}
 function _toggleToolWorklogGroup(summary){
   const group=summary&&summary.closest?summary.closest('.tool-worklog-tool-group,.tool-group'):null;
   if(group){
@@ -12663,10 +12683,11 @@ function _toggleToolWorklogGroup(summary){
 }
 function _finalizeLiveActivityDisclosureGroup(group){
   if(!group) return;
-  const keepOpen=!!(
-    group.querySelector&&group.querySelector('.tool-card.open,.thinking-card.open,.tool-group.open,.tool-worklog-tool-group.open')
-  );
   const disclosureKey=group.getAttribute('data-activity-disclosure-key')||group.getAttribute('data-tool-worklog-key')||'';
+  // A completed Work details group starts collapsed unless the user explicitly
+  // opened the outer disclosure. Inner tool/thinking cards and appearance
+  // defaults must never expand the whole settled transcript group.
+  const keepOpen=_liveActivityUserExpanded===true||_readActivityDisclosureState(disclosureKey)==='open';
   group.removeAttribute('data-live-activity-current');
   group.removeAttribute('data-live-tool-call-group');
   group.removeAttribute('data-live-tool-worklog-group');
@@ -13555,7 +13576,7 @@ function renderLiveAnchorActivityScene(streamId, scene, opts){
   });
   const group=_anchorSceneWorklogGroup(blocks,{
     live:true,
-    collapsed:false,
+    collapsed:true,
     activityKey:`live:${streamId||S.activeStreamId||'anchor'}`,
     streamId:streamId||S.activeStreamId||'',
     turnStartedAt:S.session&&S.session.pending_started_at,
@@ -14464,7 +14485,6 @@ function ensureActivityGroup(inner, opts){
   if(!group){
     group=document.createElement('div');
     let collapsed=opts.collapsed!==false;
-    if(window._worklogDetailsExpandedByDefault===true) collapsed=false;
     const savedState=_readActivityDisclosureState(activityKey);
     // Restore the user's explicit expand intent when recreating the live
     // activity group within the same turn (#1298), then let persisted chat/turn
@@ -14489,7 +14509,7 @@ function ensureActivityGroup(inner, opts){
     if(burstId) group.setAttribute('data-activity-burst-id',burstId);
     if(segmentSeq) group.setAttribute('data-live-segment-seq',segmentSeq);
     group.classList.toggle('open',!collapsed);
-    group.innerHTML=`<button type="button" class="tool-call-group-summary tool-worklog-summary activity-summary" aria-expanded="${collapsed?'false':'true'}" onclick="_toggleActivityGroup(this)"><span class="as-dot"></span><span class="tool-call-group-label tool-worklog-label as-text">Running</span><span class="tool-call-group-duration"></span><span class="tool-call-group-chevron as-caret">${li('chevron-right',12)}</span></button><div class="tool-call-group-body tool-worklog-body activity-body"><div class="worklog"><div class="tool-worklog-list"></div></div></div>`;
+    group.innerHTML=`<button type="button" class="tool-call-group-summary tool-worklog-summary activity-summary transcript-disclosure-summary" aria-expanded="${collapsed?'false':'true'}" onclick="_toggleActivityGroup(this)"><span class="as-dot"></span><span class="tool-call-group-label tool-worklog-label as-text">Running</span><span class="tool-call-group-duration"></span><span class="tool-call-group-chevron as-caret transcript-disclosure-chevron">${li('chevron-right',12)}</span></button><div class="tool-call-group-body tool-worklog-body activity-body"><div class="worklog"><div class="tool-worklog-list"></div></div></div>`;
     const anchor=opts.anchor||null;
     if(anchor&&anchor.parentElement===inner){
       if(opts.beforeAnchor) inner.insertBefore(group, anchor);
@@ -17096,7 +17116,9 @@ function renderMessages(options){
         row.dataset.sessionMsgIdx=_messageSessionIndexForRawIdx(rawIdx);
         row.dataset.messageAnchorKey=_messageViewportAnchorKeyForMessage(m);
         row.dataset.role='background_updates';
-        row.innerHTML=`<details class="background-update-card"><summary><span class="background-update-toggle">${li('chevron-right',12)}</span><span class="background-update-label">Later updates</span><span class="background-update-count"></span></summary><div class="background-update-body"></div></details>`;
+        const disclosureKey=`later-updates:${_messageViewportAnchorKeyForMessage(m)}`;
+        const disclosureOpen=_readActivityDisclosureState(disclosureKey)==='open';
+        row.innerHTML=`<details class="background-update-card" data-activity-disclosure-key="${esc(disclosureKey)}"${disclosureOpen?' open':''} ontoggle="_onBackgroundUpdateToggle(this)"><summary class="tool-call-group-summary tool-worklog-summary transcript-disclosure-summary"><span class="tool-call-group-label tool-worklog-label background-update-label">Later updates</span><span class="background-update-count"></span><span class="tool-call-group-chevron background-update-toggle transcript-disclosure-chevron">${li('chevron-right',12)}</span></summary><div class="background-update-body"></div></details>`;
         inner.appendChild(row);
         currentBackgroundUpdatesGroup={
           row,
@@ -18928,8 +18950,8 @@ function _syncToolCallGroupSummary(group){
     }else if(isWorklogGroup){
       const processedLabel=isLiveWorklog
         ? _activityProcessedElapsedLabel(group)
-        : t('processed_elapsed','');
-      label.textContent=processedLabel||t('processed_elapsed','');
+        : _workDetailsElapsedLabel('');
+      label.textContent=processedLabel||_workDetailsElapsedLabel('');
     }else{
       const rows=Array.from(group.querySelectorAll('.tool-card-row'));
       // Prefer the live _tcData classification; fall back to the durable data-*

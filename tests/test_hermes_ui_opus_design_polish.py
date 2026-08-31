@@ -78,7 +78,7 @@ def test_mode_control_is_separate_and_settled_duration_has_one_source():
     assert 'html[data-session-view="dashboard"] #sessionViewToggle{color:#fff;background:linear-gradient(145deg,#b06cff,#7437e8);' in CSS
     summary = _function_body(UI, "_syncToolCallGroupSummary")
     assert "? _activityProcessedElapsedLabel(group)" in summary
-    assert ": t('processed_elapsed','');" in summary
+    assert ": _workDetailsElapsedLabel('');" in summary
     assert "_activitySettledProcessedLabel(group)" not in summary
 
 

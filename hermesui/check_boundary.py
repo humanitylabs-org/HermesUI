@@ -61,6 +61,11 @@ PINNED_NONSTATIC_SHA256 = {
     "tests/test_compact_voice_note_rendering.py": "530ccfba0091c47e363551d62109a145e039ac67078c1d73f1d59d1a46a02f2d",
     "tests/test_stale_stream_cleanup.py": "63efe65c93e1c855c9f9ac484811e2d3c46e6b4378687a736b44fceae4ed2005",
     "tests/test_svg_audio_video_rendering.py": "d86f6ad7086c791d7239708eb7a320b826c5298e9cdde804a59d907919bcc84d",
+    # The inherited visible-order regression now pins the downstream default-
+    # collapsed Work details contract. The restart-guard regression belongs to
+    # the already-carried Wizard App lifecycle hotfix on this release line.
+    "tests/test_live_to_final_anchor_visible_order.py": "21f27053e53994ee22197a027232c24f7f278d067bce25a4b730d40f5b8dbdf4",
+    "tests/test_wizard_app_systemd_restart_guard.py": "9813977b86cd4d8c93d16c6b6deba6c1803686a3bdacd44ee3dca16d24d707d1",
     # Inherited workflows change only downstream branch reachability and the
     # exact test launchers needed for Hermes UI's replacement frontend contracts.
     ".github/workflows/browser-smoke.yml": "637468a8018ea807e5f8c17128e503faad05ecfcd4bf7e39f62a5f7182560cc6",

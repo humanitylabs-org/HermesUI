@@ -1611,22 +1611,22 @@ def test_anchor_scene_worklog_summary_is_processed_time_anchor():
     live = _function_body(UI_JS, "renderLiveAnchorActivityScene")
 
     assert "_activityProcessedElapsedLabel(group)" in summary
-    assert "_activitySettledProcessedLabel(group)" in summary
-    assert "label.textContent=processedLabel||t('processed_elapsed','')" in summary
+    assert ": _workDetailsElapsedLabel('');" in summary
+    assert "label.textContent=processedLabel||_workDetailsElapsedLabel('')" in summary
     assert "durationEl.textContent='';" in summary
     assert "else if(isWorklogGroup)" in summary
-    assert "collapsed:false" in live
+    assert "collapsed:true" in live
     assert ".tool-worklog-group[data-tool-worklog-group=\"1\"]:not([data-run-activity-group=\"1\"]) .tool-worklog-summary" in STYLE_CSS
 
 
 def test_processed_time_anchor_uses_lightweight_summary_style():
     summary_rule = STYLE_CSS[
-        STYLE_CSS.index(".tool-worklog-group[data-tool-worklog-group=\"1\"]:not([data-run-activity-group=\"1\"]) .tool-worklog-summary{"):
-        STYLE_CSS.index(".tool-worklog-group[data-tool-worklog-group=\"1\"]:not([data-run-activity-group=\"1\"]) .tool-worklog-label{")
+        STYLE_CSS.index(".tool-worklog-group[data-tool-worklog-group=\"1\"]:not([data-run-activity-group=\"1\"]) .tool-worklog-summary,"):
+        STYLE_CSS.index(".tool-worklog-group[data-tool-worklog-group=\"1\"]:not([data-run-activity-group=\"1\"]) .tool-worklog-label,")
     ]
     label_rule = STYLE_CSS[
-        STYLE_CSS.index(".tool-worklog-group[data-tool-worklog-group=\"1\"]:not([data-run-activity-group=\"1\"]) .tool-worklog-label{"):
-        STYLE_CSS.index(".tool-worklog-group[data-tool-worklog-group=\"1\"]:not([data-run-activity-group=\"1\"]) .tool-worklog-summary:hover{")
+        STYLE_CSS.index(".tool-worklog-group[data-tool-worklog-group=\"1\"]:not([data-run-activity-group=\"1\"]) .tool-worklog-label,"):
+        STYLE_CSS.index(".tool-worklog-group[data-tool-worklog-group=\"1\"]:not([data-run-activity-group=\"1\"]) .tool-worklog-summary:hover,")
     ]
 
     assert "border-bottom:1px solid color-mix(in srgb,var(--border-subtle) 62%,transparent)" in summary_rule
@@ -1640,7 +1640,7 @@ def test_legacy_settled_worklog_summary_uses_processed_anchor_too():
     summary = _function_body(UI_JS, "_syncToolCallGroupSummary")
 
     assert "const processedLabel=isLiveWorklog" in summary
-    assert ": _activitySettledProcessedLabel(group)" in summary
+    assert ": _workDetailsElapsedLabel('');" in summary
     assert "_toolWorklogSummary(cards,{live:isLiveWorklog, toolCount, labelOnly:!toolCount&&isLiveWorklog})" not in summary
     assert ".tool-worklog-group[data-tool-worklog-group=\"1\"]:not([data-run-activity-group=\"1\"]) .tool-worklog-summary" in STYLE_CSS
 
@@ -1662,7 +1662,9 @@ def test_live_processed_anchor_is_clickable_while_streaming():
     assert "summary.disabled=false" in ensure
     assert "group.removeAttribute('data-live-tool-call-group')" in finalize
     assert "group.removeAttribute('data-live-tool-worklog-group')" in finalize
-    assert ".tool-card.open,.thinking-card.open,.tool-group.open,.tool-worklog-tool-group.open" in finalize
+    assert "_liveActivityUserExpanded===true" in finalize
+    assert "_readActivityDisclosureState(disclosureKey)==='open'" in finalize
+    assert ".tool-card.open,.thinking-card.open,.tool-group.open,.tool-worklog-tool-group.open" not in finalize
     assert "group.classList.toggle('tool-call-group-collapsed', !keepOpen)" in finalize
     assert "if(keepOpen&&disclosureKey) _writeActivityDisclosureState(disclosureKey, true);" in finalize
     assert "summary.removeAttribute('data-live-summary-static')" in finalize

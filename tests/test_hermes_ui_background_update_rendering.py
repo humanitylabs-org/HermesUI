@@ -245,6 +245,12 @@ def test_process_wakeup_followup_uses_collapsed_background_update_not_normal_ans
     assert "Later updates" in process_branch
     assert "background-update-count" in process_branch
     assert "background-update-item" in process_branch
+    assert "transcript-disclosure-summary" in process_branch
+    assert "tool-worklog-summary" in process_branch
+    assert "transcript-disclosure-chevron" in process_branch
+    assert "const disclosureOpen=_readActivityDisclosureState(disclosureKey)==='open';" in process_branch
+    assert "${disclosureOpen?' open':''}" in process_branch
+    assert "ontoggle=\"_onBackgroundUpdateToggle(this)\"" in process_branch
     assert "const rowDisplayContent=displayContent;" in ui
     assert "const rowDisplayContent=isProcessWakeup?content:displayContent;" not in ui
 
@@ -253,9 +259,10 @@ def test_process_wakeup_followup_uses_collapsed_background_update_not_normal_ans
     notice_rule = STYLE_CSS[
         STYLE_CSS.index(".background-update-card{") : STYLE_CSS.index(".background-update-card>summary{")
     ]
-    assert "margin:6px 0 6px var(--msg-rail)" in notice_rule
-    assert "max-width:min(var(--msg-max),760px)" in notice_rule
-    assert "@media(max-width:700px){.background-update-card{margin-left:0;}}" in STYLE_CSS
+    assert "margin:4px 0 14px" in notice_rule
+    assert "max-width:var(--msg-max)" in notice_rule
+    assert "border:0" in notice_rule
+    assert ".background-update-card > .transcript-disclosure-summary" in STYLE_CSS
 
 
 def test_process_wakeup_label_key_exists_in_all_locales():

@@ -2985,22 +2985,21 @@
   .process-wakeup-row .msg-body pre.process-wakeup-text{margin:0;padding:0;border:0;border-radius:0;background:transparent;color:var(--muted);font-family:var(--font-mono);font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;}
   .process-wakeup-row .msg-foot{padding-left:0;margin-top:5px;}
   @media(max-width:700px){.process-wakeup-notice{margin-left:0;}}
-  .background-update-row{padding:5px 0;}
-  .background-update-card{margin:6px 0 6px var(--msg-rail);max-width:min(var(--msg-max),760px);border:1px solid var(--border);border-radius:9px;background:var(--surface-subtle,var(--hover-bg));color:var(--muted);overflow:hidden;}
-  .background-update-card>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:7px;padding:8px 10px;font-size:11px;font-weight:650;letter-spacing:.02em;}
+  .background-update-row{padding:0;}
+  .background-update-card{margin:4px 0 14px;max-width:var(--msg-max);border:0;background:transparent;color:var(--muted);overflow:visible;}
+  .background-update-card>summary{list-style:none;}
   .background-update-card>summary::-webkit-details-marker{display:none;}
-  .background-update-toggle{display:inline-flex;transition:transform .15s ease;}
+  .background-update-toggle{display:inline-flex;transition:transform .18s ease;}
   .background-update-card[open]>summary .background-update-toggle{transform:rotate(90deg);}
   .background-update-label{color:var(--muted);}
-  .background-update-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--hover-bg);color:var(--muted);font-size:10px;font-variant-numeric:tabular-nums;}
+  .background-update-count{display:inline-flex;align-items:center;color:var(--muted);font-size:calc(var(--message-body-font-size) * .9);font-weight:400;font-variant-numeric:tabular-nums;opacity:.82;flex:0 0 auto;}
   .background-update-card>summary .msg-time{margin-left:auto;}
-  .background-update-body{border-top:1px solid var(--border);padding:10px;color:var(--text);}
+  .background-update-body{padding:0;color:var(--text);}
   .background-update-body .msg-body{padding:0;max-width:none;font-size:13px;line-height:1.5;}
   .background-update-body .msg-foot{padding:0;margin-top:6px;}
   .background-update-item+.background-update-item{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
   .background-update-item-head{display:flex;align-items:center;gap:8px;margin-bottom:5px;color:var(--muted);font-size:10px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;}
   .background-update-item-head .msg-time{margin-left:auto;text-transform:none;letter-spacing:0;}
-  @media(max-width:700px){.background-update-card{margin-left:0;}}
   /* #6345: collapsed summary-card variant for parseable wakeups. */
   .process-wakeup-notice.process-wakeup-fail{border-left-color:var(--error,#f85149);}
   .process-wakeup-card{margin:0;}
@@ -4404,7 +4403,8 @@ body.resizing .sidebar{transition:none!important;}
 .tool-worklog-group[data-tool-worklog-group="1"]:not([data-run-activity-group="1"]){
   margin-top:2px;
 }
-.tool-worklog-group[data-tool-worklog-group="1"]:not([data-run-activity-group="1"]) .tool-worklog-summary{
+.tool-worklog-group[data-tool-worklog-group="1"]:not([data-run-activity-group="1"]) .tool-worklog-summary,
+.background-update-card > .transcript-disclosure-summary{
   display:flex;
   width:100%;
   padding:0 0 10px;
@@ -4424,14 +4424,22 @@ body.resizing .sidebar{transition:none!important;}
     min-height:44px;
     box-sizing:border-box;
   }
+  .background-update-card > .transcript-disclosure-summary{
+    padding-top:11px;
+    padding-bottom:11px;
+    min-height:44px;
+    box-sizing:border-box;
+  }
 }
-.tool-worklog-group[data-tool-worklog-group="1"]:not([data-run-activity-group="1"]) .tool-worklog-label{
+.tool-worklog-group[data-tool-worklog-group="1"]:not([data-run-activity-group="1"]) .tool-worklog-label,
+.background-update-card > .transcript-disclosure-summary .background-update-label{
   color:color-mix(in srgb,var(--muted) 74%,var(--bg));
   font-size:calc(var(--message-body-font-size) * .9);
   font-weight:400;
   opacity:.82;
 }
-.tool-worklog-group[data-tool-worklog-group="1"]:not([data-run-activity-group="1"]) .tool-worklog-summary:hover{
+.tool-worklog-group[data-tool-worklog-group="1"]:not([data-run-activity-group="1"]) .tool-worklog-summary:hover,
+.background-update-card > .transcript-disclosure-summary:hover{
   background:transparent;
 }
 .tool-worklog-group[data-tool-worklog-group="1"]:not([data-run-activity-group="1"]) .as-dot{
