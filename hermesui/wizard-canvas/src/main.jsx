@@ -7,8 +7,19 @@ import {
 } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import './style.css';
+import {
+  clearDraftIfSaved,
+  draftKeyForTab,
+  loadDraft,
+  recoverySnapshotIsCurrent,
+  resolveDraftBaseRevision,
+  selectInitialCanvas,
+  selectProtectedSerialized,
+  storeDraft,
+} from './draft-store.mjs';
 
 const ENDPOINT = '/apps/api/wizard-canvas';
+const TAB_ID_KEY = 'wizard-canvas.tab-id.v1';
 const SAVE_DELAY_MS = 800;
 const SAVED_VISIBLE_MS = 2600;
 const CLIENT_MAX_BYTES = 8 * 1024 * 1024;
@@ -40,6 +51,35 @@ function byteLength(value) {
   return new TextEncoder().encode(value).byteLength;
 }
 
+function browserStorage() {
+  try {
+    return window.localStorage;
+  } catch (_) {
+    return null;
+  }
+}
+
+function createTabId() {
+  if (typeof window.crypto?.randomUUID === 'function') return window.crypto.randomUUID();
+  return `tab-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function canvasDraftKey() {
+  let tabId = null;
+  try {
+    tabId = window.sessionStorage.getItem(TAB_ID_KEY);
+    if (!draftKeyForTab(tabId)) {
+      tabId = createTabId();
+      window.sessionStorage.setItem(TAB_ID_KEY, tabId);
+    }
+  } catch (_) {
+    tabId = createTabId();
+  }
+  return draftKeyForTab(tabId);
+}
+
+const DRAFT_KEY = canvasDraftKey();
+
 function sceneData(scene, theme) {
   if (!scene || typeof scene !== 'object' || Array.isArray(scene)) return null;
   return {
@@ -68,6 +108,8 @@ function WizardCanvas() {
   const baselineReadyRef = useRef(false);
   const lockedRef = useRef(false);
   const lastSavedRef = useRef('');
+  const currentSerializedRef = useRef('');
+  const changeSequenceRef = useRef(0);
   const pendingRef = useRef(null);
   const timerRef = useRef(null);
   const savedTimerRef = useRef(null);
@@ -79,6 +121,12 @@ function WizardCanvas() {
   const initialElementsRef = useRef(null);
   const initialFitFrameRef = useRef(null);
   const initialFitDoneRef = useRef(false);
+  const draftNeedsSaveRef = useRef(false);
+  const protectedDraftRef = useRef(false);
+  const draftBaseRevisionRef = useRef(null);
+  const draftStoredRef = useRef(false);
+  const protectedSerializedRef = useRef(null);
+  const recoveringDraftRef = useRef(false);
   const [problem, setProblem] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
   const [sceneReady, setSceneReady] = useState(false);
@@ -115,9 +163,11 @@ function WizardCanvas() {
       }, SAVED_VISIBLE_MS);
     }
   }, []);
-  const updateProblem = useCallback((tone, text) => {
+  const updateProblem = useCallback((tone, text, action = null) => {
     setProblem(current => (
-      current?.tone === tone && current?.text === text ? current : { tone, text }
+      current?.tone === tone && current?.text === text && current?.action === action
+        ? current
+        : { tone, text, action }
     ));
   }, []);
 
@@ -156,18 +206,39 @@ function WizardCanvas() {
       if (!response.ok) throw new Error(`Canvas load failed (${response.status})`);
       const payload = await response.json();
       revisionRef.current = Number.isInteger(payload.revision) ? payload.revision : 0;
-      const initialScene = sceneData(payload.scene, canvasThemeRef.current);
+      const serverSerialized = payload.scene ? JSON.stringify(payload.scene) : null;
+      const storage = browserStorage();
+      const draft = loadDraft(storage, DRAFT_KEY);
+      draftStoredRef.current = Boolean(draft);
+      const selected = selectInitialCanvas({
+        serverRevision: revisionRef.current,
+        serverSerialized,
+        draft,
+      });
+      if (draft && selected.source === 'server' && !selected.hasConflict) {
+        clearDraftIfSaved(storage, DRAFT_KEY, draft.serialized);
+      }
+      draftNeedsSaveRef.current = selected.needsSave;
+      protectedDraftRef.current = selected.hasConflict;
+      draftBaseRevisionRef.current = selected.hasConflict ? draft.baseRevision : null;
+      protectedSerializedRef.current = selected.hasConflict ? selected.serialized : null;
+      if (selected.hasConflict) {
+        lockedRef.current = true;
+        updateProblem('conflict', 'Unsaved changes protected', 'recover');
+      }
+      const selectedScene = selected.serialized ? JSON.parse(selected.serialized) : payload.scene;
+      const initialScene = sceneData(selectedScene, canvasThemeRef.current);
       initialElementsRef.current = initialScene?.elements || [];
       setSceneBlank(isSceneBlank(initialScene?.elements));
       setSceneReady(true);
       readyRef.current = true;
-      setProblem(null);
+      if (!selected.hasConflict) setProblem(null);
       fitInitialScene();
       return initialScene;
     } catch (error) {
       console.error('[wizard-canvas] load failed', error);
       lockedRef.current = true;
-      updateProblem('error', 'Server save unavailable');
+      updateProblem('error', 'Server save unavailable', 'reload');
       return null;
     }
   })(), [fitInitialScene, updateProblem]);
@@ -200,15 +271,28 @@ function WizardCanvas() {
       });
       if (response.status === 409) {
         lockedRef.current = true;
+        protectedDraftRef.current = true;
+        draftBaseRevisionRef.current = revisionRef.current;
+        protectedSerializedRef.current = pendingRef.current || serialized;
         showSaveStatus(null);
-        updateProblem('conflict', 'Changed in another tab');
+        updateProblem(
+          'conflict',
+          draftStoredRef.current ? 'Unsaved changes protected' : 'Unsaved changes — keep this tab open',
+          'recover',
+        );
         return;
       }
       if (!response.ok) throw new Error(`Canvas save failed (${response.status})`);
       const payload = await response.json();
       revisionRef.current = payload.revision;
       lastSavedRef.current = serialized;
+      const storage = browserStorage();
+      const cleared = clearDraftIfSaved(storage, DRAFT_KEY, serialized);
+      draftStoredRef.current = !cleared && Boolean(loadDraft(storage, DRAFT_KEY));
       if (pendingRef.current === serialized) pendingRef.current = null;
+      protectedDraftRef.current = false;
+      draftBaseRevisionRef.current = null;
+      protectedSerializedRef.current = null;
       setProblem(null);
       showSaveStatus(
         pendingRef.current && pendingRef.current !== lastSavedRef.current ? 'saving' : 'saved'
@@ -216,7 +300,11 @@ function WizardCanvas() {
     } catch (error) {
       console.error('[wizard-canvas] save failed', error);
       showSaveStatus(null);
-      updateProblem('error', 'Not saved — retrying');
+      updateProblem(
+        'error',
+        draftStoredRef.current ? 'Not saved — kept on this device' : 'Not saved — keep this tab open',
+        'retry',
+      );
     } finally {
       savingRef.current = false;
       if (!lockedRef.current && pendingRef.current && pendingRef.current !== lastSavedRef.current) {
@@ -228,7 +316,7 @@ function WizardCanvas() {
 
   const handleChange = useCallback((elements, appState, files) => {
     if (readyRef.current) setSceneBlank(isSceneBlank(elements));
-    if (!readyRef.current || lockedRef.current) return;
+    if (!readyRef.current) return;
     let serialized;
     try {
       // The local serializer is self-contained: it retains bounded embedded files.
@@ -252,14 +340,118 @@ function WizardCanvas() {
 
     if (!baselineReadyRef.current) {
       baselineReadyRef.current = true;
-      lastSavedRef.current = serialized;
+      currentSerializedRef.current = serialized;
+      if (draftNeedsSaveRef.current || protectedDraftRef.current) {
+        draftNeedsSaveRef.current = false;
+        lastSavedRef.current = '';
+        pendingRef.current = serialized;
+        if (protectedDraftRef.current) protectedSerializedRef.current = serialized;
+        draftStoredRef.current = storeDraft(browserStorage(), DRAFT_KEY, {
+          baseRevision: resolveDraftBaseRevision(
+            revisionRef.current,
+            protectedDraftRef.current ? draftBaseRevisionRef.current : null,
+          ),
+          serialized,
+        });
+        if (!lockedRef.current) {
+          showSaveStatus('saving');
+          window.clearTimeout(timerRef.current);
+          timerRef.current = window.setTimeout(flushSave, SAVE_DELAY_MS);
+        }
+      } else {
+        lastSavedRef.current = serialized;
+      }
       return;
     }
-    if (serialized === lastSavedRef.current) return;
+    if (currentSerializedRef.current !== serialized) {
+      currentSerializedRef.current = serialized;
+      changeSequenceRef.current += 1;
+    }
+    if (serialized === lastSavedRef.current && !lockedRef.current) return;
     pendingRef.current = serialized;
+    if (protectedDraftRef.current) protectedSerializedRef.current = serialized;
+    draftStoredRef.current = storeDraft(browserStorage(), DRAFT_KEY, {
+      baseRevision: resolveDraftBaseRevision(
+        revisionRef.current,
+        protectedDraftRef.current ? draftBaseRevisionRef.current : null,
+      ),
+      serialized,
+    });
+    if (lockedRef.current) return;
     showSaveStatus('saving');
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(flushSave, SAVE_DELAY_MS);
+  }, [flushSave, showSaveStatus, updateProblem]);
+
+  const recoverDraft = useCallback(async () => {
+    if (recoveringDraftRef.current) return;
+    const storage = browserStorage();
+    const storedDraft = loadDraft(storage, DRAFT_KEY);
+    const serialized = selectProtectedSerialized(
+      protectedSerializedRef.current,
+      pendingRef.current,
+      storedDraft?.serialized,
+    );
+    if (!serialized) {
+      updateProblem('error', 'Unsaved changes are only in this tab — keep it open', 'recover');
+      return;
+    }
+    const recoverySequence = changeSequenceRef.current;
+    recoveringDraftRef.current = true;
+    updateProblem('conflict', 'Checking saved version…');
+    try {
+      const response = await fetch(ENDPOINT, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new Error(`Canvas load failed (${response.status})`);
+      const payload = await response.json();
+      const serverSerialized = payload.scene ? JSON.stringify(payload.scene) : '';
+      if (!recoverySnapshotIsCurrent(recoverySequence, changeSequenceRef.current)) {
+        updateProblem(
+          'conflict',
+          draftStoredRef.current ? 'Newer changes protected — recover again' : 'Newer changes kept in this tab — recover again',
+          'recover',
+        );
+        return;
+      }
+      revisionRef.current = Number.isInteger(payload.revision) ? payload.revision : 0;
+      if (serverSerialized === serialized) {
+        lastSavedRef.current = serialized;
+        pendingRef.current = null;
+        const cleared = clearDraftIfSaved(storage, DRAFT_KEY, serialized);
+        draftStoredRef.current = !cleared && Boolean(loadDraft(storage, DRAFT_KEY));
+        protectedDraftRef.current = false;
+        draftBaseRevisionRef.current = null;
+        protectedSerializedRef.current = null;
+        lockedRef.current = false;
+        setProblem(null);
+        showSaveStatus('saved');
+        return;
+      }
+      lastSavedRef.current = serverSerialized;
+      pendingRef.current = serialized;
+      draftBaseRevisionRef.current = null;
+      draftStoredRef.current = storeDraft(storage, DRAFT_KEY, {
+        baseRevision: revisionRef.current,
+        serialized,
+      });
+      protectedDraftRef.current = false;
+      lockedRef.current = false;
+      setProblem(null);
+      showSaveStatus('saving');
+      window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(flushSave, 0);
+    } catch (error) {
+      console.error('[wizard-canvas] recovery check failed', error);
+      updateProblem(
+        'error',
+        draftStoredRef.current ? 'Draft kept — server check failed' : 'Server check failed — keep this tab open',
+        'recover',
+      );
+    } finally {
+      recoveringDraftRef.current = false;
+    }
   }, [flushSave, showSaveStatus, updateProblem]);
 
   useEffect(() => {
@@ -267,9 +459,16 @@ function WizardCanvas() {
       window.clearTimeout(timerRef.current);
       void flushSave();
     };
+    const warnIfUnsaved = event => {
+      if (!pendingRef.current || pendingRef.current === lastSavedRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
     window.addEventListener('pagehide', flushOnHide);
+    window.addEventListener('beforeunload', warnIfUnsaved);
     return () => {
       window.removeEventListener('pagehide', flushOnHide);
+      window.removeEventListener('beforeunload', warnIfUnsaved);
       window.clearTimeout(timerRef.current);
       window.clearTimeout(savedTimerRef.current);
       window.cancelAnimationFrame(initialFitFrameRef.current);
@@ -321,10 +520,17 @@ function WizardCanvas() {
 
   const topRightUi = useCallback(() => {
     if (problem) {
+      const action = problem.action;
+      const label = action === 'recover' ? 'Recover' : action === 'retry' ? 'Retry' : 'Reload';
+      const act = action === 'recover'
+        ? recoverDraft
+        : action === 'retry'
+          ? () => void flushSave()
+          : () => window.location.reload();
       return (
         <div className={`wizard-canvas-recovery is-${problem.tone}`} role="alert">
           <span>{problem.text}</span>
-          <button type="button" onClick={() => window.location.reload()}>Reload</button>
+          {action ? <button type="button" onClick={act}>{label}</button> : null}
         </div>
       );
     }
@@ -337,7 +543,7 @@ function WizardCanvas() {
         {saveStatus.text}
       </div>
     ) : null;
-  }, [problem, saveStatus]);
+  }, [flushSave, problem, recoverDraft, saveStatus]);
 
   return (
     <main ref={canvasShellRef} className="wizard-canvas-shell" aria-label="Persistent Wizard canvas">

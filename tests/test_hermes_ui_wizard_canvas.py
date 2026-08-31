@@ -7,13 +7,14 @@ RAIL = (ROOT / "static" / "tailnet-app-rail.js").read_text(encoding="utf-8")
 SW = (ROOT / "static" / "sw.js").read_text(encoding="utf-8")
 SOURCE = (ROOT / "hermesui" / "wizard-canvas" / "src" / "main.jsx").read_text(encoding="utf-8")
 SOURCE_CSS = (ROOT / "hermesui" / "wizard-canvas" / "src" / "style.css").read_text(encoding="utf-8")
+DRAFT_SOURCE = (ROOT / "hermesui" / "wizard-canvas" / "src" / "draft-store.mjs").read_text(encoding="utf-8")
 BUILD = ROOT / "static" / "wizard-canvas"
 
 
 def test_wizard_icon_opens_one_embedded_desktop_canvas():
     assert 'id="tailnetWizardHome" aria-label="Wizard Canvas"' in INDEX
     assert 'id="wizardCanvasFrame" title="Wizard Canvas"' in INDEX
-    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v8' in INDEX
+    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v9' in INDEX
     assert "showWizardHome=isWizardHomeDesktop()" in RAIL
     assert "wizardHome.hidden=!showWizardHome" in RAIL
     assert "if(wizardHome)wizardHome.hidden=true" in RAIL
@@ -22,7 +23,7 @@ def test_wizard_icon_opens_one_embedded_desktop_canvas():
 
 def test_canvas_is_self_hosted_and_cloud_actions_are_disabled():
     assert (BUILD / "index.html").is_file()
-    assert (BUILD / "assets" / "app-v8.min.js").is_file()
+    assert (BUILD / "assets" / "app-v9.min.js").is_file()
     assert (BUILD / "EXCALIDRAW_LICENSE.txt").is_file()
     assert (BUILD / "fonts").is_dir()
     assert "@excalidraw/excalidraw" in SOURCE
@@ -65,8 +66,26 @@ def test_canvas_uses_only_the_server_autosave_endpoint():
     assert "serializeAsJSON(elements, persistentAppState, files, 'local')" in SOURCE
     assert "baseRevision" in SOURCE
     assert "method: 'PUT'" in SOURCE
-    assert "Changed in another tab" in SOURCE
-    assert "wizard-canvas-v8" in SW
+    assert "Unsaved changes protected" in SOURCE
+    assert "wizard-canvas-v9" in SW
+
+
+def test_canvas_keeps_an_unsaved_local_draft_until_the_matching_server_save():
+    assert "wizard-canvas.tab-id.v1" in SOURCE
+    assert "wizard-canvas.unsaved.v1." in DRAFT_SOURCE
+    assert "draftKeyForTab" in SOURCE
+    assert "storeDraft(browserStorage(), DRAFT_KEY" in SOURCE
+    assert "clearDraftIfSaved(storage, DRAFT_KEY, serialized)" in SOURCE
+    assert "selectInitialCanvas" in SOURCE
+    assert "selectProtectedSerialized" in SOURCE
+    assert "recoverySnapshotIsCurrent" in SOURCE
+    assert "changeSequenceRef.current += 1" in SOURCE
+    assert "protectedSerializedRef.current" in SOURCE
+    assert "resolveDraftBaseRevision" in SOURCE
+    assert "if (!selected.hasConflict) setProblem(null)" in SOURCE
+    assert "keep this tab open" in SOURCE
+    assert "beforeunload" in SOURCE
+    assert "draft.serialized !== serialized" in DRAFT_SOURCE
 
 
 def test_canvas_dark_mode_is_local_and_follows_the_parent_shell():
