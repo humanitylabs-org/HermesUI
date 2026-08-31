@@ -3688,10 +3688,12 @@ function _initialTailNeedsHumanTurn(messages){
   if(typeof window!=='undefined'&&window.HermesMessageProjection){
     const projected=window.HermesMessageProjection.project(list);
     const hasHuman=projected.some(entry=>entry.visible&&entry.semanticType==='human_prompt');
-    const hasPrimaryAssistant=projected.some(entry=>entry.visible&&(
-      entry.semanticType==='assistant_interim'||entry.semanticType==='assistant_final'
+    const hasAssistantOutput=projected.some(entry=>entry.visible&&(
+      entry.semanticType==='assistant_interim'
+      || entry.semanticType==='assistant_final'
+      || entry.semanticType==='async_update'
     ));
-    return hasPrimaryAssistant&&!hasHuman;
+    return hasAssistantOutput&&!hasHuman;
   }
   const hasAssistant=list.some(message=>message&&message.role==='assistant'&&(
     typeof _messageIsRenderable!=='function'||_messageIsRenderable(message)

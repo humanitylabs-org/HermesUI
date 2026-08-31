@@ -654,6 +654,11 @@
 
 
   function backgroundFreeMessages(messages){
+    if(typeof window!=='undefined'&&window.HermesMessageProjection){
+      return window.HermesMessageProjection.project(messages)
+        .filter(entry=>entry&&entry.visible&&entry.message&&['user','assistant','tool'].includes(entry.message.role))
+        .map(entry=>entry.message);
+    }
     const filtered=[];
     let backgroundActive=false;
     let userDirectedRunOpen=false;

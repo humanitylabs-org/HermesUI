@@ -131,3 +131,34 @@ global.api=async url=>{
     assert len(payload["requests"]) == 1
     assert "msg_limit=120" in payload["requests"][0]
     assert payload["messages"][0] == "The initiating human request."
+
+
+def test_cold_tail_with_only_async_updates_still_recovers_the_human_prompt():
+    script = r"""
+const fs=require('fs');
+const sessions=fs.readFileSync(process.argv[2],'utf8');
+function extractFunc(name){
+  const start=sessions.indexOf('function '+name);
+  if(start<0) throw new Error(name+' not found');
+  let brace=sessions.indexOf('{',start),depth=0;
+  for(let i=brace;i<sessions.length;i++){
+    if(sessions[i]==='{') depth++;
+    else if(sessions[i]==='}'&&--depth===0) return sessions.slice(start,i+1);
+  }
+  throw new Error(name+' unterminated');
+}
+global.window=global;
+global.msgContent=message=>String(message&&message.content||'');
+global._messageIsRenderable=message=>!!(message&&message.role!=='tool'&&(message.content||(message.tool_calls||[]).length));
+global._isContextCompactionMessage=()=>false;
+global._isPreservedCompressionTaskListMessage=()=>false;
+global._isRecoveryControlMessage=()=>false;
+eval(fs.readFileSync(process.argv[1],'utf8'));
+eval(extractFunc('_initialTailNeedsHumanTurn'));
+const messages=[
+  {role:'user',content:'[IMPORTANT: Background process proc_review completed (exit_code=0).]',_source:'process_wakeup'},
+  {role:'assistant',content:'Independent review found no blockers.',finish_reason:'stop'},
+];
+process.stdout.write(JSON.stringify(_initialTailNeedsHumanTurn(messages)));
+"""
+    assert _run_node(script) is True

@@ -466,3 +466,33 @@ setTimeout(()=>{{syncSessionDashboard();process.stdout.write(JSON.stringify({{pr
         "prompt": "Run the long verification.",
         "result": "Verification passed and the change is live.",
     }
+
+
+def test_linked_direct_completion_is_available_to_manual_status_summary():
+    node = shutil.which("node")
+    assert node is not None
+    harness = f"""
+const fs=require('fs');const vm=require('vm');const elements=new Map();
+function element(id){{if(!elements.has(id))elements.set(id,{{id,hidden:false,textContent:'',innerHTML:'',dataset:{{}},disabled:false,attrs:{{}},listeners:{{}},addEventListener(name,fn){{this.listeners[name]=fn;}},setAttribute(name,value){{this.attrs[name]=String(value);}},removeAttribute(name){{delete this.attrs[name];}}}});return elements.get(id);}}
+global.window=global;global.document={{readyState:'complete',documentElement:{{dataset:{{sessionView:'dashboard'}}}},getElementById:element,addEventListener(){{}}}};
+global.location={{href:'https://device.example/hermesUI/session/session-1'}};global.history={{state:null,replaceState(){{}}}};global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
+global.S={{session:{{session_id:'session-1'}},messages:[
+  {{role:'user',content:'Verify the contact export.',id:'u1'}},
+  {{role:'assistant',content:'',id:'start',tool_calls:[{{function:{{name:'terminal'}}}}],finish_reason:'tool_calls'}},
+  {{role:'tool',content:'Background process proc_linked_2 started.',id:'started'}},
+  {{role:'assistant',content:'Waiting for the export.',id:'waiting',finish_reason:'stop'}},
+  {{role:'user',content:'[IMPORTANT: Background process proc_linked_2 completed (exit_code=0).]',_source:'process_wakeup',_wakeup_meta:{{task_id:'proc_linked_2'}},id:'wakeup'}},
+  {{role:'assistant',content:'3,486 contacts.',id:'final',finish_reason:'stop'}},
+],busy:false,activeStreamId:null}};
+global.msgContent=m=>String(m&&m.content||'');global.renderMd=s=>String(s||'');global._stripWorkspaceDisplayPrefix=s=>String(s||'').trim();global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');global._messageIsRenderable=m=>!!(m&&m.role!=='tool'&&(m.content||(Array.isArray(m.tool_calls)&&m.tool_calls.length)));global._isContextCompactionMessage=()=>false;global._isPreservedCompressionTaskListMessage=()=>false;global._isRecoveryControlMessage=()=>false;global.INFLIGHT={{}};global.requestAnimationFrame=cb=>{{cb();return 1;}};global.queueMicrotask=cb=>cb();global._messagesTruncated=false;global._oldestIdx=0;
+const requests=[];global.fetch=async(_url,opts)=>{{const body=JSON.parse(opts.body);requests.push(body);return {{ok:true,status:200,json:async()=>({{ok:true,kind:body.kind,summary:'Current status.',provider:'test',model:'test'}})}};}};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'message_projection.js'))},'utf8'));
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
+setTimeout(async()=>{{await element('sessionDashboardRefresh').listeners.click();setTimeout(()=>process.stdout.write(JSON.stringify(requests)),10);}},20);
+"""
+    result = subprocess.run([node, "-e", harness], check=True, capture_output=True, text=True)
+    requests = json.loads(result.stdout)
+    status_request = next(request for request in requests if request["kind"] == "status")
+    evidence = json.dumps(status_request)
+    assert "3,486 contacts." in evidence
+    assert "Background process proc_linked_2 completed" not in evidence
