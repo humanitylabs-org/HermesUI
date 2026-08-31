@@ -14379,6 +14379,8 @@ function _renderSettledAnchorSceneForMessage(message, segment, rawIdx){
   });
   if(!group) return false;
   group.setAttribute('data-anchor-settled-scene-owner','1');
+  group.toggleAttribute('data-errored-worklog-default-open', erroredWorklogKeepOpen);
+  group.toggleAttribute('data-transient-worklog-default-open', keepSettledWorklogOpen);
   // #5839: for a COLLAPSED settled worklog, defer building the row DOM until the
   // user first expands it. A reasoning-heavy turn can carry 80+ activity rows;
   // eagerly materializing them for every historical turn balloons the DOM and a
@@ -18106,9 +18108,8 @@ function renderMessages(options){
   // worklog card built with no expandable tool steps), every segment is hidden and
   // the turn paints as nothing — leaving the transcript a bare stack of date
   // separators (#3875 brick). Reveal such turns so their content is never silently
-  // swallowed: expand the turn's Worklog group(s) when the turn has no other
-  // visible content. This NEVER touches a turn that has any visible segment, so the
-  // intended collapsed-Worklog UX is preserved whenever a visible answer exists.
+  // swallowed: keep a visible Work details summary when the turn has no other
+  // visible content. This NEVER expands a historical worklog automatically.
   // The live turn is excluded by its `liveAssistantTurn` id (it drives its own
   // state during a stream), so this sweep is safe to run even while busy — a
   // historical blank turn must not re-paint blank during a follow-up stream
@@ -18151,6 +18152,21 @@ function renderMessages(options){
         }
       }
     }
+  }
+  // Recycled session/pagination DOM can carry an old `open` class even when the
+  // current disclosure has no user-open state. Normalize every settled Work
+  // details group after the rebuild: closed by default, open only when the user
+  // opened it or when the narrow error/stream-settle safety exception applies.
+  for(const group of inner.querySelectorAll('[data-tool-worklog-group="1"]:not([data-live-worklog="1"])')){
+    const activityKey=group.getAttribute('data-activity-disclosure-key')||group.getAttribute('data-tool-worklog-key')||'';
+    const savedState=_readActivityDisclosureState(activityKey);
+    const safetyOpen=group.hasAttribute('data-errored-worklog-default-open')
+      ||group.hasAttribute('data-transient-worklog-default-open');
+    const shouldOpen=savedState==='open'||(savedState!=='closed'&&safetyOpen);
+    group.classList.toggle('tool-call-group-collapsed',!shouldOpen);
+    group.classList.toggle('open',shouldOpen);
+    const summary=group.querySelector('.tool-worklog-summary,.tool-call-group-summary');
+    if(summary) summary.setAttribute('aria-expanded',shouldOpen?'true':'false');
   }
   // Re-attach the preserved live turn (#3877). The rebuild above recreated a
   // live turn from S.messages, but the live assistant message's content lags the

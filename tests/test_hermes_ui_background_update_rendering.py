@@ -270,6 +270,7 @@ def test_blank_turn_failsafe_keeps_nonempty_work_details_collapsed():
     failsafe = ui.split("Fail-safe invariant (#3875)", 1)[1].split("// Re-attach the preserved live turn", 1)[0]
     assert "A non-empty Work details summary is itself visible and expandable" in failsafe
     assert "group.classList.remove('tool-call-group-collapsed')" not in failsafe
+    assert "Normalize every settled Work" in failsafe
     assert "group.classList.add('open')" not in failsafe
     assert "removeAttribute('aria-hidden')" in failsafe, (
         "The last-resort source fallback must remain for truly empty groups"
