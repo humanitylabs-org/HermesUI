@@ -668,6 +668,18 @@ function _backgroundUpdateResumesUserRun(messages,triggerIdx,lastUserIdx){
 }
 function _getVisibleMessagesWithIdx(){
   if(!_visWithIdxCache || _visWithIdxCacheLen !== S.messages.length || _visWithIdxCacheSrc !== S.messages){
+    if(typeof window!=='undefined'&&window.HermesMessageProjection){
+      _visWithIdxCache=window.HermesMessageProjection.visible(S.messages||[]).map(entry=>({
+        m:entry.message,
+        rawIdx:entry.rawIdx,
+        backgroundUpdate:!!entry.backgroundUpdate,
+        semanticType:entry.semanticType,
+        turnId:entry.turnId,
+      }));
+      _visWithIdxCacheLen=S.messages.length;
+      _visWithIdxCacheSrc=S.messages;
+      return _visWithIdxCache;
+    }
     const rebuilt=[];
     let rawIdx=0;
     let backgroundUpdateActive=false;
@@ -15519,6 +15531,10 @@ function _assistantToolAnchorIdxForMessage(messages, rawIdx){
   if(_assistantMessageHasVisibleContent(current)) return rawIdx;
   if(_assistantReasoningPayloadText(current)) return rawIdx;
   for(let idx=rawIdx-1;idx>=0;idx--){
+    // User-role rows include hidden process wakeups and recovery controls. They
+    // are causal boundaries even when the transcript projection suppresses
+    // them, so wakeup-owned tools must never attach to the preceding answer.
+    if(list[idx]&&list[idx].role==='user') return rawIdx;
     if(_assistantMessageHasVisibleContent(list[idx])) return idx;
   }
   return rawIdx;
@@ -16553,6 +16569,15 @@ function renderMessages(options){
 
   const preservedCompressionTaskMessages=_latestPreservedCompressionTaskListMessages(S.messages);
   const visWithIdx=_getVisibleMessagesWithIdx();
+  // Keep hidden synthetic controls/tool-call-only assistants available as
+  // ownership boundaries for the worklog pass below. Visible projection alone
+  // cannot tell whether a missing activity anchor belongs to the primary turn
+  // or to a later background wakeup.
+  const semanticEntryByRawIdx=new Map(
+    typeof window!=='undefined'&&window.HermesMessageProjection
+      ? window.HermesMessageProjection.project(S.messages||[]).map(entry=>[entry.rawIdx,entry])
+      : []
+  );
   $('emptyState').style.display=(visWithIdx.length||preservedCompressionTaskMessages.length)?'none':'';
   const virtualWindow=virtualFallback
     ? {virtualized:false,start:0,end:visWithIdx.length,topPad:0,bottomPad:0,total:visWithIdx.length,tailStart:visWithIdx.length}
@@ -16751,8 +16776,8 @@ function renderMessages(options){
     indicator.id='loadOlderIndicator';
     indicator.className='load-older-indicator message-window-load-earlier';
     indicator.textContent=serverOlderCount>0
-      ? `Load earlier messages (${serverOlderCount} older)`
-      : (typeof t==='function'?t('load_older_messages'):'Load earlier messages');
+      ? `Earlier turns (${serverOlderCount} older messages)`
+      : (typeof t==='function'?t('load_older_messages'):'Earlier turns');
     inner.appendChild(indicator);
     _wireMessageWindowLoadEarlierButton();
   }
@@ -16790,6 +16815,7 @@ function renderMessages(options){
   }
   let _prevSepKey=null;
   let currentAssistantTurn=null;
+  let currentBackgroundUpdatesGroup=null;
   // Only build question→assistant mapping for the visible window, not the
   // full visWithIdx.  The jump-to-question button is only rendered for
   // assistant messages that appear in the current render window anyway.
@@ -16888,7 +16914,10 @@ function renderMessages(options){
   const latestRenderedAssistantRawIdx=(()=>{
     for(let i=renderVisWithIdx.length-1;i>=0;i--){
       const entry=renderVisWithIdx[i];
-      if(entry&&entry.m&&entry.m.role==='assistant'&&!entry.m._live) return entry.rawIdx;
+      if(
+        entry&&entry.m&&entry.m.role==='assistant'&&!entry.m._live&&!entry.backgroundUpdate&&
+        (!entry.semanticType||entry.semanticType==='assistant_final')
+      ) return entry.rawIdx;
     }
     return -1;
   })();
@@ -16900,6 +16929,7 @@ function renderMessages(options){
       // turn before rendering the always-visible tail so assistant segments do
       // not merge across the spacer boundary.
       currentAssistantTurn=null;
+      currentBackgroundUpdatesGroup=null;
       inner.appendChild(_messageVirtualSpacer(virtualWindow.bottomPad,'after'));
     }
     const entry=renderVisWithIdx[vi];
@@ -16910,6 +16940,7 @@ function renderMessages(options){
       const _d=new Date(_tsSep*1000);
       const _key=_d.toDateString();
       if(_prevSepKey && _prevSepKey!==_key){
+        currentBackgroundUpdatesGroup=null;
         const sep=document.createElement('div');
         sep.className='msg-date-sep';
         sep.textContent=_fmtDateSep(_d);
@@ -16984,7 +17015,11 @@ function renderMessages(options){
     }
     const isLastAssistant=!isUser&&vi===renderVisWithIdx.length-1;
     const nextRendered=renderVisWithIdx[vi+1];
-    const isTurnFinalAssistant=!isUser&&(!nextRendered||!nextRendered.m||nextRendered.m.role!=='assistant');
+    const isTurnFinalAssistant=!isUser&&(
+      entry.semanticType
+        ? entry.semanticType==='assistant_final'
+        : (!nextRendered||!nextRendered.m||nextRendered.m.role!=='assistant'||!!nextRendered.backgroundUpdate!==isBackgroundUpdate)
+    );
     let filesHtml='';
     if(m.attachments&&m.attachments.length){
       // Static regression tests intentionally look for msg-media-img/msg-file-badge near this branch.
@@ -17054,18 +17089,37 @@ function renderMessages(options){
       currentAssistantTurn=null;
       const updateText=String(displayContent||'').trim();
       if(!updateText&&!filesHtml&&!statusHtml) continue;
-      const row=document.createElement('div');
-      row.className='msg-row background-update-row';
-      row.dataset.msgIdx=rawIdx;
-      row.dataset.sessionMsgIdx=_messageSessionIndexForRawIdx(rawIdx);
-      row.dataset.messageAnchorKey=_messageViewportAnchorKeyForMessage(m);
-      row.dataset.role='background_update';
-      row.dataset.rawText=updateText;
-      row.innerHTML=`<details class="background-update-card"><summary><span class="background-update-toggle">${li('chevron-right',12)}</span><span class="background-update-label">Background update</span>${timeHtml}</summary><div class="background-update-body">${statusHtml}${filesHtml}<div class="msg-body">${bodyHtml}</div><div class="msg-foot"><span class="msg-actions">${copyBtn}</span></div></div></details>`;
-      inner.appendChild(row);
-      assistantSegments.set(rawIdx,row.querySelector('.background-update-body'));
+      if(!currentBackgroundUpdatesGroup){
+        const row=document.createElement('div');
+        row.className='msg-row background-update-row';
+        row.dataset.msgIdx=rawIdx;
+        row.dataset.sessionMsgIdx=_messageSessionIndexForRawIdx(rawIdx);
+        row.dataset.messageAnchorKey=_messageViewportAnchorKeyForMessage(m);
+        row.dataset.role='background_updates';
+        row.innerHTML=`<details class="background-update-card"><summary><span class="background-update-toggle">${li('chevron-right',12)}</span><span class="background-update-label">Later updates</span><span class="background-update-count"></span></summary><div class="background-update-body"></div></details>`;
+        inner.appendChild(row);
+        currentBackgroundUpdatesGroup={
+          row,
+          body:row.querySelector('.background-update-body'),
+          count:row.querySelector('.background-update-count'),
+          size:0,
+        };
+      }
+      const item=document.createElement('section');
+      item.className='background-update-item';
+      item.dataset.msgIdx=rawIdx;
+      item.dataset.sessionMsgIdx=_messageSessionIndexForRawIdx(rawIdx);
+      item.dataset.messageAnchorKey=_messageViewportAnchorKeyForMessage(m);
+      item.dataset.role='background_update';
+      item.dataset.rawText=updateText;
+      item.innerHTML=`<div class="background-update-item-head"><span>Update</span>${timeHtml}</div>${statusHtml}${filesHtml}<div class="msg-body">${bodyHtml}</div><div class="msg-foot"><span class="msg-actions">${copyBtn}</span></div>`;
+      currentBackgroundUpdatesGroup.body.appendChild(item);
+      currentBackgroundUpdatesGroup.size++;
+      currentBackgroundUpdatesGroup.count.textContent=`${currentBackgroundUpdatesGroup.size}`;
+      assistantSegments.set(rawIdx,item);
       continue;
     }
+    currentBackgroundUpdatesGroup=null;
 
     if(isProcessWakeup){
       currentAssistantTurn=null;
@@ -17618,10 +17672,26 @@ function renderMessages(options){
         }
       }
       let anchorRow=assistantSegments.get(aIdx)||null;
+      const targetSemantic=semanticEntryByRawIdx.get(aIdx);
+      if(targetSemantic&&targetSemantic.backgroundUpdate) return anchorRow;
       if(!anchorRow&&assistantIdxs.length){
         if(aIdx<assistantIdxs[0]) return null;
         const fallbackIdx=[...assistantIdxs].reverse().find(idx=>idx<=aIdx);
-        anchorRow=fallbackIdx!==undefined?assistantSegments.get(fallbackIdx):assistantSegments.get(assistantIdxs[assistantIdxs.length-1]);
+        if(fallbackIdx!==undefined){
+          // Suppressed user-role controls still separate ownership. Never let a
+          // wakeup-owned tool fall back to the completed answer above it.
+          for(let idx=fallbackIdx+1;idx<=aIdx;idx++){
+            if(S.messages[idx]&&S.messages[idx].role==='user') return null;
+          }
+          const fallbackSemantic=semanticEntryByRawIdx.get(fallbackIdx);
+          if(targetSemantic&&fallbackSemantic&&(
+            targetSemantic.turnId!==fallbackSemantic.turnId||
+            !!targetSemantic.backgroundUpdate!==!!fallbackSemantic.backgroundUpdate
+          )) return null;
+          anchorRow=assistantSegments.get(fallbackIdx);
+        }else{
+          anchorRow=assistantSegments.get(assistantIdxs[assistantIdxs.length-1]);
+        }
       }
       return anchorRow;
     };

@@ -183,7 +183,7 @@ const LOCALES = {
     session_attention_generic_title: 'Waiting for user action',
     untitled: 'Untitled',
     n_messages: (n) => `${n} messages`,
-    load_older_messages: '↑ Scroll up or click to load older messages',
+    load_older_messages: 'Earlier turns',
     session_jump_start: 'Start',
     session_jump_start_label: 'Jump to beginning of session',
     session_jump_end: 'End',

@@ -239,9 +239,12 @@ def test_process_wakeup_followup_uses_collapsed_background_update_not_normal_ans
     process_branch = ui[process_branch_idx:user_branch_idx]
     assert "background-update-row" in process_branch
     assert "background-update-card" in process_branch
+    assert "dataset.role='background_updates'" in process_branch
     assert "dataset.role='background_update'" in process_branch
     assert "${filesHtml}" in process_branch
-    assert "Background update" in process_branch
+    assert "Later updates" in process_branch
+    assert "background-update-count" in process_branch
+    assert "background-update-item" in process_branch
     assert "const rowDisplayContent=displayContent;" in ui
     assert "const rowDisplayContent=isProcessWakeup?content:displayContent;" not in ui
 

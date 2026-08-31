@@ -3256,6 +3256,10 @@ let _messagesTruncated = false;
 // Older messages are loaded on-demand via _loadOlderMessages().
 const _INITIAL_MSG_LIMIT = 6;
 const _OLDER_MSG_LIMIT = 30;
+// Cold loads start tiny, then widen at most twice only when the suffix contains
+// assistant output but not the human prompt that owns it. This keeps ordinary
+// sessions fast while making a long latest turn causally complete.
+const _LATEST_TURN_AUTO_LIMITS = [120, 480];
 // Frontend-only warm transcript cache. Page memory is mirrored into bounded
 // sessionStorage so a reload in the same tab can reuse recent tails. Content is
 // never placed in CacheStorage/localStorage, disappears when the tab closes,
@@ -3678,6 +3682,51 @@ function _syncToolCallsForLoadedMessages(messages, sessionToolCalls){
   }
 }
 
+function _initialTailNeedsHumanTurn(messages){
+  const list=Array.isArray(messages)?messages:[];
+  if(!list.length) return false;
+  if(typeof window!=='undefined'&&window.HermesMessageProjection){
+    const projected=window.HermesMessageProjection.project(list);
+    const hasHuman=projected.some(entry=>entry.visible&&entry.semanticType==='human_prompt');
+    const hasPrimaryAssistant=projected.some(entry=>entry.visible&&(
+      entry.semanticType==='assistant_interim'||entry.semanticType==='assistant_final'
+    ));
+    return hasPrimaryAssistant&&!hasHuman;
+  }
+  const hasAssistant=list.some(message=>message&&message.role==='assistant'&&(
+    typeof _messageIsRenderable!=='function'||_messageIsRenderable(message)
+  ));
+  const hasHuman=list.some(message=>message&&message.role==='user'&&(
+    typeof _isBackgroundUpdateTriggerMessage!=='function'||!_isBackgroundUpdateTriggerMessage(message)
+  )&&(
+    typeof _messageIsRenderable!=='function'||_messageIsRenderable(message)
+  ));
+  return hasAssistant&&!hasHuman;
+}
+
+async function _expandInitialTailToLatestHumanTurn(sid, data, ownsLoad){
+  let current=data;
+  for(const desiredLimit of _LATEST_TURN_AUTO_LIMITS){
+    const session=current&&current.session;
+    if(!session||!session._messages_truncated||!_initialTailNeedsHumanTurn(session.messages)) break;
+    const serverMax=Math.max(1,Number(session._msg_limit_max)||_MSG_LIMIT_MAX);
+    const limit=Math.min(desiredLimit,serverMax);
+    const currentRenderable=(Array.isArray(session.messages)?session.messages:[]).filter(message=>(
+      typeof _messageIsRenderable==='function'?_messageIsRenderable(message):!!(message&&message.role&&message.role!=='tool')
+    )).length;
+    if(limit<=currentRenderable) continue;
+    const expanded=await api(
+      `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${limit}&expand_renderable=1`,
+      {timeoutMs:120000}
+    );
+    if(typeof ownsLoad==='function'&&!ownsLoad()) return current;
+    if(!expanded||!expanded.session||String(expanded.session.session_id||'')!==String(sid)) return current;
+    current=expanded;
+    if(limit>=serverMax) break;
+  }
+  return current;
+}
+
 async function _ensureMessagesLoaded(sid, opts) {
   // `opts` is an explicit named parameter (vs loadSession's arguments[1]
   // pattern) because _ensureMessagesLoaded is a module-private helper: it is
@@ -3729,9 +3778,14 @@ async function _ensureMessagesLoaded(sid, opts) {
     }
     if(!data){
       data = await api(
-      `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0${reloadLimitParam}${expandParam}`,
-      {timeoutMs:120000}
-    );
+        `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0${reloadLimitParam}${expandParam}`,
+        {timeoutMs:120000}
+      );
+    }
+    if(data&&data.session){
+      if(typeof _expandInitialTailToLatestHumanTurn==='function'){
+        data=await _expandInitialTailToLatestHumanTurn(sid,data,_ownsLoad);
+      }
       if(data&&data.session&&!opts.force&&typeof _storeSessionMessageCache==='function'){
         _storeSessionMessageCache(sid,data.session,_messageCacheEpoch);
       }

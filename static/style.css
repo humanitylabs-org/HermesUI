@@ -2992,10 +2992,14 @@
   .background-update-toggle{display:inline-flex;transition:transform .15s ease;}
   .background-update-card[open]>summary .background-update-toggle{transform:rotate(90deg);}
   .background-update-label{color:var(--muted);}
+  .background-update-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--hover-bg);color:var(--muted);font-size:10px;font-variant-numeric:tabular-nums;}
   .background-update-card>summary .msg-time{margin-left:auto;}
   .background-update-body{border-top:1px solid var(--border);padding:10px;color:var(--text);}
   .background-update-body .msg-body{padding:0;max-width:none;font-size:13px;line-height:1.5;}
   .background-update-body .msg-foot{padding:0;margin-top:6px;}
+  .background-update-item+.background-update-item{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+  .background-update-item-head{display:flex;align-items:center;gap:8px;margin-bottom:5px;color:var(--muted);font-size:10px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;}
+  .background-update-item-head .msg-time{margin-left:auto;text-transform:none;letter-spacing:0;}
   @media(max-width:700px){.background-update-card{margin-left:0;}}
   /* #6345: collapsed summary-card variant for parseable wakeups. */
   .process-wakeup-notice.process-wakeup-fail{border-left-color:var(--error,#f85149);}

@@ -236,7 +236,17 @@
       message.role==='user'?cleanUserText(message):rawText(message)
     ].join('\u001f');
   };
+  const isIntermediaryEntry=entry=>!!(entry&&(entry.intermediary||entry.semanticType==='assistant_interim'));
   const appendMessageEntry=(cached,message,index)=>{
+    const projector=typeof window!=='undefined'&&window.HermesMessageProjection;
+    if(projector&&cached.semanticState){
+      const entry=projector.append(cached.semanticState,cached.source,index);
+      if(!entry||!entry.visible||entry.backgroundUpdate) return;
+      entry.index=index;
+      cached.entries.push(entry);
+      if(!cached.firstUser&&message.role==='user'&&cleanUserText(message)) cached.firstUser=entry;
+      return;
+    }
     if(message&&message.role==='user'){
       if(isBackgroundUpdateTrigger(message)){
         const resumesUserRun=backgroundTriggerResumesUserRun(cached,message,index);
@@ -288,7 +298,8 @@
     if(!cached.firstUser&&message.role==='user'&&cleanUserText(message)) cached.firstUser=entry;
   };
   const rebuildProjection=(messages)=>{
-    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:'',backgroundUpdateActive:false,backgroundResumeBoundary:null,userDirectedRunOpen:false,lastUserDirectedIdx:-1};
+    const projector=typeof window!=='undefined'&&window.HermesMessageProjection;
+    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:'',backgroundUpdateActive:false,backgroundResumeBoundary:null,userDirectedRunOpen:false,lastUserDirectedIdx:-1,semanticState:projector?projector.createState():null};
     for(let index=0;index<messages.length;index++) appendMessageEntry(cached,messages[index],index);
     cached.length=messages.length;
     cached.firstSignature=messages.length?messageSignature(messages[0]):'';
@@ -355,10 +366,10 @@
     for(let index=entries.length-1;index>=0;index--) if(predicate(entries[index])) return entries[index];
     return undefined;
   };
-  const latestUserEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='user'&&!entry.intermediary&&cleanUserText(entry.message));
+  const latestUserEntry=entries=>latestMatchingEntry(entries,entry=>entry.message.role==='user'&&!isIntermediaryEntry(entry)&&cleanUserText(entry.message));
   const latestAssistantEntry=entries=>latestMatchingEntry(entries,entry=>(
     entry.message.role==='assistant'
-    && !entry.intermediary
+    && !isIntermediaryEntry(entry)
     && rawText(entry.message)
     && !entry.message._live
     && !assistantContinuesUserDirectedTurn(entry.message)
@@ -378,7 +389,7 @@
         if(entry.index>=latestAssistant.index) continue;
         if(
           entry.message.role==='assistant'
-          && !entry.intermediary
+          && !isIntermediaryEntry(entry)
           && rawText(entry.message)
           && !entry.message._live
           && !assistantContinuesUserDirectedTurn(entry.message)
@@ -453,8 +464,8 @@
     button.hidden=!visible;
     button.disabled=visible&&loading;
     button.textContent=loading
-      ? 'Loading earlier messages…'
-      : (hasOlder?`Load earlier messages (${before} older)`:'Load earlier messages');
+      ? 'Loading earlier turns…'
+      : (hasOlder?`Earlier turns (${before} older messages)`:'Earlier turns');
   }
 
   function renderDashboardInstruction(entries,resultAnchor=''){

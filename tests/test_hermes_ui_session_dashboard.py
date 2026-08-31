@@ -72,7 +72,7 @@ def test_high_signal_keeps_one_unboxed_goal_and_exactly_three_cards():
     assert 'id="sessionDashboardOriginalRequest"' in block
     assert 'id="sessionDashboardInstruction"' in block
     assert 'id="sessionDashboardLoadEarlier" hidden' in block
-    assert '>Load earlier messages</button>' in block
+    assert '>Earlier turns</button>' in block
     assert 'id="sessionDashboardStatus"' in block
     assert 'id="sessionDashboardCompleted"' in block
     assert 'id="sessionDashboardSummaryRefresh"' in block
@@ -162,7 +162,7 @@ def test_high_signal_summary_has_a_normal_auxiliary_provider_slot():
     assert '"description": "on-demand Goal and Status summaries"' in API_CONFIG
 
 
-def test_refresh_calls_return_model_sentences_and_background_rows_feed_no_box():
+def test_refresh_calls_keep_background_rows_out_of_result_but_available_to_status():
     node = shutil.which("node")
     assert node is not None
     harness = f"""
@@ -189,6 +189,8 @@ global.S={{session:{{session_id:'session-1'}},messages:[
   {{role:'user',content:'[ASYNC DELEGATION BATCH COMPLETE — review-1] Review finished.',_source:'process_wakeup',id:'b1'}},
   {{role:'assistant',content:'The dashboard is live and verified.',id:'a2',finish_reason:'stop'}},
   {{role:'user',content:'[IMPORTANT: Background process proc_1 completed (exit_code=0).]',_source:'process_wakeup',id:'b2'}},
+  {{role:'assistant',content:'',id:'bg-tool',tool_calls:[{{function:{{name:'terminal'}}}}],finish_reason:'tool_calls'}},
+  {{role:'tool',content:'BACKGROUND_QA_COMPLETE',id:'bg-tool-result'}},
   {{role:'assistant',content:'Independent review completed with no blockers.',id:'b3',finish_reason:'stop'}},
 ],busy:false,activeStreamId:null}};
 global.msgContent=m=>String(m&&m.content||'');
@@ -211,6 +213,7 @@ global.fetch=async(_url,opts)=>{{
     ok:true,kind:body.kind,summary:body.kind==='goal'?'The session goal is to ship the live dashboard.':'The dashboard has been shipped and the agent is waiting.',provider:'xai-oauth',model:'grok-4.20'
   }})}};
 }};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'message_projection.js'))},'utf8'));
 vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
 (async()=>{{
   await new Promise(resolve=>setTimeout(resolve,25));
@@ -239,7 +242,8 @@ vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-d
     assert len(payload["requests"]) == 2
     assert {request["kind"] for request in payload["requests"]} == {"goal", "status"}
     combined = json.dumps(payload["requests"])
-    assert "Independent review" not in combined
+    status_request = next(request for request in payload["requests"] if request["kind"] == "status")
+    assert "Independent review" in json.dumps(status_request)
     assert "ASYNC DELEGATION" not in combined
     assert "Background process" not in combined
     assert "SECRET_PIXELS" not in combined
@@ -256,6 +260,7 @@ let reads=0;global.window=global;global.document={{readyState:'complete',documen
 global.location={{href:'https://device.example/hermesUI/'}};global.history={{state:null,replaceState(){{}}}};global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
 global.S={{session:{{session_id:'long'}},messages:Array.from({{length:10000}},(_,i)=>({{role:i%2?'assistant':'user',content:`message ${{i}}`,id:`m-${{i}}`}})),busy:false,activeStreamId:null}};
 global.msgContent=m=>{{reads++;return String(m&&m.content||'');}};global.renderMd=s=>String(s||'');global._stripWorkspaceDisplayPrefix=s=>String(s||'');global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');global._messageIsRenderable=()=>true;global._isContextCompactionMessage=()=>false;global._isPreservedCompressionTaskListMessage=()=>false;global._isRecoveryControlMessage=()=>false;global.INFLIGHT={{}};global.requestAnimationFrame=cb=>{{cb();return 1;}};global.queueMicrotask=cb=>cb();global._messagesTruncated=false;global._oldestIdx=0;
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'message_projection.js'))},'utf8'));
 vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
 const initial=reads;for(let i=0;i<20;i++)syncSessionDashboard();const repeated=reads-initial;document.documentElement.dataset.sessionView='classic';const beforeClassic=reads;for(let i=0;i<20;i++)syncSessionDashboard();process.stdout.write(JSON.stringify({{initial,repeated,classic:reads-beforeClassic}}));
 """
@@ -276,6 +281,8 @@ global.window=global;global.document={{readyState:'complete',documentElement:{{d
 global.location={{href:'https://device.example/hermesUI/session/session-1'}};global.history={{state:null,replaceState(){{}}}};global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
 global.S={{session:{{session_id:'session-1'}},messages:[
   {{role:'user',content:'[Workspace::v1: /tmp]\\nAnalyze the CRM export.',id:'u1'}},
+  {{role:'assistant',content:'',id:'start-work',tool_calls:[{{function:{{name:'terminal'}}}}],finish_reason:'tool_calls'}},
+  {{role:'tool',content:'Background process proc_1 started.',id:'start-result'}},
   {{role:'assistant',content:'The export is running; I will verify it when it finishes.',id:'progress',finish_reason:'stop'}},
   {{role:'user',content:'[IMPORTANT: Background process proc_1 completed (exit_code=0).]',_source:'process_wakeup',id:'w1'}},
   {{role:'assistant',content:'',id:'work',tool_calls:[{{function:{{name:'terminal'}}}}],finish_reason:'tool_calls'}},
@@ -283,6 +290,7 @@ global.S={{session:{{session_id:'session-1'}},messages:[
   {{role:'assistant',content:'The CRM export contains 3,486 verified contacts.',id:'final',finish_reason:'stop'}},
 ],busy:false,activeStreamId:null}};
 global.msgContent=m=>String(m&&m.content||'');global.renderMd=s=>String(s||'');global._stripWorkspaceDisplayPrefix=s=>String(s||'').replace(/^\\s*\\[Workspace[^\\]]*\\]\\s*/i,'').trim();global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');global._messageIsRenderable=m=>!!(m&&m.role!=='tool'&&(m.content||(m.tool_calls||[]).length));global._isContextCompactionMessage=()=>false;global._isPreservedCompressionTaskListMessage=()=>false;global._isRecoveryControlMessage=()=>false;global.INFLIGHT={{}};global.requestAnimationFrame=cb=>{{cb();return 1;}};global.queueMicrotask=cb=>cb();global._messagesTruncated=false;global._oldestIdx=0;global.fetch=async()=>{{throw new Error('manual summaries must not run');}};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'message_projection.js'))},'utf8'));
 vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
 setTimeout(()=>{{syncSessionDashboard();process.stdout.write(JSON.stringify({{prompt:element('sessionDashboardInstruction').innerHTML,result:element('sessionDashboardCompleted').innerHTML}}));}},20);
 """
@@ -309,6 +317,7 @@ const historyRequests=[];global.api=async url=>{{
   throw new Error(`Unexpected URL: ${{url}}`);
 }};
 let summaryRequests=0;global.fetch=async()=>{{summaryRequests++;throw new Error('Summary refresh must remain manual');}};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'message_projection.js'))},'utf8'));
 vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
 setTimeout(()=>{{syncSessionDashboard();process.stdout.write(JSON.stringify({{prompt:element('sessionDashboardInstruction').innerHTML,result:element('sessionDashboardCompleted').innerHTML,goal:element('sessionDashboardOriginalRequest').innerHTML,status:element('sessionDashboardStatus').innerHTML,historyRequests,summaryRequests}}));}},40);
 """
@@ -337,6 +346,7 @@ global.msgContent=m=>String(m&&m.content||'');global.renderMd=s=>String(s||'');g
 const historyRequests=[];global.api=async url=>{{historyRequests.push(url);const match=String(url).match(/msg_before=(\\d+)/);const before=match?Number(match[1]):0;return {{session:{{messages:[{{role:'assistant',content:'Still no user prompt.',id:'a-older-'+before}}],_messages_truncated:true,_messages_offset:Math.max(1,before-30)}}}};}};
 let olderLoads=0;global._loadOlderMessages=async()=>{{olderLoads++;global._messagesTruncated=false;global._oldestIdx=0;}};
 let summaryRequests=0;global.fetch=async()=>{{summaryRequests++;throw new Error('Summary refresh must remain manual');}};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'message_projection.js'))},'utf8'));
 vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
 setTimeout(()=>{{
   syncSessionDashboard();
@@ -351,7 +361,7 @@ setTimeout(()=>{{
     assert payload["before"] == {
         "hidden": False,
         "disabled": False,
-        "label": "Load earlier messages (151 older)",
+        "label": "Earlier turns (151 older messages)",
         "prompt": "No prompt is available yet.",
     }
     assert payload["afterHidden"] is True
@@ -380,6 +390,7 @@ global.S={{session:{{session_id:'session-1'}},messages:[
   {{role:'assistant',content:'The client list is reconciled.',id:'final',finish_reason:'stop'}},
 ],busy:false,activeStreamId:null}};
 global.msgContent=m=>String(m&&m.content||'');global.renderMd=s=>String(s||'');global._stripWorkspaceDisplayPrefix=s=>String(s||'').replace(/^\\s*\\[Workspace[^\\]]*\\]\\s*/i,'').trim();global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');global._messageIsRenderable=m=>!!(m&&m.role!=='tool'&&m.content);global._isContextCompactionMessage=()=>false;global._isPreservedCompressionTaskListMessage=()=>false;global._isRecoveryControlMessage=m=>String(m&&m.content||'')===continuation;global.INFLIGHT={{}};global.requestAnimationFrame=cb=>{{cb();return 1;}};global.queueMicrotask=cb=>cb();global._messagesTruncated=false;global._oldestIdx=0;global.fetch=async()=>{{throw new Error('manual summaries must not run');}};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'message_projection.js'))},'utf8'));
 vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
 setTimeout(()=>{{syncSessionDashboard();process.stdout.write(JSON.stringify({{prompt:element('sessionDashboardInstruction').innerHTML,result:element('sessionDashboardCompleted').innerHTML}}));}},20);
 """
@@ -446,6 +457,7 @@ global.S={{session:{{session_id:'session-1'}},messages:[
   {{role:'assistant',content:'Verification passed and the change is live.',finish_reason:'stop'}},
 ],busy:false,activeStreamId:null}};
 global.msgContent=m=>String(m&&m.content||'');global.renderMd=s=>String(s||'');global._stripWorkspaceDisplayPrefix=s=>String(s||'').trim();global._stripAttachedFilesMarkerForDisplay=s=>String(s||'');global._messageIsRenderable=m=>!!(m&&m.role!=='tool'&&(m.content||(Array.isArray(m.tool_calls)&&m.tool_calls.length)));global._isContextCompactionMessage=()=>false;global._isPreservedCompressionTaskListMessage=()=>false;global._isRecoveryControlMessage=()=>false;global.INFLIGHT={{}};global.requestAnimationFrame=cb=>{{cb();return 1;}};global.queueMicrotask=cb=>cb();global._messagesTruncated=false;global._oldestIdx=0;global.fetch=async()=>{{throw new Error('manual summaries must not run');}};
+vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'message_projection.js'))},'utf8'));
 vm.runInThisContext(fs.readFileSync({json.dumps(str(ROOT / 'static' / 'session-dashboard.js'))},'utf8'));
 setTimeout(()=>{{syncSessionDashboard();process.stdout.write(JSON.stringify({{prompt:element('sessionDashboardInstruction').innerHTML,result:element('sessionDashboardCompleted').innerHTML}}));}},20);
 """
