@@ -14525,6 +14525,17 @@ function ensureActivityGroup(inner, opts){
   if(opts.turnDuration!==undefined&&opts.turnDuration!==null) group.setAttribute('data-turn-duration',String(opts.turnDuration));
   if(opts.turnStartedAt!==undefined&&opts.turnStartedAt!==null) group.setAttribute('data-turn-started-at',String(opts.turnStartedAt));
   const summary=group.querySelector('.tool-worklog-summary,.tool-call-group-summary');
+  if(!live){
+    // Recycled DOM from pagination/session switches can retain an old open class.
+    // Re-apply the settled contract on every render: collapsed by default,
+    // except for an explicit v2 user-open state or the deliberate errored-turn
+    // visibility exception carried by opts.collapsed=false.
+    const settledState=_readActivityDisclosureState(activityKey);
+    const settledOpen=settledState==='open'||(settledState!=='closed'&&opts.collapsed===false);
+    group.classList.toggle('tool-call-group-collapsed',!settledOpen);
+    group.classList.toggle('open',settledOpen);
+    if(summary) summary.setAttribute('aria-expanded',String(settledOpen));
+  }
   if(summary){
     summary.removeAttribute('data-live-summary-static');
     summary.removeAttribute('aria-disabled');

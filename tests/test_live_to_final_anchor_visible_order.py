@@ -1660,6 +1660,10 @@ def test_live_processed_anchor_is_clickable_while_streaming():
     assert "summary.removeAttribute('data-live-summary-static')" in ensure
     assert "summary.removeAttribute('aria-disabled')" in ensure
     assert "summary.disabled=false" in ensure
+    assert "if(!live)" in ensure
+    assert "const settledState=_readActivityDisclosureState(activityKey);" in ensure
+    assert "settledState==='open'||(settledState!=='closed'&&opts.collapsed===false)" in ensure
+    assert "group.classList.toggle('tool-call-group-collapsed',!settledOpen)" in ensure
     assert "group.removeAttribute('data-live-tool-call-group')" in finalize
     assert "group.removeAttribute('data-live-tool-worklog-group')" in finalize
     assert "_liveActivityUserExpanded===true" in finalize

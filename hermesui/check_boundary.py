@@ -64,7 +64,7 @@ PINNED_NONSTATIC_SHA256 = {
     # The inherited visible-order regression now pins the downstream default-
     # collapsed Work details contract. The restart-guard regression belongs to
     # the already-carried Wizard App lifecycle hotfix on this release line.
-    "tests/test_live_to_final_anchor_visible_order.py": "21f27053e53994ee22197a027232c24f7f278d067bce25a4b730d40f5b8dbdf4",
+    "tests/test_live_to_final_anchor_visible_order.py": "1c9a24bb86baab2f176c3372bc74f5e69075e67268a2d0088cc3bc54dc9944d0",
     "tests/test_wizard_app_systemd_restart_guard.py": "9813977b86cd4d8c93d16c6b6deba6c1803686a3bdacd44ee3dca16d24d707d1",
     # Inherited workflows change only downstream branch reachability and the
     # exact test launchers needed for Hermes UI's replacement frontend contracts.
