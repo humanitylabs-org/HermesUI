@@ -14,7 +14,7 @@ BUILD = ROOT / "static" / "wizard-canvas"
 def test_wizard_icon_opens_one_embedded_desktop_canvas():
     assert 'id="tailnetWizardHome" aria-label="Wizard Canvas"' in INDEX
     assert 'id="wizardCanvasFrame" title="Wizard Canvas"' in INDEX
-    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v9' in INDEX
+    assert 'static/wizard-canvas/index.html?overlay=wizard-canvas-v10' in INDEX
     assert "showWizardHome=isWizardHomeDesktop()" in RAIL
     assert "wizardHome.hidden=!showWizardHome" in RAIL
     assert "if(wizardHome)wizardHome.hidden=true" in RAIL
@@ -23,7 +23,7 @@ def test_wizard_icon_opens_one_embedded_desktop_canvas():
 
 def test_canvas_is_self_hosted_and_cloud_actions_are_disabled():
     assert (BUILD / "index.html").is_file()
-    assert (BUILD / "assets" / "app-v9.min.js").is_file()
+    assert (BUILD / "assets" / "app-v10.min.js").is_file()
     assert (BUILD / "EXCALIDRAW_LICENSE.txt").is_file()
     assert (BUILD / "fonts").is_dir()
     assert "@excalidraw/excalidraw" in SOURCE
@@ -67,13 +67,15 @@ def test_canvas_uses_only_the_server_autosave_endpoint():
     assert "baseRevision" in SOURCE
     assert "method: 'PUT'" in SOURCE
     assert "Unsaved changes protected" in SOURCE
-    assert "wizard-canvas-v9" in SW
+    assert "wizard-canvas-v10" in SW
 
 
 def test_canvas_keeps_an_unsaved_local_draft_until_the_matching_server_save():
-    assert "wizard-canvas.tab-id.v1" in SOURCE
+    assert "wizard-canvas.tab-id.v1" in DRAFT_SOURCE
     assert "wizard-canvas.unsaved.v1." in DRAFT_SOURCE
-    assert "draftKeyForTab" in SOURCE
+    assert "claimDraftSlot" in SOURCE
+    assert "BroadcastChannelClass: window.BroadcastChannel" in SOURCE
+    assert "INHERITED_DRAFT_KEY" in SOURCE
     assert "storeDraft(browserStorage(), DRAFT_KEY" in SOURCE
     assert "clearDraftIfSaved(storage, DRAFT_KEY, serialized)" in SOURCE
     assert "selectInitialCanvas" in SOURCE

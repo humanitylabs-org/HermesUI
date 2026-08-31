@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  claimDraftSlot,
   clearDraftIfSaved,
   draftKeyForTab,
   loadDraft,
@@ -34,6 +35,42 @@ class FailingStorage extends MemoryStorage {
   setItem() {
     throw new Error('quota exceeded');
   }
+}
+
+class FakeBroadcastChannel {
+  static channels = new Map();
+
+  constructor(name) {
+    this.name = name;
+    this.listener = null;
+    const peers = FakeBroadcastChannel.channels.get(name) || new Set();
+    peers.add(this);
+    FakeBroadcastChannel.channels.set(name, peers);
+  }
+
+  addEventListener(type, listener) {
+    if (type === 'message') this.listener = listener;
+  }
+
+  postMessage(data) {
+    for (const peer of FakeBroadcastChannel.channels.get(this.name) || []) {
+      if (peer === this || !peer.listener) continue;
+      queueMicrotask(() => peer.listener({ data }));
+    }
+  }
+
+  close() {
+    FakeBroadcastChannel.channels.get(this.name)?.delete(this);
+  }
+
+  static reset() {
+    FakeBroadcastChannel.channels.clear();
+  }
+}
+
+function ids(...values) {
+  let index = 0;
+  return () => values[index++];
 }
 
 const KEY = 'wizard-canvas.unsaved.v1';
@@ -85,6 +122,49 @@ test('different tabs keep independent draft slots and clear only their own confi
   assert.equal(clearDraftIfSaved(storage, tabA, editedScene), true);
   assert.equal(loadDraft(storage, tabA), null);
   assert.equal(loadDraft(storage, tabB).serialized, serverScene);
+});
+
+test('an opener-cloned tab rotates the inherited draft slot while the original stays active', async t => {
+  FakeBroadcastChannel.reset();
+  t.after(() => FakeBroadcastChannel.reset());
+  const parentSession = new MemoryStorage();
+  const parent = await claimDraftSlot({
+    sessionStorage: parentSession,
+    BroadcastChannelClass: FakeBroadcastChannel,
+    createId: ids('parent-tab-12345678', 'parent-nonce-12345678'),
+    waitMs: 1,
+  });
+  const childSession = new MemoryStorage();
+  childSession.setItem('wizard-canvas.tab-id.v1', parent.tabId);
+  const child = await claimDraftSlot({
+    sessionStorage: childSession,
+    BroadcastChannelClass: FakeBroadcastChannel,
+    createId: ids('child-nonce-12345678', 'child-tab-12345678'),
+    waitMs: 1,
+  });
+
+  assert.notEqual(child.tabId, parent.tabId);
+  assert.notEqual(child.draftKey, parent.draftKey);
+  assert.equal(child.inheritedDraftKey, parent.draftKey);
+  assert.equal(parentSession.getItem('wizard-canvas.tab-id.v1'), parent.tabId);
+  assert.equal(childSession.getItem('wizard-canvas.tab-id.v1'), child.tabId);
+  parent.channel.close();
+  child.channel.close();
+});
+
+test('without BroadcastChannel an inherited slot is rotated but remains available for recovery', async () => {
+  const session = new MemoryStorage();
+  session.setItem('wizard-canvas.tab-id.v1', 'inherited-tab-12345678');
+  const claim = await claimDraftSlot({
+    sessionStorage: session,
+    BroadcastChannelClass: null,
+    createId: ids('nonce-tab-12345678', 'fresh-tab-12345678'),
+    waitMs: 0,
+  });
+
+  assert.equal(claim.tabId, 'fresh-tab-12345678');
+  assert.equal(claim.inheritedDraftKey, draftKeyForTab('inherited-tab-12345678'));
+  assert.equal(session.getItem('wizard-canvas.tab-id.v1'), 'fresh-tab-12345678');
 });
 
 test('a newer server revision is not overwritten while the local draft remains recoverable', () => {

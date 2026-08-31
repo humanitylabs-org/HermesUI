@@ -8,8 +8,8 @@ import {
 import '@excalidraw/excalidraw/index.css';
 import './style.css';
 import {
+  claimDraftSlot,
   clearDraftIfSaved,
-  draftKeyForTab,
   loadDraft,
   recoverySnapshotIsCurrent,
   resolveDraftBaseRevision,
@@ -19,7 +19,6 @@ import {
 } from './draft-store.mjs';
 
 const ENDPOINT = '/apps/api/wizard-canvas';
-const TAB_ID_KEY = 'wizard-canvas.tab-id.v1';
 const SAVE_DELAY_MS = 800;
 const SAVED_VISIBLE_MS = 2600;
 const CLIENT_MAX_BYTES = 8 * 1024 * 1024;
@@ -64,21 +63,9 @@ function createTabId() {
   return `tab-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function canvasDraftKey() {
-  let tabId = null;
-  try {
-    tabId = window.sessionStorage.getItem(TAB_ID_KEY);
-    if (!draftKeyForTab(tabId)) {
-      tabId = createTabId();
-      window.sessionStorage.setItem(TAB_ID_KEY, tabId);
-    }
-  } catch (_) {
-    tabId = createTabId();
-  }
-  return draftKeyForTab(tabId);
-}
-
-const DRAFT_KEY = canvasDraftKey();
+let DRAFT_KEY = null;
+let INHERITED_DRAFT_KEY = null;
+let draftClaimChannel = null;
 
 function sceneData(scene, theme) {
   if (!scene || typeof scene !== 'object' || Array.isArray(scene)) return null;
@@ -208,15 +195,26 @@ function WizardCanvas() {
       revisionRef.current = Number.isInteger(payload.revision) ? payload.revision : 0;
       const serverSerialized = payload.scene ? JSON.stringify(payload.scene) : null;
       const storage = browserStorage();
-      const draft = loadDraft(storage, DRAFT_KEY);
+      let draft = loadDraft(storage, DRAFT_KEY);
+      const draftFromCurrentSlot = Boolean(draft);
+      if (!draft && INHERITED_DRAFT_KEY) {
+        draft = loadDraft(storage, INHERITED_DRAFT_KEY);
+        if (draft) {
+          storeDraft(storage, DRAFT_KEY, {
+            baseRevision: draft.baseRevision,
+            serialized: draft.serialized,
+          });
+        }
+      }
       draftStoredRef.current = Boolean(draft);
       const selected = selectInitialCanvas({
         serverRevision: revisionRef.current,
         serverSerialized,
         draft,
       });
-      if (draft && selected.source === 'server' && !selected.hasConflict) {
+      if (draftFromCurrentSlot && selected.source === 'server' && !selected.hasConflict) {
         clearDraftIfSaved(storage, DRAFT_KEY, draft.serialized);
+        draftStoredRef.current = false;
       }
       draftNeedsSaveRef.current = selected.needsSave;
       protectedDraftRef.current = selected.hasConflict;
@@ -586,4 +584,16 @@ function WizardCanvas() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<WizardCanvas />);
+async function startWizardCanvas() {
+  const claim = await claimDraftSlot({
+    sessionStorage: window.sessionStorage,
+    BroadcastChannelClass: window.BroadcastChannel,
+    createId: createTabId,
+  });
+  DRAFT_KEY = claim.draftKey;
+  INHERITED_DRAFT_KEY = claim.inheritedDraftKey;
+  draftClaimChannel = claim.channel;
+  createRoot(document.getElementById('root')).render(<WizardCanvas />);
+}
+
+void startWizardCanvas();

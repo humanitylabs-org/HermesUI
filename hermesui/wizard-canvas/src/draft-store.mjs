@@ -7,6 +7,80 @@ export function draftKeyForTab(tabId) {
   return `${DRAFT_KEY_PREFIX}${tabId}`;
 }
 
+export async function claimDraftSlot({
+  sessionStorage,
+  BroadcastChannelClass,
+  createId,
+  channelName = 'wizard-canvas.tab-claims.v1',
+  waitMs = 75,
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
+}) {
+  let inheritedTabId = null;
+  try {
+    inheritedTabId = sessionStorage?.getItem('wizard-canvas.tab-id.v1');
+  } catch (_) {}
+  if (!draftKeyForTab(inheritedTabId)) inheritedTabId = null;
+
+  let tabId = inheritedTabId || createId();
+  let channel = null;
+  let collision = false;
+  let resolving = true;
+  let activeTabId = null;
+  const nonce = createId();
+
+  try {
+    if (typeof BroadcastChannelClass === 'function') {
+      channel = new BroadcastChannelClass(channelName);
+      channel.addEventListener('message', event => {
+        const message = event?.data;
+        if (!message) return;
+        const claimedTabId = activeTabId || tabId;
+        if (
+          message.type === 'probe'
+          && message.nonce !== nonce
+          && message.tabId === claimedTabId
+        ) {
+          if (resolving) collision = true;
+          channel.postMessage({
+            type: 'occupied',
+            tabId: message.tabId,
+            nonce: message.nonce,
+            responder: nonce,
+          });
+        }
+        if (
+          resolving
+          && message.type === 'occupied'
+          && message.tabId === tabId
+          && message.nonce === nonce
+        ) collision = true;
+      });
+      channel.postMessage({ type: 'probe', tabId, nonce });
+      await sleep(waitMs);
+    } else if (inheritedTabId) {
+      // Without a coordination channel, rotate rather than risk two tabs
+      // sharing one draft slot. The inherited slot remains a recovery source.
+      collision = true;
+    }
+  } catch (_) {
+    collision = Boolean(inheritedTabId);
+    try { channel?.close(); } catch (_) {}
+    channel = null;
+  }
+
+  if (collision) tabId = createId();
+  activeTabId = tabId;
+  resolving = false;
+  try { sessionStorage?.setItem('wizard-canvas.tab-id.v1', tabId); } catch (_) {}
+
+  return {
+    tabId,
+    draftKey: draftKeyForTab(tabId),
+    inheritedDraftKey: collision ? draftKeyForTab(inheritedTabId) : null,
+    channel,
+  };
+}
+
 function encodedBytes(value) {
   return new TextEncoder().encode(value).byteLength;
 }
