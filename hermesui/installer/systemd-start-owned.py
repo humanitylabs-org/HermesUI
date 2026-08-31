@@ -71,6 +71,13 @@ def build_command(
         "--property=Restart=on-failure",
         "--property=RestartSec=5s",
         "--property=TimeoutStopSec=30s",
+        # A Wizard App terminal runs inside this service's cgroup. Reject direct
+        # `systemctl stop/restart hermesui.service` calls so one thread cannot
+        # terminate every live stream. The installer/updater remains able to
+        # perform attended maintenance by pidfd-signalling the exact verified
+        # MainPID through stop-owned-process.py; --collect then releases this
+        # transient unit so the external launcher can recreate it safely.
+        "--property=RefuseManualStop=yes",
         "--setenv=HERMESUI_MANAGED=1",
         f"--setenv=HERMESUI_RUNTIME_COMMIT={runtime_commit}",
         f"--setenv=HERMESUI_RUNTIME_TREE={runtime_tree}",
