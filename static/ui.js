@@ -18130,26 +18130,14 @@ function renderMessages(options){
     for(const turn of inner.querySelectorAll('.assistant-turn')){
       if(turn.id==='liveAssistantTurn') continue; // live turn drives its own state
       if(_turnHasVisibleContent(turn)) continue;
-      // No visible content — surface the folded Worklog so the turn isn't blank.
       const groups=turn.querySelectorAll('.tool-worklog-group,.tool-call-group');
       let revealed=false;
+      // A non-empty Work details summary is itself visible and expandable. Keep
+      // tool-call-group-collapsed intact by default; the user can open it
+      // without the blank-turn safety net forcing a large historical worklog
+      // into the transcript.
       for(const group of groups){
         if(!(group.textContent||'').trim()) continue; // empty group can't help
-        if(group.classList.contains('tool-call-group-collapsed')){
-          group.classList.remove('tool-call-group-collapsed');
-          group.classList.add('open');
-          const summary=group.querySelector('.tool-call-group-summary,.activity-summary');
-          if(summary) summary.setAttribute('aria-expanded','true');
-          // #5839: this turn is otherwise blank, so materialize any deferred
-          // settled rows now that we're force-expanding the worklog to fill it.
-          if(typeof _materializeDeferredWorklogRows==='function') _materializeDeferredWorklogRows(group);
-        }
-        // `revealed` means "this turn has a non-empty Worklog group that the user
-        // can see" — NOT "we just expanded something". An already-open non-empty
-        // group is itself visible (it slips past _turnHasVisibleContent only
-        // because that check inspects .assistant-segment nodes, not group bodies),
-        // so the turn isn't truly blank and the last-resort un-hide below is
-        // unnecessary. Keep this assignment OUTSIDE the if(collapsed) branch.
         revealed=true;
       }
       // Last resort: no usable worklog group either, but hidden worklog-source

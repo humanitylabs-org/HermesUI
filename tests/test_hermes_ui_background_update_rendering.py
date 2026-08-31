@@ -265,6 +265,17 @@ def test_process_wakeup_followup_uses_collapsed_background_update_not_normal_ans
     assert ".background-update-card > .transcript-disclosure-summary" in STYLE_CSS
 
 
+def test_blank_turn_failsafe_keeps_nonempty_work_details_collapsed():
+    ui = UI_JS_PATH.read_text(encoding="utf-8")
+    failsafe = ui.split("Fail-safe invariant (#3875)", 1)[1].split("// Re-attach the preserved live turn", 1)[0]
+    assert "A non-empty Work details summary is itself visible and expandable" in failsafe
+    assert "group.classList.remove('tool-call-group-collapsed')" not in failsafe
+    assert "group.classList.add('open')" not in failsafe
+    assert "removeAttribute('aria-hidden')" in failsafe, (
+        "The last-resort source fallback must remain for truly empty groups"
+    )
+
+
 def test_process_wakeup_label_key_exists_in_all_locales():
     locale_pattern = re.compile(
         r"^\s{2}(?:'(?P<quoted>[A-Za-z0-9-]+)'|(?P<plain>[A-Za-z0-9-]+))\s*:\s*\{",
