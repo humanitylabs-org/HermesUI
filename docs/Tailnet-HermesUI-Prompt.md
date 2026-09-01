@@ -1,25 +1,39 @@
 # Give this prompt to your AI
 
-This is the release prompt template. The published Humanity Labs page and release asset replace `REVIEWED_COMMIT_SHA` with the independently reviewed 40-character commit before anyone copies it. Do not use this unresolved template directly.
+This is the release prompt template. The published AI Wizards page and release asset replace `REVIEWED_COMMIT_SHA` with the independently reviewed 40-character commit before anyone copies it. Do not use this unresolved template directly.
 
 ```text
-Install HermesUI v0.3.0 from https://github.com/humanitylabs-org/HermesUI on this Hermes device and expose it privately at /hermesUI.
+Instal...[truncated]
+
+Use one private-access mode only:
+- If Wizard App is already installed through a healthy Tailscale Serve route recorded in `~/.config/hermesui/install.env`, preserve that route and URL. Do not add Cloudflare.
+- For a new VPS install, use Cloudflare Tunnel + Access. This is the preferred mode even when Tailscale is installed.
+- Use Tailscale for a new install only if I explicitly choose it. Never enable Funnel.
 
 Complete and verify the installation:
 
-1. Check that the host is Linux with Python 3.11, 3.12, or 3.13, git, curl, systemd user services, `systemd-analyze`, Hermes Agent, and Tailscale. Confirm Hermes works with `hermes --version` and `hermes doctor`. Tailscale is mandatory and must be connected with MagicDNS. If a prerequisite is missing, explain one safe fix at a time. Ask before running sudo, a package manager, or the official Tailscale installer. Never enable Funnel.
+1. Inspect the host, the existing Hermes/WebUI processes, `~/.config/hermesui/install.env`, and any existing checkout. Preserve all Hermes conversations, profiles, configuration, credentials, workspaces, and gateway services. Do not overwrite a dirty checkout or start a second WebUI over the same `HERMES_HOME`. If a healthy Wizard App installation already exists, preserve it and report its current version and access mode; this setup prompt is not an authorization to migrate or update it.
 
-2. Set `expected_commit="REVIEWED_COMMIT_SHA"` and refuse to continue if that value is not exactly 40 lowercase hexadecimal characters. Clone the repository at reviewed tag `v0.3.0` into `~/apps/HermesUI`, or safely update an existing clean checkout to that exact tag. Do not overwrite unrelated local changes. Verify `git describe --tags --exact-match` returns `v0.3.0`. Verify `git rev-parse HEAD`, `git rev-parse 'v0.3.0^{commit}'`, and the peeled commit reported by `git ls-remote origin 'refs/tags/v0.3.0^{}'` all equal the literal `expected_commit`. Refuse to continue if any value differs.
+2. For a new install, set `expected_commit="REVIEWED_COMMIT_SHA"`. Refuse to continue unless it is exactly 40 lowercase hexadecimal characters. Clone the repository into a new `~/apps/HermesUI` checkout, then check out reviewed tag `v0.3.1`. Verify that `git describe --tags --exact-match` returns `v0.3.1` and that `git rev-parse HEAD`, `git rev-parse 'v0.3.1^{commit}'`, and the peeled commit from `git ls-remote origin 'refs/tags/v0.3.1^{}'` all equal the literal `expected_commit`.
 
-3. Run `./hermesui/installer/tailnet-prereq-check.sh`, resolve any failure safely, then run `./hermesui/installer/tailnet-setup.sh`. This release supports standalone mode only. If setup reports another or ambiguous Hermes/WebUI execution process using the resolved `HERMES_HOME`, stop and report the conflict without mutation. Do not choose another port, start a second backend, copy credentials into an isolated home, or attempt external/client-only attachment.
+3. Run `hermes --version` and `hermes doctor`. The installer supports Linux, Python 3.11–3.13, git, curl, Hermes Agent, and systemd user services. Ask before sudo, package-manager commands, installing cloudflared or Tailscale, or enabling user lingering. Resolve one prerequisite at a time.
 
-4. Verify `hermesui-launcher.service` is enabled and `hermesui.service` is active. Run `./hermesui/installer/tailnet-status.sh` to verify the exact managed process, standalone mode, resolved Hermes home, and default profile. Verify the loopback `/health` endpoint on the port recorded in `~/.config/hermesui/install.env`; never infer safety from port separation alone.
+4. For a new Cloudflare install, ask me for a dedicated hostname under a zone I control and the exact email address or addresses allowed to operate this Hermes account. Treat those users as trusted operators. Obtain the Cloudflare account ID and zone ID. Have me save a narrowly scoped Cloudflare API token in a local owner-only regular file without pasting it into chat; the token needs account permissions Cloudflare Tunnel: Edit, Access: Apps and Policies: Edit, and Access: Organizations, Identity Providers, and Groups: Read, plus zone permission DNS: Edit for the selected zone. Confirm the account has a Zero Trust organization and the Cloudflare One-Time PIN identity provider enabled. Confirm the hostname, operator emails, account ID, zone ID, token path, and the planned ne...[truncated]
 
-5. Verify the canonical private Tailnet URL `https://<this-device>.ts.net/hermesUI/` loads exactly as written. Verify `/hermesUI/health` is healthy and `/hermesUI/manifest.json` identifies HermesUI with relative `id`, `start_url`, and `scope` values that remain contained under `/hermesUI` when installed as a PWA. Confirm the Serve configuration exposes `/hermesUI` only and that Funnel is not enabled.
+   ./hermesui/installer/setup.sh --mode cloudflare \
+     --account-id ACCOUNT_ID \
+     --zone-id ZONE_ID \
+     --hostname wizard.example.com \
+     --allow-email owner@example.com \
+     --api-token-file ~/.config/hermesui/cloudflare-api-token
 
-6. Treat anyone who can open HermesUI as a trusted operator of this Hermes account. The unchanged upstream backend scopes its cookies to the whole origin (`Path=/`), so use a dedicated MagicDNS origin if sibling paths are not equally trusted. Mounted OIDC callbacks are not supported without upstream backend changes; use password or passkey authentication. If this Tailnet includes people who should not control the agent, help me enable the WebUI password without asking me to paste the password into chat, and recommend a narrow Tailscale grant or ACL.
+   Repeat `--allow-email` for each approved operator. Do not put the API token itself in the command line. The installer must create Access and its allow policy before DNS, create a dedicated remotely managed Tunnel, require Access JWT validation at the origin connector, keep the WebUI on `127.0.0.1:8793`, install persistent user services, and fail closed or roll back only the resources it created.
 
-7. Report the installed tag and commit, service state, loopback bind, local health evidence, Tailnet health evidence, final URL, and exact uninstall command `./hermesui/installer/tailnet-uninstall.sh`. Do not claim success until every check passes.
+5. For an explicitly approved new Tailscale install, run `./hermesui/installer/setup.sh --mode tailscale`. Confirm MagicDNS is enabled, `/hermesUI` is the only Serve path this installer owns, and Funnel remains disabled. Do not add Cloudflare to an existing healthy Tailscale installation.
 
-Preserve existing Hermes conversations, profiles, configuration, credentials, workspaces, and gateway services. Do not publish the app to the internet, enable Funnel, print secrets, or silently replace a different service already using the selected port or `/hermesUI` path.
+6. Verify the exact selected mode. For Cloudflare, run `./hermesui/installer/cloudflare-status.sh`, verify both user services are enabled and active, verify local `/health`, confirm an unauthenticated request is intercepted by Cloudflare Access, then have me authenticate and confirm the Wizard App loads. For Tailscale, run `./hermesui/installer/tailnet-status.sh` and verify the local and Tailnet health URLs. In either mode, confirm there is no public host bind, no second Hermes execution backend, no broken images or browser errors, and that a restart preserves sessions and settings.
+
+7. Report the installed tag and commit, access mode, final private URL, loopback bind, service states, local and private-access health evidence, and rollback command. For Cloudflare the rollback command is `./hermesui/installer/cloudflare-uninstall.sh --api-token-file PATH`; for Tailscale it is `./hermesui/installer/tailnet-uninstall.sh`. Do not claim success until every selected-mode check passes. If setup reports retained recovery state, do not rerun setup; after provider connectivity is restored, run the Cloudflare uninstall command first so the installer can reconcile and remove only its exact resources.
+
+Never print secrets, weaken Access or Tailscale policy, expose the origin publicly, enable Funnel, silently replace another service, or create competing Cloudflare and Tailscale routes.
 ```

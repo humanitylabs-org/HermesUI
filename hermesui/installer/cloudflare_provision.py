@@ -263,6 +263,18 @@ def listed(api: Any, path: str) -> list[Any]:
     return result
 
 
+def read_optional(api: Any, path: str) -> dict[str, Any] | None:
+    try:
+        result = api.request("GET", path)
+    except Exception as exc:
+        if getattr(exc, "status", None) == 404:
+            return None
+        raise
+    if not isinstance(result, dict):
+        raise RuntimeError(f"Cloudflare API returned an invalid resource for {path}")
+    return result
+
+
 def exact_fields(actual: dict[str, Any], expected: dict[str, Any], fields: tuple[str, ...]) -> bool:
     return all(actual.get(field) == expected.get(field) for field in fields)
 
@@ -481,6 +493,7 @@ def provision(
             "allowed_emails": list(config.allowed_emails),
             "auth_domain": organization["auth_domain"],
             "access_app_id": app["id"],
+            "access_app_aud": app["aud"],
             "access_policy_id": policy["id"],
             "tunnel_id": tunnel["id"],
             "tunnel_name": config.tunnel_name,
@@ -538,6 +551,8 @@ def cleanup(
     token_path: Path,
     state_path: Path,
     state: dict[str, Any],
+    *,
+    preserve_connector_token: bool = False,
 ) -> None:
     expected = {
         "account_id": config.account_id,
@@ -575,6 +590,27 @@ def cleanup(
             if len(app_candidates) != 1 or len(exact_apps) != 1 or not isinstance(exact_apps[0].get("id"), str):
                 raise RuntimeError("Access application recovery inventory is ambiguous; refusing cleanup")
             state["access_app_id"] = exact_apps[0]["id"]
+            if isinstance(exact_apps[0].get("aud"), str):
+                state["access_app_aud"] = exact_apps[0]["aud"]
+    if recovery_mode and state.get("access_app_id") and not state.get("access_policy_id"):
+        policy_candidates = listed(
+            api,
+            f"/accounts/{config.account_id}/access/apps/{state['access_app_id']}/policies?per_page=100",
+        )
+        expected_policy = desired_policy(config)
+        exact_policies = [
+            item
+            for item in policy_candidates
+            if exact_fields(
+                item,
+                expected_policy,
+                ("name", "decision", "session_duration", "include", "exclude", "require"),
+            )
+        ]
+        if policy_candidates:
+            if len(policy_candidates) != 1 or len(exact_policies) != 1 or not isinstance(exact_policies[0].get("id"), str):
+                raise RuntimeError("Access policy recovery inventory is ambiguous; refusing cleanup")
+            state["access_policy_id"] = exact_policies[0]["id"]
     if recovery_mode and not state.get("tunnel_id"):
         tunnel_candidates = matching(listed(api, paths["tunnels"]), name=config.tunnel_name)
         exact_tunnels = [item for item in tunnel_candidates if item.get("config_src") == "cloudflare"]
@@ -604,12 +640,90 @@ def cleanup(
             state["dns_record_id"] = exact_dns[0]["id"]
 
     operations = []
-    if isinstance(state.get("dns_record_id"), str) and state["dns_record_id"]:
-        operations.append(("DNS record", f"/zones/{config.zone_id}/dns_records/{state['dns_record_id']}"))
-    if isinstance(state.get("tunnel_id"), str) and state["tunnel_id"]:
-        operations.append(("tunnel", f"/accounts/{config.account_id}/cfd_tunnel/{state['tunnel_id']}"))
-    if isinstance(state.get("access_app_id"), str) and state["access_app_id"]:
-        operations.append(("Access application", f"/accounts/{config.account_id}/access/apps/{state['access_app_id']}"))
+    app_audience = state.get("access_app_aud")
+    app_id = state.get("access_app_id")
+    if isinstance(app_id, str) and app_id:
+        app_path = f"/accounts/{config.account_id}/access/apps/{app_id}"
+        app_resource = read_optional(api, app_path)
+        if app_resource is not None:
+            expected_app = desired_app(config, listed(api, paths["idps"]))
+            app_fields = (
+                "name",
+                "domain",
+                "type",
+                "session_duration",
+                "allowed_idps",
+                "auto_redirect_to_identity",
+                "app_launcher_visible",
+                "allow_iframe",
+            )
+            if app_resource.get("id") != app_id or not exact_fields(app_resource, expected_app, app_fields):
+                raise RuntimeError("Access application no longer matches installer ownership; refusing cleanup")
+            app_audience = app_resource.get("aud")
+            if not isinstance(app_audience, str) or not app_audience:
+                raise RuntimeError("Access application has no valid audience; refusing cleanup")
+            policy_id = state.get("access_policy_id")
+            policies = listed(api, f"{app_path}/policies?per_page=100")
+            expected_policy = desired_policy(config)
+            exact_policies = [
+                item
+                for item in policies
+                if item.get("id") == policy_id
+                and exact_fields(
+                    item,
+                    expected_policy,
+                    ("name", "decision", "session_duration", "include", "exclude", "require"),
+                )
+            ]
+            if policies and (len(policies) != 1 or len(exact_policies) != 1):
+                raise RuntimeError("Access policies no longer match installer ownership; refusing cleanup")
+            if not policies and (not recovery_mode or policy_id):
+                raise RuntimeError("Access policy is missing; refusing cleanup")
+            operations.append(("Access application", app_path))
+
+    tunnel_id = state.get("tunnel_id")
+    if isinstance(tunnel_id, str) and tunnel_id:
+        tunnel_path = f"/accounts/{config.account_id}/cfd_tunnel/{tunnel_id}"
+        tunnel_resource = read_optional(api, tunnel_path)
+        if tunnel_resource is not None:
+            if (
+                tunnel_resource.get("id") != tunnel_id
+                or tunnel_resource.get("name") != config.tunnel_name
+                or tunnel_resource.get("config_src") != "cloudflare"
+            ):
+                raise RuntimeError("tunnel no longer matches installer ownership; refusing cleanup")
+            auth_domain = state.get("auth_domain")
+            if not isinstance(auth_domain, str):
+                organization = api.request("GET", paths["organization"])
+                if isinstance(organization, dict):
+                    auth_domain = organization.get("auth_domain")
+            if not isinstance(auth_domain, str) or not isinstance(app_audience, str):
+                raise RuntimeError("tunnel ownership evidence is incomplete; refusing cleanup")
+            tunnel_config = api.request("GET", f"{tunnel_path}/configurations")
+            expected_config = desired_tunnel_config(config, auth_domain, app_audience)
+            if not isinstance(tunnel_config, dict) or tunnel_config.get("config") != expected_config["config"]:
+                raise RuntimeError("tunnel configuration no longer matches installer ownership; refusing cleanup")
+            operations.insert(0, ("tunnel", tunnel_path))
+
+    dns_id = state.get("dns_record_id")
+    if isinstance(dns_id, str) and dns_id:
+        dns_path = f"/zones/{config.zone_id}/dns_records/{dns_id}"
+        dns_resource = read_optional(api, dns_path)
+        if dns_resource is not None:
+            expected_dns = {
+                "type": "CNAME",
+                "name": config.hostname,
+                "content": f"{tunnel_id}.cfargotunnel.com",
+                "proxied": True,
+                "ttl": 1,
+            }
+            if dns_resource.get("id") != dns_id or not exact_fields(
+                dns_resource,
+                expected_dns,
+                ("type", "name", "content", "proxied", "ttl"),
+            ):
+                raise RuntimeError("DNS record no longer matches installer ownership; refusing cleanup")
+            operations.insert(0, ("DNS record", dns_path))
     _delete_managed(api, tuple(operations))
     if matching(listed(api, paths["dns"]), name=config.hostname):
         raise RuntimeError("DNS record still exists after cleanup")
@@ -617,7 +731,8 @@ def cleanup(
         raise RuntimeError("tunnel still exists after cleanup")
     if matching(listed(api, paths["apps"]), domain=config.hostname, type="self_hosted"):
         raise RuntimeError("Access application still exists after cleanup")
-    token_path.unlink(missing_ok=True)
+    if not preserve_connector_token:
+        token_path.unlink(missing_ok=True)
     state_path.unlink(missing_ok=True)
 
 
@@ -643,6 +758,7 @@ def parse_args() -> argparse.Namespace:
     apply_parser.add_argument("--origin-url", required=True)
     apply_parser.add_argument("--tunnel-name", required=True)
     cleanup_parser = sub.add_parser("cleanup")
+    cleanup_parser.add_argument("--preserve-connector-token", action="store_true")
     for child in (apply_parser, cleanup_parser):
         child.add_argument("--api-token-file", type=Path, required=True)
         child.add_argument("--connector-token-file", type=Path, required=True)
@@ -669,7 +785,14 @@ def main() -> int:
         else:
             state = json.loads(args.state_file.read_text(encoding="utf-8"))
             config = state_config(state)
-            cleanup(config, api, args.connector_token_file, args.state_file, state)
+            cleanup(
+                config,
+                api,
+                args.connector_token_file,
+                args.state_file,
+                state,
+                preserve_connector_token=args.preserve_connector_token,
+            )
             print("Cloudflare resources removed")
         return 0
     except Exception as exc:

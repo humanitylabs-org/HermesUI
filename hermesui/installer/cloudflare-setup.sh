@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+original_args=("$@")
+installer_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+lock_helper="${HERMESUI_LIFECYCLE_LOCK_HELPER:-${installer_dir}/acquire-lifecycle-lock.py}"
+lifecycle_lock="${HERMESUI_LIFECYCLE_LOCK_FILE:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/hermesui-${UID}/lifecycle.lock}"
+if [[ "${HERMESUI_LIFECYCLE_LOCK_HELD:-0}" == 1 ]]; then
+  python3 "$lock_helper" --lock "$lifecycle_lock" --fd 9 --verify-inherited || exit 75
+else
+  exec python3 "$lock_helper" --lock "$lifecycle_lock" --fd 9 -- "$0" "${original_args[@]}"
+fi
+
 PORT="${HERMESUI_PORT:-8793}"
 account_id=''
 zone_id=''
@@ -27,7 +37,6 @@ if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1024 || PORT > 65535 )); then
   exit 2
 fi
 
-installer_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${HERMESUI_REPO_ROOT_OVERRIDE:-$(cd "$installer_dir/../.." && pwd)}"
 state_dir="${HERMESUI_STATE_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/hermesui}"
 state_file="${HERMESUI_STATE_FILE:-${state_dir}/install.env}"
@@ -63,8 +72,6 @@ done
 
 mkdir -p "$state_dir" "$systemd_dir"
 chmod 700 "$state_dir"
-exec 9>"$state_dir/setup.lock"
-flock -n 9 || { printf 'ERROR: another Wizard App setup or uninstall is already running.\n' >&2; exit 1; }
 provisioned=0
 units_written=0
 cleanup_failed_install() {
@@ -72,7 +79,11 @@ cleanup_failed_install() {
   trap - EXIT
   "$systemctl_bin" --user disable --now hermesui-cloudflared.service hermesui.service >/dev/null 2>&1 || true
   if [[ "$units_written" == 1 ]]; then
-    rm -f "$app_unit" "$tunnel_unit"
+    "$python_bin" "$units_helper" remove \
+      --app-unit "$app_unit" --tunnel-unit "$tunnel_unit" \
+      --repo-root "$repo_root" --home "$HOME" --hermes-home "$hermes_home" \
+      --python "$python_bin" --cloudflared "$cloudflared_bin" --token-file "$connector_token" --port "$PORT" \
+      || printf 'ERROR: managed systemd units changed during rollback and were preserved.\n' >&2
     "$systemctl_bin" --user daemon-reload >/dev/null 2>&1 || true
   fi
   rm -f "$state_file"
@@ -178,17 +189,30 @@ done
 rm -f "$headers"
 [[ "$access_ok" == 1 ]] || { printf 'ERROR: public hostname did not prove a Cloudflare Access gate.\n' >&2; exit 1; }
 
-umask 077
-{
-  printf 'HERMESUI_STATE_VERSION=3\n'
-  printf 'HERMESUI_MODE=standalone\n'
-  printf 'HERMESUI_ACCESS_MODE=cloudflare\n'
-  printf 'HERMESUI_PORT=%s\n' "$PORT"
-  printf 'HERMESUI_HERMES_HOME=%s\n' "$hermes_home"
-  printf 'HERMESUI_PROFILE=default\n'
-  printf 'HERMESUI_HOSTNAME=%s\n' "${hostname,,}"
-} >"$state_file"
-chmod 600 "$state_file"
+"$python_bin" - "$state_file" "$PORT" "$hermes_home" "${hostname,,}" <<'PY'
+import os
+import sys
+
+path, port, hermes_home, hostname = sys.argv[1:]
+payload = (
+    "HERMESUI_STATE_VERSION=3\n"
+    "HERMESUI_MODE=standalone\n"
+    "HERMESUI_ACCESS_MODE=cloudflare\n"
+    f"HERMESUI_PORT={port}\n"
+    f"HERMESUI_HERMES_HOME={hermes_home}\n"
+    "HERMESUI_PROFILE=default\n"
+    f"HERMESUI_HOSTNAME={hostname}\n"
+).encode()
+flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+fd = os.open(path, flags, 0o600)
+try:
+    written = 0
+    while written < len(payload):
+        written += os.write(fd, payload[written:])
+    os.fsync(fd)
+finally:
+    os.close(fd)
+PY
 
 trap - EXIT
 printf '\nWizard App is ready at https://%s/\n' "${hostname,,}"

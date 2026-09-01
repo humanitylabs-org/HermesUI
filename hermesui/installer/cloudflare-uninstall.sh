@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+original_args=("$@")
+installer_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+lock_helper="${HERMESUI_LIFECYCLE_LOCK_HELPER:-${installer_dir}/acquire-lifecycle-lock.py}"
+lifecycle_lock="${HERMESUI_LIFECYCLE_LOCK_FILE:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/hermesui-${UID}/lifecycle.lock}"
+if [[ "${HERMESUI_LIFECYCLE_LOCK_HELD:-0}" == 1 ]]; then
+  python3 "$lock_helper" --lock "$lifecycle_lock" --fd 9 --verify-inherited || exit 75
+else
+  exec python3 "$lock_helper" --lock "$lifecycle_lock" --fd 9 -- "$0" "${original_args[@]}"
+fi
+
 api_token_file=''
 while (($#)); do
   case "$1" in
@@ -8,21 +19,19 @@ while (($#)); do
   esac
 done
 [[ -n "$api_token_file" ]] || { printf 'ERROR: --api-token-file is required so managed Cloudflare resources can be removed before local state.\n' >&2; exit 2; }
-installer_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="${HERMESUI_REPO_ROOT_OVERRIDE:-$(cd "$installer_dir/../.." && pwd)}"
 state_dir="${HERMESUI_STATE_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/hermesui}"
 state_file="${HERMESUI_STATE_FILE:-${state_dir}/install.env}"
 cloudflare_state="${HERMESUI_CLOUDFLARE_STATE_FILE:-${state_dir}/cloudflare.json}"
 connector_token="${HERMESUI_CONNECTOR_TOKEN_FILE:-${state_dir}/cloudflared.token}"
-mkdir -p "$state_dir"
-chmod 700 "$state_dir"
-exec 9>"$state_dir/setup.lock"
-flock -n 9 || { printf 'ERROR: another Wizard App setup or uninstall is already running.\n' >&2; exit 1; }
 systemd_dir="${HERMESUI_SYSTEMD_DIR:-${HOME}/.config/systemd/user}"
 app_unit="${systemd_dir}/hermesui.service"
 tunnel_unit="${systemd_dir}/hermesui-cloudflared.service"
 systemctl_bin="${HERMESUI_SYSTEMCTL:-systemctl}"
 python_bin="${HERMESUI_PYTHON:-$(command -v python3)}"
+cloudflared_bin="${HERMESUI_CLOUDFLARED:-$(command -v cloudflared)}"
 provisioner="${HERMESUI_CLOUDFLARE_PROVISIONER:-${installer_dir}/cloudflare_provision.py}"
+units_helper="${HERMESUI_CLOUDFLARE_UNITS_HELPER:-${installer_dir}/cloudflare_systemd_units.py}"
 if [[ -r "$cloudflare_state" && ! -e "$state_file" ]]; then
   recovery_status="$("$python_bin" - "$cloudflare_state" <<'PY'
 import json
@@ -47,15 +56,66 @@ PY
   fi
 fi
 [[ -r "$state_file" && -r "$cloudflare_state" && -r "$connector_token" ]] || { printf 'ERROR: Cloudflare install state is incomplete.\n' >&2; exit 1; }
-grep -qx 'HERMESUI_ACCESS_MODE=cloudflare' "$state_file" || { printf 'ERROR: install state is not Cloudflare-owned.\n' >&2; exit 1; }
-grep -qx '# Managed by HermesUI Cloudflare installer: application' <(head -n 1 "$app_unit") || { printf 'ERROR: HermesUI unit ownership is ambiguous.\n' >&2; exit 1; }
-grep -qx '# Managed by HermesUI Cloudflare installer: connector' <(head -n 1 "$tunnel_unit") || { printf 'ERROR: connector unit ownership is ambiguous.\n' >&2; exit 1; }
+readarray -t local_state < <("$python_bin" - "$state_file" <<'PY'
+import os
+import stat
+import sys
+
+path = sys.argv[1]
+info = os.stat(path, follow_symlinks=False)
+if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+    raise SystemExit("ERROR: install state is not a regular owned file.")
+values = {}
+with open(path, encoding="utf-8") as handle:
+    for raw in handle:
+        key, separator, value = raw.rstrip("\n").partition("=")
+        if not separator or key in values:
+            raise SystemExit("ERROR: install state is malformed.")
+        values[key] = value
+required = {
+    "HERMESUI_STATE_VERSION": "3",
+    "HERMESUI_MODE": "standalone",
+    "HERMESUI_ACCESS_MODE": "cloudflare",
+    "HERMESUI_PROFILE": "default",
+}
+if any(values.get(key) != value for key, value in required.items()):
+    raise SystemExit("ERROR: install state is not Cloudflare-owned.")
+port = values.get("HERMESUI_PORT", "")
+hermes_home = values.get("HERMESUI_HERMES_HOME", "")
+if not port.isdigit() or not hermes_home:
+    raise SystemExit("ERROR: install state is incomplete.")
+print(port)
+print(hermes_home)
+PY
+)
+port="${local_state[0]}"
+hermes_home="${local_state[1]}"
+"$python_bin" "$units_helper" verify \
+  --app-unit "$app_unit" --tunnel-unit "$tunnel_unit" \
+  --repo-root "$repo_root" --home "$HOME" --hermes-home "$hermes_home" \
+  --python "$python_bin" --cloudflared "$cloudflared_bin" --token-file "$connector_token" --port "$port"
 "$systemctl_bin" --user disable --now hermesui-cloudflared.service
 "$python_bin" "$provisioner" cleanup \
   --api-token-file "$api_token_file" \
   --connector-token-file "$connector_token" \
-  --state-file "$cloudflare_state"
+  --state-file "$cloudflare_state" \
+  --preserve-connector-token
 "$systemctl_bin" --user disable --now hermesui.service
-rm -f "$app_unit" "$tunnel_unit" "$state_file"
+"$python_bin" "$units_helper" remove \
+  --app-unit "$app_unit" --tunnel-unit "$tunnel_unit" \
+  --repo-root "$repo_root" --home "$HOME" --hermes-home "$hermes_home" \
+  --python "$python_bin" --cloudflared "$cloudflared_bin" --token-file "$connector_token" --port "$port"
+"$python_bin" - "$connector_token" "$state_file" <<'PY'
+import os
+import stat
+import sys
+
+for raw in sys.argv[1:]:
+    path = os.path.abspath(raw)
+    info = os.stat(path, follow_symlinks=False)
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+        raise SystemExit(f"ERROR: refusing to remove ambiguous local state path: {path}")
+    os.unlink(path)
+PY
 "$systemctl_bin" --user daemon-reload
 printf 'Wizard App and its installer-managed Cloudflare resources were removed. Hermes data was preserved.\n'

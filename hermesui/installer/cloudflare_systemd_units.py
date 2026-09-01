@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import os
+import secrets
+import stat
 import sys
 from pathlib import Path
 
@@ -15,6 +18,133 @@ def quoted(value: str) -> str:
     if "\n" in value or "\0" in value:
         raise RuntimeError("systemd values cannot contain newline or NUL bytes")
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%") + '"'
+
+
+def systemd_path(value: str) -> str:
+    """Encode one absolute filesystem path for a non-shell systemd directive."""
+    if not value.startswith("/"):
+        raise RuntimeError("systemd path must be absolute")
+    encoded: list[str] = []
+    safe = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/._-+@,:"
+    for byte in value.encode("utf-8"):
+        if byte in safe:
+            encoded.append(chr(byte))
+        elif byte == ord("%"):
+            encoded.append("%%")
+        else:
+            encoded.append(f"\\x{byte:02x}")
+    return "".join(encoded)
+
+
+def _read_regular(path: Path) -> tuple[bytes, os.stat_result]:
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise RuntimeError(f"refusing non-regular managed unit: {path}")
+        chunks = []
+        while True:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        return b"".join(chunks), info
+    finally:
+        os.close(fd)
+
+
+def _publish_new(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        directory_flags |= os.O_NOFOLLOW
+    parent_fd = os.open(path.parent, directory_flags)
+    temporary = f".{path.name}.hermesui-{os.getpid()}-{secrets.token_hex(8)}"
+    file_fd = -1
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        file_fd = os.open(temporary, flags, 0o644, dir_fd=parent_fd)
+        payload = content.encode("utf-8")
+        written = 0
+        while written < len(payload):
+            written += os.write(file_fd, payload[written:])
+        os.fsync(file_fd)
+        os.link(
+            temporary,
+            path.name,
+            src_dir_fd=parent_fd,
+            dst_dir_fd=parent_fd,
+            follow_symlinks=False,
+        )
+        destination = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        source = os.fstat(file_fd)
+        if (destination.st_dev, destination.st_ino) != (source.st_dev, source.st_ino):
+            raise RuntimeError(f"managed unit publication identity mismatch: {path}")
+    finally:
+        if file_fd >= 0:
+            os.close(file_fd)
+        try:
+            os.unlink(temporary, dir_fd=parent_fd)
+        except FileNotFoundError:
+            pass
+        os.close(parent_fd)
+
+
+def _verify_exact(path: Path, expected: str) -> None:
+    actual, _ = _read_regular(path)
+    if actual != expected.encode("utf-8"):
+        raise RuntimeError(f"managed unit differs from the specification: {path}")
+
+
+def _remove_exact(path: Path, expected: str) -> None:
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        directory_flags |= os.O_NOFOLLOW
+    parent_fd = os.open(path.parent, directory_flags)
+    quarantine = f".{path.name}.hermesui-remove-{os.getpid()}-{secrets.token_hex(8)}"
+    moved = False
+    try:
+        os.rename(path.name, quarantine, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+        moved = True
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        file_fd = os.open(quarantine, flags, dir_fd=parent_fd)
+        try:
+            info = os.fstat(file_fd)
+            if not stat.S_ISREG(info.st_mode):
+                raise RuntimeError(f"refusing non-regular managed unit: {path}")
+            chunks = []
+            while True:
+                chunk = os.read(file_fd, 1024 * 1024)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            if b"".join(chunks) != expected.encode("utf-8"):
+                raise RuntimeError(f"managed unit differs from the specification: {path}")
+        except Exception:
+            try:
+                os.link(
+                    quarantine,
+                    path.name,
+                    src_dir_fd=parent_fd,
+                    dst_dir_fd=parent_fd,
+                    follow_symlinks=False,
+                )
+                os.unlink(quarantine, dir_fd=parent_fd)
+                moved = False
+            except FileExistsError:
+                pass
+            raise
+        finally:
+            os.close(file_fd)
+        os.unlink(quarantine, dir_fd=parent_fd)
+        moved = False
+    finally:
+        if moved:
+            print(f"ERROR: managed unit was quarantined at {path.parent / quarantine}", file=sys.stderr)
+        os.close(parent_fd)
 
 
 def absolute_existing(path: Path, label: str) -> Path:
@@ -56,7 +186,7 @@ Wants=network-online.target
 
 [Service]
 Type=exec
-WorkingDirectory={quoted(str(repo_root))}
+WorkingDirectory={systemd_path(str(repo_root))}
 Environment={quoted('HERMESUI_MANAGED=1')}
 Environment={quoted('HERMESUI_MODE=standalone')}
 Environment={quoted('HERMESUI_ACCESS_MODE=cloudflare')}
@@ -119,7 +249,7 @@ WantedBy=default.target
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("write", "verify"))
+    parser.add_argument("action", choices=("write", "verify", "remove"))
     parser.add_argument("--app-unit", type=Path, required=True)
     parser.add_argument("--tunnel-unit", type=Path, required=True)
     parser.add_argument("--repo-root", type=Path, required=True)
@@ -141,16 +271,20 @@ def main() -> int:
             args.port,
         )
         if args.action == "write":
-            args.app_unit.parent.mkdir(parents=True, exist_ok=True)
-            args.app_unit.write_text(app, encoding="utf-8")
-            args.app_unit.chmod(0o644)
-            args.tunnel_unit.write_text(tunnel, encoding="utf-8")
-            args.tunnel_unit.chmod(0o644)
+            _publish_new(args.app_unit, app)
+            try:
+                _publish_new(args.tunnel_unit, tunnel)
+            except Exception:
+                _remove_exact(args.app_unit, app)
+                raise
+        elif args.action == "verify":
+            _verify_exact(args.app_unit, app)
+            _verify_exact(args.tunnel_unit, tunnel)
         else:
-            if args.app_unit.read_text(encoding="utf-8") != app:
-                raise RuntimeError("HermesUI application unit differs from the managed specification")
-            if args.tunnel_unit.read_text(encoding="utf-8") != tunnel:
-                raise RuntimeError("cloudflared unit differs from the managed specification")
+            _verify_exact(args.app_unit, app)
+            _verify_exact(args.tunnel_unit, tunnel)
+            _remove_exact(args.tunnel_unit, tunnel)
+            _remove_exact(args.app_unit, app)
         return 0
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

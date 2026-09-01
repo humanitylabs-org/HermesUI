@@ -1,6 +1,8 @@
 import importlib.util
 import json
+import shutil
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -58,6 +60,10 @@ class FakeApi:
             return policy
         if path == "/accounts/account/access/apps/app-1/policies?per_page=100" and method == "GET":
             return list(self.policies.get("app-1", []))
+        if path == "/accounts/account/access/apps/app-1" and method == "GET":
+            if not self.apps:
+                raise load_module().CloudflareApiError("not found", status=404)
+            return dict(self.apps[0])
         if path == "/accounts/account/access/apps/app-1" and method == "DELETE":
             self.apps = []
             self.policies = {}
@@ -82,6 +88,10 @@ class FakeApi:
             }
         if path == "/accounts/account/cfd_tunnel/tunnel-1/token" and method == "GET":
             return "secret-tunnel-token"
+        if path == "/accounts/account/cfd_tunnel/tunnel-1" and method == "GET":
+            if not self.tunnels:
+                raise load_module().CloudflareApiError("not found", status=404)
+            return dict(self.tunnels[0])
         if path == "/accounts/account/cfd_tunnel/tunnel-1" and method == "DELETE":
             self.tunnels = []
             self.configs.pop("tunnel-1", None)
@@ -93,6 +103,10 @@ class FakeApi:
             record = {**body, "id": "dns-1"}
             self.records.append(record)
             return record
+        if path == "/zones/zone/dns_records/dns-1" and method == "GET":
+            if not self.records:
+                raise load_module().CloudflareApiError("not found", status=404)
+            return dict(self.records[0])
         if path == "/zones/zone/dns_records/dns-1" and method == "DELETE":
             self.records = []
             self.deleted.append("dns-1")
@@ -341,6 +355,59 @@ def test_cleanup_requires_matching_owned_state_and_deletes_in_reverse(tmp_path):
     assert not state_path.exists()
 
 
+def test_cleanup_refuses_provider_resource_drift_before_any_delete(tmp_path):
+    module = load_module()
+    api = FakeApi()
+    token_path = tmp_path / "token"
+    state_path = tmp_path / "state.json"
+    state = module.provision(config(module), api, token_path, state_path)
+    api.records[0]["content"] = "foreign.example.com"
+
+    with pytest.raises(RuntimeError, match="DNS record no longer matches installer ownership"):
+        module.cleanup(config(module), api, token_path, state_path, state)
+
+    assert not api.deleted
+    assert token_path.exists()
+    assert state_path.exists()
+
+
+def test_cleanup_refuses_an_added_access_policy_before_any_delete(tmp_path):
+    module = load_module()
+    api = FakeApi()
+    token_path = tmp_path / "token"
+    state_path = tmp_path / "state.json"
+    state = module.provision(config(module), api, token_path, state_path)
+    api.policies["app-1"].append({"id": "foreign-policy", "decision": "allow"})
+
+    with pytest.raises(RuntimeError, match="Access policies no longer match installer ownership"):
+        module.cleanup(config(module), api, token_path, state_path, state)
+
+    assert not api.deleted
+    assert token_path.exists()
+    assert state_path.exists()
+
+
+def test_cleanup_can_preserve_connector_token_until_local_units_are_removed(tmp_path):
+    module = load_module()
+    api = FakeApi()
+    token_path = tmp_path / "token"
+    state_path = tmp_path / "state.json"
+    state = module.provision(config(module), api, token_path, state_path)
+
+    module.cleanup(
+        config(module),
+        api,
+        token_path,
+        state_path,
+        state,
+        preserve_connector_token=True,
+    )
+
+    assert token_path.exists()
+    assert stat.S_IMODE(token_path.stat().st_mode) == 0o600
+    assert not state_path.exists()
+
+
 def test_validation_rejects_unsafe_or_ambiguous_inputs():
     module = load_module()
     with pytest.raises(ValueError, match="hostname"):
@@ -385,6 +452,75 @@ def test_systemd_units_keep_origin_on_loopback_and_token_out_of_argv(tmp_path):
     assert "not-a-real-token" not in tunnel_unit
     assert "NoNewPrivileges=true" in tunnel_unit
     assert "ProtectSystem=strict" in tunnel_unit
+    assert f"WorkingDirectory={repo}" in app_unit
+    assert f'WorkingDirectory="{repo}"' not in app_unit
+
+
+def test_systemd_units_pass_real_systemd_analyze_with_a_spaced_repo_path(tmp_path):
+    analyzer = shutil.which("systemd-analyze")
+    if analyzer is None:
+        pytest.skip("systemd-analyze is not installed")
+    assert analyzer is not None
+    module = load_units_module()
+    repo = tmp_path / "Hermes UI"
+    home = tmp_path / "home"
+    hermes_home = home / ".hermes"
+    token = home / ".config" / "hermesui" / "cloudflared.token"
+    bin_dir = tmp_path / "bin"
+    cloudflared = bin_dir / "cloudflared"
+    python = bin_dir / "python3"
+    unit_dir = tmp_path / "units"
+    for path in (repo, home, hermes_home, token.parent, bin_dir, unit_dir):
+        path.mkdir(parents=True, exist_ok=True)
+    (repo / "bootstrap.py").write_text("# fixture\n", encoding="utf-8")
+    (repo / "hermesui" / "installer").mkdir(parents=True)
+    (repo / "hermesui" / "installer" / "runtime-home-guard.py").write_text("# fixture\n", encoding="utf-8")
+    token.write_text("not-a-real-token\n", encoding="utf-8")
+    token.chmod(0o600)
+    for executable in (cloudflared, python):
+        executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        executable.chmod(0o755)
+
+    app, tunnel = module.render_units(repo, home, hermes_home, python, cloudflared, token, 8793)
+    app_path = unit_dir / "hermesui.service"
+    tunnel_path = unit_dir / "hermesui-cloudflared.service"
+    module._publish_new(app_path, app)
+    module._publish_new(tunnel_path, tunnel)
+
+    assert "WorkingDirectory=" + str(repo).replace(" ", "\\x20") in app
+    result = subprocess.run(
+        [analyzer, "verify", str(app_path), str(tunnel_path)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_systemd_unit_writer_rejects_a_symlink_destination_without_touching_target(tmp_path):
+    module = load_units_module()
+    target = tmp_path / "unrelated"
+    target.write_text("keep me\n", encoding="utf-8")
+    unit_path = tmp_path / "hermesui.service"
+    unit_path.symlink_to(target)
+
+    with pytest.raises(FileExistsError):
+        module._publish_new(unit_path, "replacement\n")
+
+    assert unit_path.is_symlink()
+    assert target.read_text(encoding="utf-8") == "keep me\n"
+
+
+def test_systemd_unit_removal_restores_a_drifted_unit(tmp_path):
+    module = load_units_module()
+    unit_path = tmp_path / "hermesui.service"
+    unit_path.write_text("foreign unit\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="differs from the specification"):
+        module._remove_exact(unit_path, "installer unit\n")
+
+    assert unit_path.read_text(encoding="utf-8") == "foreign unit\n"
+    assert not list(tmp_path.glob(".*.hermesui-remove-*"))
 
 
 def test_systemd_unit_renderer_rejects_untrusted_executables(tmp_path):
@@ -401,6 +537,11 @@ def test_cloudflare_docs_name_every_required_api_token_permission():
         "DNS: Edit",
         "One-Time PIN",
     )
+    prompt = (ROOT / "docs/give-this-prompt-to-your-ai.md").read_text(encoding="utf-8")
+    legacy_prompt = (ROOT / "docs/Tailnet-HermesUI-Prompt.md").read_text(encoding="utf-8")
+    assert prompt == legacy_prompt
+    assert "v0.3.1" in prompt
+    assert "v0.3.0" not in prompt
     for relative in ("README.md", "docs/give-this-prompt-to-your-ai.md"):
         content = (ROOT / relative).read_text(encoding="utf-8")
         for permission in expected:

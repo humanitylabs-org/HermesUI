@@ -24,10 +24,6 @@ cat >"$BIN/cloudflared" <<'SH'
 #!/usr/bin/env bash
 exit 0
 SH
-cat >"$BIN/systemd-analyze" <<'SH'
-#!/usr/bin/env bash
-exit 0
-SH
 cat >"$BIN/prereq" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -79,6 +75,10 @@ emails = []
 index = 0
 while index < len(args):
     key = args[index]
+    if key == '--preserve-connector-token':
+        values[key] = True
+        index += 1
+        continue
     value = args[index + 1]
     index += 2
     if key == '--allow-email':
@@ -107,7 +107,8 @@ if action == 'apply':
     state.write_text(json.dumps(payload), encoding='utf-8')
     state.chmod(0o600)
 else:
-    connector.unlink(missing_ok=True)
+    if not values.get('--preserve-connector-token'):
+        connector.unlink(missing_ok=True)
     state.unlink(missing_ok=True)
 PY
 cat >"$BIN/tailnet-prereq" <<'SH'
@@ -145,9 +146,17 @@ export HERMESUI_TAILNET_PREREQ="$BIN/tailnet-prereq"
 export HERMESUI_TAILNET_SETUP="$BIN/tailnet-setup"
 export HERMESUI_ACCESS_GATE_ATTEMPTS=1
 export HERMESUI_ACCESS_GATE_DELAY=0
+export HERMESUI_LIFECYCLE_LOCK_FILE="$TMP/runtime/hermesui/lifecycle.lock"
 
-exec 8>"$STATE/setup.lock"
-flock -n 8
+mkdir -p "$TMP/runtime/hermesui"
+chmod 700 "$TMP/runtime/hermesui"
+# shellcheck disable=SC2016
+"$qa_python" "$ROOT/hermesui/installer/acquire-lifecycle-lock.py" \
+  --lock "$HERMESUI_LIFECYCLE_LOCK_FILE" --fd 9 -- \
+  bash -c 'printf ready >"$1"; sleep 30' _ "$TMP/lock-ready" &
+lock_pid=$!
+for _ in $(seq 1 50); do [[ -e "$TMP/lock-ready" ]] && break; sleep 0.1; done
+[[ -e "$TMP/lock-ready" ]] || { printf 'Lifecycle lock fixture did not start.\n' >&2; exit 1; }
 if "$ROOT/hermesui/installer/setup.sh" --mode cloudflare \
   --account-id account --zone-id zone --hostname wizard.example.com \
   --allow-email owner@example.com --api-token-file "$STATE/api-token" \
@@ -155,8 +164,9 @@ if "$ROOT/hermesui/installer/setup.sh" --mode cloudflare \
   printf 'Concurrent Cloudflare setup unexpectedly succeeded.\n' >&2
   exit 1
 fi
-grep -q 'another Wizard App setup or uninstall is already running' "$TMP/locked.err"
-flock -u 8
+grep -q 'another HermesUI setup, update, or uninstall is already running' "$TMP/locked.err"
+kill "$lock_pid"
+wait "$lock_pid" 2>/dev/null || true
 
 printf '%s\n' '{"status":"recovery_required"}' >"$STATE/cloudflare.json"
 chmod 600 "$STATE/cloudflare.json"
@@ -188,6 +198,13 @@ if grep -q 'fake-connector-token' "$SYSTEMD/hermesui-cloudflared.service"; then
   printf 'Connector secret leaked into the systemd unit.\n' >&2
   exit 1
 fi
+export HERMESUI_QA_GATE_MODE=generic403
+if "$ROOT/hermesui/installer/cloudflare-status.sh" >"$TMP/status403.out" 2>"$TMP/status403.err"; then
+  printf 'Status incorrectly accepted a generic provider 403 as proof of Cloudflare Access.\n' >&2
+  exit 1
+fi
+grep -q 'does not prove Cloudflare Access' "$TMP/status403.err"
+unset HERMESUI_QA_GATE_MODE
 "$ROOT/hermesui/installer/cloudflare-status.sh" | grep -q 'Wizard App URL: https://wizard.example.com/'
 "$ROOT/hermesui/installer/cloudflare-uninstall.sh" --api-token-file "$STATE/api-token"
 [[ ! -e "$STATE/install.env" && ! -e "$STATE/cloudflare.json" && ! -e "$STATE/cloudflared.token" ]]
