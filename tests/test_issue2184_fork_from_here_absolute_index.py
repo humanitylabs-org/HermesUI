@@ -9,7 +9,8 @@ the beginning of the full transcript.  In a truncated session where
 
 The fix:
 
-1. ``forkFromMessage`` captures ``absoluteKeepCount = _oldestIdx + msgIdx``
+1. ``forkFromMessage`` resolves the clicked row through
+   ``_messageSessionIndexForRawIdx`` and captures the resulting keep count
    *before* any async work (``_ensureAllMessagesLoaded`` resets
    ``_oldestIdx`` to 0 after its wholesale replace).
 2. It calls ``_ensureAllMessagesLoaded()`` so the full transcript is
@@ -56,25 +57,18 @@ def _function_body(src: str, name: str) -> str:
 # ---------------------------------------------------------------------------
 
 def test_fork_uses_absolute_keep_count():
-    """``forkFromMessage`` must add ``_oldestIdx`` to ``msgIdx`` before sending."""
+    """``forkFromMessage`` must map sparse projected rows to source indices."""
     body = _function_body(COMMANDS_JS, "forkFromMessage")
-    # The function must compute an absolute count that incorporates _oldestIdx.
-    assert "_oldestIdx" in body, (
-        "forkFromMessage must reference _oldestIdx to compute the absolute "
-        "keep_count for truncated sessions. See #2184."
-    )
-    # The absolute count expression must combine _oldestIdx + msgIdx.
-    assert re.search(r"_oldestIdx\s*\+\s*msgIdx", body), (
-        "forkFromMessage must compute absoluteKeepCount as _oldestIdx + msgIdx. "
-        "See #2184."
-    )
+    assert "_messageSessionIndexForRawIdx(localRawIdx)" in body
+    assert "absoluteMessageIndex+1" in body
+    assert "Number.isInteger(absoluteKeepCount)" in body
 
 
 def test_fork_captures_absolute_count_before_await():
     """The absolute keep_count must be captured BEFORE any ``await`` call."""
     body = _function_body(COMMANDS_JS, "forkFromMessage")
-    capture_match = re.search(r"absoluteKeepCount\s*=\s*_oldestIdx\s*\+\s*msgIdx", body)
-    assert capture_match, "Missing absoluteKeepCount = _oldestIdx + msgIdx assignment"
+    capture_match = re.search(r"absoluteKeepCount\s*=\s*Number\.isInteger\(absoluteMessageIndex\)", body)
+    assert capture_match, "Missing projected absoluteKeepCount assignment"
     capture_idx = capture_match.start()
     # Find the first await in the function body.
     await_match = re.search(r"\bawait\b", body)
@@ -181,20 +175,7 @@ def test_ensure_all_messages_uses_extended_timeout_for_full_history_load():
 def test_fork_absolute_count_reduces_to_msgIdx_when_oldestIdx_zero():
     """When ``_oldestIdx`` is 0, ``absoluteKeepCount`` equals ``msgIdx`` (no behaviour change)."""
     body = _function_body(COMMANDS_JS, "forkFromMessage")
-    # The expression _oldestIdx + msgIdx evaluates to msgIdx when _oldestIdx==0.
-    # Verify the expression exists (already checked above) and that there
-    # is no conditional that would skip the computation for non-truncated sessions.
-    assert re.search(r"absoluteKeepCount\s*=\s*_oldestIdx\s*\+\s*msgIdx", body), (
-        "The absolute count must always be computed as _oldestIdx + msgIdx. "
-        "When _oldestIdx is 0 (full transcript loaded), this equals msgIdx, "
-        "preserving short-session behaviour. See #2184."
-    )
-    # There should NOT be a conditional that only computes the offset for
-    # truncated sessions — that would be fragile if the condition and the
-    # _oldestIdx read got out of sync.
-    assert "if(" not in body.split("absoluteKeepCount")[0].split("\n")[-1], (
-        "The absoluteKeepCount computation must not be inside a conditional "
-        "that gates on _messagesTruncated — always computing _oldestIdx + "
-        "msgIdx is simpler and correct for both truncated and non-truncated "
-        "sessions. See #2184."
-    )
+    # The contiguous-window fallback maps localRawIdx through _oldestIdx, then
+    # converts the zero-based source index back to one-based keep_count.
+    assert "(_oldestIdx+localRawIdx)" in body
+    assert "absoluteMessageIndex+1" in body

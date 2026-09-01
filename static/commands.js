@@ -1995,12 +1995,10 @@ async function cmdBranch(args){
 
 // ── Fork from a specific message point ──
 // Called from the "Fork from here" button on message hover actions.
-// msgIdx is 1-based within the currently loaded tail window (rawIdx+1).
-// When the session is truncated (_oldestIdx > 0), msgIdx alone would be
-// a local-window count, but the backend expects an absolute message count
-// from the beginning of the full transcript.  We capture the absolute
-// count (_oldestIdx + msgIdx) BEFORE awaiting _ensureAllMessagesLoaded,
-// which resets _oldestIdx to 0 after its wholesale replace.  See #2184.
+// msgIdx is 1-based within the currently loaded window (rawIdx+1). The
+// backend expects an absolute keep_count from the start of the transcript.
+// Turn-aware windows are sparse, so _oldestIdx + msgIdx is not valid; map the
+// clicked row through its persisted _display_source_index before any await.
 async function forkFromMessage(msgIdx){
   if(!S.session)return;
   // During streaming, only block fork if the clicked message is the
@@ -2023,10 +2021,17 @@ async function forkFromMessage(msgIdx){
     : false;
   if(readOnlySession&&!branchableReadOnlySession){showToast('Read-only sessions cannot be forked.',3000);return;}
   const initialSid = S.session.session_id;
-  // Capture the absolute keep_count before any async work that may
-  // reset _oldestIdx.  _oldestIdx is 0 when the full transcript is
-  // already loaded, so short/already-full sessions send msgIdx unchanged.
-  const absoluteKeepCount = _oldestIdx + msgIdx;
+  const localRawIdx=Number(msgIdx)-1;
+  const absoluteMessageIndex=typeof _messageSessionIndexForRawIdx==='function'
+    ? _messageSessionIndexForRawIdx(localRawIdx)
+    : (_oldestIdx+localRawIdx);
+  const absoluteKeepCount=Number.isInteger(absoluteMessageIndex)
+    ? absoluteMessageIndex+1
+    : null;
+  if(!Number.isInteger(absoluteKeepCount)||absoluteKeepCount<1){
+    showToast('Cannot locate this message in the full transcript.',3000);
+    return;
+  }
   // Ensure the full transcript is loaded so the forked session renders
   // correctly and subsequent operations see the complete history.
   // Skip during streaming to avoid visual flicker — the fork data
@@ -2035,6 +2040,10 @@ async function forkFromMessage(msgIdx){
     await _ensureAllMessagesLoaded();
   }
   if(!S.session || S.session.session_id !== initialSid) return;
+  if(!S.busy&&typeof _messagePrefixLoadedThrough==='function'&&!_messagePrefixLoadedThrough(absoluteKeepCount)){
+    showToast('Cannot load the full transcript for this fork.',3000);
+    return;
+  }
   try{
     const data=await api('/api/session/branch',{
       method:'POST',

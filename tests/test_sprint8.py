@@ -80,7 +80,12 @@ def test_session_truncate_unknown_session_404(cleanup_test_sessions):
 def test_session_truncate_returns_messages(cleanup_test_sessions):
     created = []
     sid = make_session_tracked(created)
-    data, status = post("/api/session/truncate", {"session_id": sid, "keep_count": 0})
+    session = get(f"/api/session?session_id={urllib.parse.quote(sid)}")["session"]
+    data, status = post("/api/session/truncate", {
+        "session_id": sid,
+        "keep_count": 0,
+        "expected_message_revision": session["message_revision"],
+    })
     assert status == 200
     assert data.get("ok") is True
     assert "messages" in data["session"]

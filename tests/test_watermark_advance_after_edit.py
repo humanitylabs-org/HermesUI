@@ -61,7 +61,12 @@ def _post_truncate(monkeypatch, sid, keep_count):
         def payload(self):
             return json.loads(self.wfile.getvalue().decode("utf-8"))
 
-    body_bytes = json.dumps({"session_id": sid, "keep_count": keep_count}).encode()
+    session = Session.load(sid)
+    body_bytes = json.dumps({
+        "session_id": sid,
+        "keep_count": keep_count,
+        "expected_message_revision": routes._session_message_mutation_revision(session),
+    }).encode()
     monkeypatch.setattr(routes, "_check_csrf", lambda handler: True)
     handler = _JSONHandler(body_bytes)
     routes.handle_post(handler, SimpleNamespace(path="/api/session/truncate"))

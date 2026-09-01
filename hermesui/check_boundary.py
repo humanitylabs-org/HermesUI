@@ -42,7 +42,7 @@ PINNED_NONSTATIC_SHA256 = {
     # test_hermes_ui_true_cold_archive.py suite. Imported channel memory keeps
     # upstream metadata-only behavior.
     "api/models.py": "2d33916801f7fe876436c90d3cd9154b4fb6f91c82c14f84603eead2e54d5185",
-    "api/routes.py": "0be44676bf3908d731da16aba3a593f663599356f908988af0ab41d614ceb4ed",
+    "api/routes.py": "62ceb92dab3b16ae64fa36038fcb374cccbea54b93bd22f94edb7c6690b10e6c",
     "api/session_cold_archive.py": "ec5b3a0b0e6332d9d18f0fb649db34a66cd1b06a19df52717ffea1713c0f559f",
     "api/upload.py": "9d4eff0a1f15b3606f076baffa9ff8eba024bdd54cfe4a11a3c9e5480d4ec854",
     # Two inherited lifecycle regressions now assert the cold-archive cache
@@ -71,6 +71,17 @@ PINNED_NONSTATIC_SHA256 = {
     "tests/test_issue4346_vscroll_footer_jitter.py": "d1493dcffbdc2536b14b7d90ad6a6f76598ad099d7aa1ae02fa4bc7716fb2a1a",
     "tests/test_issue4793_dom_recycle_hardening.py": "f25da120c33440d2786611bfdad448a8a9d1d0377de02ca8fd345feef9109ec2",
     "tests/test_live_to_final_anchor_visible_order.py": "662d795f0f72caffd99aa12ec8e4884fedb8031a1e9af64a24798bf0f357e237",
+    # Sparse semantic projections must map edit/regenerate/fork actions through
+    # their absolute source indices before a full-history load mutates the view.
+    "tests/test_issue2184_fork_from_here_absolute_index.py": "4abf16b43dc17e70d49e05f1e574126f33c9c234a55abafb3aedeee116eae0a8",
+    "tests/test_issue_edit_regenerate_absolute_keep_count.py": "c04ea7f8ba322d14b0c849ace75e084eabe885dc21b1a7b44907ab3715f45465",
+    # Destructive transcript truncation now requires the opaque revision from
+    # the matching GET payload; these existing endpoint regressions carry that
+    # precondition while preserving their original watermark/validation scope.
+    "tests/test_issue2914_truncation_watermark.py": "54eea685e17273cc38b0322bbcc3ffd8bb3178b65dce5a70c85c891b6695c434",
+    "tests/test_session_truncate_keep_count_validation.py": "c931b8dbbc519587ee362659f42b4cf7ff32d954d4df81dbd5660efb5c8b02fc",
+    "tests/test_sprint8.py": "1f1642718215786fac00039253b9f69c05c480d2a4f5cb7a09f9927867fc9308",
+    "tests/test_watermark_advance_after_edit.py": "39631ff2426592d48663f2dee88f9f723617aebcdd9c871b498aeaa20aa00395",
     # The restart-guard regression belongs to the already-carried Wizard App
     # lifecycle hotfix on this release line.
     "tests/test_wizard_app_systemd_restart_guard.py": "9813977b86cd4d8c93d16c6b6deba6c1803686a3bdacd44ee3dca16d24d707d1",

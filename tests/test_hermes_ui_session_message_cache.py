@@ -243,12 +243,12 @@ function _clearSameSessionForceReloadHint(){{}} function _messageReloadLimitForS
 function _syncToolCallsForLoadedMessages(){{}} function clearLiveToolCards(){{}} function clearVisibleMessageRowCache(){{}}
 function _isSessionActivelyViewedForList(){{return false;}}
 let apiCalls=0;
-async function api(){{apiCalls++;return {{session:{{session_id:'forced',message_count:1,profile:'default',updated_at:11,messages:[{{role:'assistant',content:'fresh'}}]}}}};}}
+async function api(){{apiCalls++;return {{session:{{session_id:'forced',message_count:1,message_revision:'stable-rev',profile:'default',updated_at:11,messages:[{{role:'assistant',content:'fresh'}}]}}}};}}
 {_cache_source()}
 {ensure}
 assert.strictEqual(_storeSessionMessageCache('forced',{{session_id:'forced',message_count:1,profile:'default',updated_at:10,messages:[{{role:'assistant',content:'stale'}}]}}),true);
 await _ensureMessagesLoaded('forced',{{force:true,loadGeneration:1}});
-assert.strictEqual(apiCalls,1);assert.strictEqual(S.messages[0].content,'fresh');
+assert.strictEqual(apiCalls,1);assert.strictEqual(S.messages[0].content,'fresh');assert.strictEqual(S.session.message_revision,'stable-rev');
 console.log(JSON.stringify({{ok:true,apiCalls}}));
 """
     assert _run_node(harness) == {"ok": True, "apiCalls": 1}

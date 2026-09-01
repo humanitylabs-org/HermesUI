@@ -10,6 +10,7 @@ import inspect
 import errno
 import io
 import gzip
+import hmac
 import json
 from api.sse_chunked import end_sse_headers
 import logging
@@ -46,7 +47,7 @@ from api.agent_sessions import (
     is_cli_session_row_visible,
     read_session_lineage_report,
 )
-from api.compression_anchor import visible_messages_for_anchor
+from api.compression_anchor import is_context_compression_marker, visible_messages_for_anchor
 from api.compression_recovery import (
     COMPRESSION_RECOVERY_ACTION_START_FOCUSED,
     clear_compression_recovery,
@@ -63,6 +64,40 @@ from api.gateway_restart import restart_active_profile_gateway
 from api.shares import create_or_refresh_share, load_share, revoke_share
 
 logger = logging.getLogger(__name__)
+
+# Stable, session-scoped digest for destructive transcript mutation
+# preconditions. Including the session id prevents cross-session equality while
+# keeping the token valid across WebUI restarts and warm-cache restores.
+
+
+def _session_message_mutation_revision(session) -> str:
+    """Return an opaque identity for the atomically persisted session bytes."""
+    digest = hashlib.sha256()
+    digest.update(str(getattr(session, "session_id", "") or "").encode("utf-8"))
+    digest.update(b"\0")
+    path = getattr(session, "path", None)
+    try:
+        if path is None:
+            raise OSError("session path unavailable")
+        with Path(path).open("rb") as source:
+            while True:
+                chunk = source.read(1024 * 1024)
+                if not chunk:
+                    break
+                digest.update(chunk)
+    except (AttributeError, OSError, TypeError):
+        # New/in-memory sessions should normally have been saved before they can
+        # reach a mutation route. Keep the fallback exact and fail-safe for test
+        # doubles or a storage race where the sidecar is temporarily unavailable.
+        digest.update(
+            json.dumps(
+                list(getattr(session, "messages", None) or []),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+    return digest.hexdigest()
 
 
 def _publish_session_list_changed(
@@ -4804,7 +4839,15 @@ def _anchor_scene_settle_live_running_row(row, *, has_settled_thinking: bool):
 def _complete_hydrated_anchor_scene(messages, scene, message_index, *, message_offset=0, tool_calls=None, stream_id=""):
     if not isinstance(messages, list) or not isinstance(scene, dict) or not isinstance(message_index, int):
         return scene
-    local_final_idx = message_index - int(message_offset or 0)
+    source_to_local = {
+        message.get("_display_source_index"): local_idx
+        for local_idx, message in enumerate(messages)
+        if isinstance(message, dict) and isinstance(message.get("_display_source_index"), int)
+    }
+    local_final_idx = source_to_local.get(
+        message_index,
+        message_index - int(message_offset or 0),
+    )
     if local_final_idx < 0 or local_final_idx >= len(messages):
         return scene
     final_message = messages[local_final_idx]
@@ -4931,7 +4974,9 @@ def _complete_hydrated_anchor_scene(messages, scene, message_index, *, message_o
         message = messages[local_idx]
         if not isinstance(message, dict) or message.get("role") != "assistant":
             continue
-        absolute_idx = int(message_offset or 0) + local_idx
+        absolute_idx = message.get("_display_source_index")
+        if not isinstance(absolute_idx, int):
+            absolute_idx = int(message_offset or 0) + local_idx
         text = _anchor_scene_message_text(message)
         content_rows = _anchor_scene_content_rows(
             message,
@@ -5007,7 +5052,10 @@ def _complete_hydrated_anchor_scene(messages, scene, message_index, *, message_o
             absolute_idx = int(call.get("assistant_msg_idx"))
         except (TypeError, ValueError):
             continue
-        local_idx = absolute_idx - int(message_offset or 0)
+        local_idx = source_to_local.get(
+            absolute_idx,
+            absolute_idx - int(message_offset or 0),
+        )
         if not (turn_start < local_idx <= local_final_idx):
             continue
         row = _anchor_scene_tool_row(call, order, absolute_idx, stream_id)
@@ -5102,7 +5150,9 @@ def _hydrate_anchor_activity_scenes(messages, records, *, message_offset=0, tool
     for local_idx, message in enumerate(messages):
         if not isinstance(message, dict) or message.get("role") != "assistant":
             continue
-        absolute_idx = int(message_offset or 0) + local_idx
+        absolute_idx = message.get("_display_source_index")
+        if not isinstance(absolute_idx, int):
+            absolute_idx = int(message_offset or 0) + local_idx
         _msg_ref = _assistant_anchor_scene_message_ref(message)
         record = by_ref.get(_msg_ref) if _ref_counts.get(_msg_ref, 0) <= 1 else None
         if not record:
@@ -8791,6 +8841,553 @@ def _message_window_for_display(messages, msg_limit=None, msg_before=None, expan
             break
     window = source[start_idx:end_idx]
     return window, start_idx
+
+
+_DISPLAY_WORKSPACE_PREFIX_RE = re.compile(
+    r"^\s*\[Workspace::v1:\s*(?:\\.|[^\]\\])+\]\s*",
+    re.IGNORECASE,
+)
+_DISPLAY_BACKGROUND_TRIGGER_RE = re.compile(
+    r"^\s*(?:"
+    r"\[ASYNC DELEGATION(?: BATCH)? COMPLETE(?:\s*(?:—|-)\s*[^\]]*)?\]"
+    r"|\[IMPORTANT:\s*Background process\b"
+    r"|\[BACKGROUND WAKEUP\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _display_message_text(message) -> str:
+    """Return text from provider/native/serialized content for display semantics."""
+    if not isinstance(message, dict):
+        return ""
+    content = message.get("content", "")
+    if isinstance(content, str):
+        value = content.strip()
+        if value.lower().startswith("json:"):
+            try:
+                decoded = json.loads(value[5:].strip())
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return value
+            return _display_message_text({"content": decoded})
+        return value
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict) and part.get("type") in {
+                "text",
+                "input_text",
+                "output_text",
+            }:
+                parts.append(str(part.get("text") or part.get("content") or ""))
+        return "".join(parts).strip()
+    if isinstance(content, dict):
+        return str(content.get("text") or content.get("content") or content.get("preview") or "").strip()
+    return str(content or "").strip()
+
+
+def _display_control_text(message) -> str:
+    return _DISPLAY_WORKSPACE_PREFIX_RE.sub("", _display_message_text(message), count=1).strip()
+
+
+def _is_display_background_trigger(message) -> bool:
+    if not isinstance(message, dict) or str(message.get("role") or "").lower() != "user":
+        return False
+    if message.get("_source") in {"process_wakeup", "async_delegation"}:
+        return True
+    return bool(_DISPLAY_BACKGROUND_TRIGGER_RE.match(_display_control_text(message)))
+
+
+def _structured_multimodal_content_for_display(value) -> tuple[str, bool] | None:
+    """Extract text/media presence from a persisted provider content payload."""
+    text_parts = []
+    has_media = False
+    recognized = False
+
+    def visit(part):
+        nonlocal has_media, recognized
+        if isinstance(part, str):
+            text_parts.append(part)
+            recognized = True
+            return
+        if not isinstance(part, dict):
+            return
+        part_type = str(part.get("type") or "").lower()
+        if part_type in {"text", "input_text", "output_text"}:
+            text_parts.append(str(part.get("text") or part.get("content") or ""))
+            recognized = True
+            return
+        if part_type in {"image", "image_url", "input_image", "output_image"}:
+            recognized = True
+            has_media = True
+            return
+        nested = part.get("content")
+        if isinstance(nested, list):
+            for child in nested:
+                visit(child)
+
+    for item in value if isinstance(value, list) else [value]:
+        visit(item)
+    if not recognized:
+        return None
+    return "".join(text_parts).strip(), has_media
+
+
+def _serialized_multimodal_content_for_display(value) -> tuple[str, bool] | None:
+    if not isinstance(value, str):
+        return None
+    framed = value.lstrip("\x00\ufeff").strip()
+    if not re.match(r"^json\s*:", framed, re.I):
+        return None
+    payload = re.sub(r"^json\s*:\s*", "", framed, count=1, flags=re.I)
+    if not payload.startswith(("[", "{")):
+        return None
+    try:
+        return _structured_multimodal_content_for_display(json.loads(payload))
+    except Exception:
+        text_parts = []
+        pattern = re.compile(
+            r'"type"\s*:\s*"(?:text|input_text|output_text)"[\s\S]*?'
+            r'"text"\s*:\s*"((?:\\.|[^"\\])*)"',
+            re.I,
+        )
+        for match in pattern.finditer(payload):
+            try:
+                text_parts.append(json.loads(f'"{match.group(1)}"'))
+            except Exception:
+                text_parts.append(match.group(1) or "")
+        if not text_parts:
+            return None
+        has_media = bool(
+            re.search(
+                r'"type"\s*:\s*"(?:image|image_url|input_image|output_image)"',
+                payload,
+                re.I,
+            )
+        )
+        return "".join(text_parts).strip(), has_media
+
+
+def _multimodal_shadow_comparable_text_for_display(value) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r"\n\n\[Attached files:\s*[^\]]+\]\s*$", "", text, flags=re.I).strip()
+    return _DISPLAY_WORKSPACE_PREFIX_RE.sub("", text, count=1).strip()
+
+
+def _display_message_timestamp(message) -> float | None:
+    if not isinstance(message, dict):
+        return None
+    for key in ("timestamp", "_ts", "created_at"):
+        value = message.get(key)
+        if value is None:
+            continue
+        try:
+            return float(str(value))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _is_serialized_multimodal_shadow_for_display(message, previous_message) -> bool:
+    """Match the frontend's adjacent transport-shadow suppression semantics."""
+    if not isinstance(message, dict) or not isinstance(previous_message, dict):
+        return False
+    if str(message.get("role") or "").lower() != "user":
+        return False
+    if str(previous_message.get("role") or "").lower() != "user":
+        return False
+    if message.get("attachments"):
+        return False
+    if not previous_message.get("attachments"):
+        return False
+    extracted = _serialized_multimodal_content_for_display(message.get("content"))
+    if not extracted or not extracted[1]:
+        return False
+    current_text = _multimodal_shadow_comparable_text_for_display(extracted[0])
+    previous_text = _multimodal_shadow_comparable_text_for_display(
+        _display_message_text(previous_message)
+    )
+    if not current_text or current_text != previous_text:
+        return False
+    current_ts = _display_message_timestamp(message)
+    previous_ts = _display_message_timestamp(previous_message)
+    if current_ts is None or previous_ts is None:
+        return False
+    return abs(current_ts - previous_ts) <= 10
+
+
+def _is_genuine_human_prompt_for_display(message) -> bool:
+    """Exclude user-role transport/control rows from latest-human anchoring."""
+    if not isinstance(message, dict) or str(message.get("role") or "").lower() != "user":
+        return False
+    if message.get("recovery_control") is True:
+        return False
+    if is_context_compression_marker(message) or _is_display_background_trigger(message):
+        return False
+    return bool(_display_control_text(message) or message.get("attachments"))
+
+
+def _message_has_turn_projection_surface(message) -> bool:
+    """Match the frontend's visible-message test for semantic tail selection."""
+    if not isinstance(message, dict):
+        return False
+    role = str(message.get("role") or "").lower()
+    if role not in {"user", "assistant"}:
+        return False
+    if role == "user":
+        return _is_genuine_human_prompt_for_display(message)
+    if _display_message_text(message).strip():
+        return True
+    if message.get("_statusCard") or message.get("attachments"):
+        return True
+    if message.get("tool_calls") or message.get("_partial_tool_calls"):
+        return True
+    content = message.get("content")
+    if isinstance(content, list) and any(
+        isinstance(part, dict) and part.get("type") == "tool_use" for part in content
+    ):
+        return True
+    if any(
+        bool(message.get(key))
+        for key in (
+            "reasoning",
+            "reasoning_content",
+            "codex_reasoning_items",
+            "images",
+            "media",
+            "_activity_scene",
+        )
+    ):
+        return True
+    return False
+
+
+def _assistant_continues_display_turn(message) -> bool:
+    if not isinstance(message, dict) or str(message.get("role") or "").lower() != "assistant":
+        return False
+    if message.get("tool_calls") or message.get("_partial_tool_calls"):
+        return True
+    content = message.get("content")
+    if isinstance(content, list) and any(
+        isinstance(part, dict) and part.get("type") == "tool_use" for part in content
+    ):
+        return True
+    return str(message.get("finish_reason") or "").lower() == "tool_calls"
+
+
+def _assistant_looks_interim_for_display(message) -> bool:
+    text = _display_message_text(message)
+    if not text or len(text) > 800:
+        return False
+    return bool(
+        re.search(r"\b(?:is|are|am)\s+still\s+(?:running|working|processing|waiting|verifying|deploying)\b", text, re.I)
+        or re.search(r"\b(?:is|are)\s+(?:currently\s+)?(?:in progress|pending)\b", text, re.I)
+        or re.search(r"\bwaiting for\b", text, re.I)
+        or re.search(r"\bI(?:'ll| will)\b.{0,120}\b(?:when|once|after)\b", text, re.I)
+    )
+
+
+def _display_background_task_id(message) -> str:
+    meta = message.get("_wakeup_meta") if isinstance(message, dict) else None
+    meta = meta if isinstance(meta, dict) else {}
+    for value in (
+        meta.get("task_id"),
+        meta.get("process_id"),
+        meta.get("delegation_id"),
+        meta.get("completion_id"),
+    ):
+        candidate = str(value or "").strip()
+        if 4 <= len(candidate) <= 200:
+            return candidate
+    text = _display_control_text(message)
+    process_match = re.search(r"\b(proc_[A-Za-z0-9_-]+)\b", text)
+    if process_match:
+        return process_match.group(1)
+    delegation_match = re.match(
+        r"^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE\s*(?:—|-)\s*([^\]\s]+)",
+        text,
+        re.I,
+    )
+    return delegation_match.group(1) if delegation_match else ""
+
+
+_DISPLAY_TASK_LINK_TOKEN_RE = re.compile(r"\b[A-Za-z0-9][A-Za-z0-9_-]{3,199}\b")
+
+
+def _display_tool_background_task_ids(message) -> set[str]:
+    """Extract durable task-link identifiers from one tool record."""
+    linked = set()
+    if not isinstance(message, dict) or str(message.get("role") or "").lower() != "tool":
+        return linked
+    meta = message.get("_wakeup_meta")
+    if isinstance(meta, dict):
+        for key in ("task_id", "process_id", "delegation_id", "completion_id"):
+            candidate = str(meta.get(key) or "").strip()
+            if 4 <= len(candidate) <= 200:
+                linked.add(candidate)
+    for candidate in _DISPLAY_TASK_LINK_TOKEN_RE.findall(_display_message_text(message)):
+        if "_" in candidate or "-" in candidate or re.fullmatch(r"[A-Fa-f0-9]{8,64}", candidate):
+            linked.add(candidate)
+    return linked
+
+
+def _assistant_references_display_task(message, task_id) -> bool:
+    if not task_id or not isinstance(message, dict):
+        return False
+    meta = message.get("_wakeup_meta")
+    meta = meta if isinstance(meta, dict) else {}
+    if any(
+        str(meta.get(key) or "") == task_id
+        for key in ("task_id", "process_id", "delegation_id", "completion_id")
+    ):
+        return True
+    return task_id in _display_message_text(message)
+
+
+def _display_turn_semantics_for_display(messages, prompt_idx) -> tuple[int | None, dict[int, bool], dict[int, tuple[str, bool]]]:
+    """Return primary-final, control-resume, and assistant semantic annotations."""
+    linked_task_ids = set()
+    human_run_open = True
+    background_active = False
+    background_task_id = ""
+    background_can_resume = False
+    last_primary_idx = None
+    last_primary_looks_interim = False
+    control_resume_flags = {}
+    primary_surface_indices = []
+    assistant_semantics = {}
+
+    for index in range(prompt_idx + 1, len(messages)):
+        message = messages[index]
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role") or "").lower()
+        if role == "tool":
+            linked_task_ids.update(_display_tool_background_task_ids(message))
+            continue
+        if (
+            role == "user"
+            and _is_genuine_human_prompt_for_display(message)
+            and not _is_serialized_multimodal_shadow_for_display(
+                message, messages[index - 1] if index > 0 else None
+            )
+        ):
+            break
+        if role == "user" and _is_display_background_trigger(message):
+            task_id = _display_background_task_id(message)
+            can_resume = last_primary_idx is not None and last_primary_looks_interim
+            resumes = can_resume and bool(task_id) and task_id in linked_task_ids
+            if resumes:
+                human_run_open = True
+                background_active = False
+            else:
+                background_active = not human_run_open
+            control_resume_flags[index] = resumes
+            background_task_id = task_id
+            background_can_resume = can_resume
+            continue
+        if role != "assistant":
+            continue
+
+        continues = _assistant_continues_display_turn(message)
+        if background_active:
+            resumes = background_can_resume and _assistant_references_display_task(
+                message,
+                background_task_id,
+            )
+            if resumes:
+                background_active = False
+                human_run_open = True
+            else:
+                if _message_has_turn_projection_surface(message):
+                    assistant_semantics[index] = ("async_update", True)
+                if not continues:
+                    background_active = False
+                    background_task_id = ""
+                    background_can_resume = False
+                continue
+
+        if _message_has_turn_projection_surface(message):
+            last_primary_idx = index
+            primary_surface_indices.append(index)
+            last_primary_looks_interim = continues or _assistant_looks_interim_for_display(message)
+        human_run_open = continues
+
+    for index in primary_surface_indices:
+        assistant_semantics[index] = (
+            "assistant_final" if index == last_primary_idx else "assistant_interim",
+            False,
+        )
+    return last_primary_idx, control_resume_flags, assistant_semantics
+
+
+def _latest_primary_assistant_index_for_display(messages, prompt_idx) -> int | None:
+    """Mirror the frontend projection enough to preserve the prompt's final result."""
+    return _display_turn_semantics_for_display(messages, prompt_idx)[0]
+
+
+def _selected_tail_source_indices(messages, msg_limit) -> set[int]:
+    limit = max(1, int(msg_limit or 1))
+    visible_indices = [
+        index
+        for index, message in enumerate(messages or [])
+        if _message_has_turn_projection_surface(message)
+    ]
+    source_indices = set(visible_indices[-limit:])
+    call_ids = _tool_call_ids_in_messages(messages[index] for index in source_indices)
+    first_selected = min(source_indices) if source_indices else len(messages)
+    for source_idx in range(first_selected, len(messages)):
+        message = messages[source_idx]
+        if _tool_result_matches_call_ids(message, call_ids):
+            source_indices.add(source_idx)
+    return source_indices
+
+
+def _latest_human_turn_projection_for_display(messages, msg_limit) -> tuple[list, int]:
+    """Return prompt + primary result + bounded tail, with lazy-load gap rows.
+
+    Unlike count-based widening, this scans semantic user rows and therefore
+    crosses arbitrarily many assistant tool-call records. Omitted records stay
+    addressable by absolute source indices in ``_latest_turn_gap``.
+    """
+    source = list(messages or [])
+    if not source:
+        return [], 0
+    prompt_idx = next(
+        (
+            index
+            for index in range(len(source) - 1, -1, -1)
+            if _is_genuine_human_prompt_for_display(source[index])
+            and not _is_serialized_multimodal_shadow_for_display(
+                source[index], source[index - 1] if index > 0 else None
+            )
+        ),
+        None,
+    )
+    if prompt_idx is None:
+        return _message_window_for_display(source, msg_limit=msg_limit)
+
+    shadow_indices = {
+        index
+        for index in range(max(1, prompt_idx + 1), len(source))
+        if _is_serialized_multimodal_shadow_for_display(source[index], source[index - 1])
+    }
+    selected = _selected_tail_source_indices(source, msg_limit) - shadow_indices
+    selected.add(prompt_idx)
+    primary_final_idx, control_resume_flags, assistant_semantics = _display_turn_semantics_for_display(
+        source, prompt_idx
+    )
+    if primary_final_idx is not None:
+        selected.add(primary_final_idx)
+    selected = {index for index in selected if index >= prompt_idx}
+
+    projected = []
+    previous_idx = None
+    for source_idx in sorted(selected):
+        if previous_idx is not None and source_idx > previous_idx + 1:
+            gap_start = previous_idx + 1
+            gap_end = source_idx
+            omitted_renderable = sum(
+                1
+                for relative_idx, message in enumerate(source[gap_start:gap_end])
+                if _message_has_turn_projection_surface(message)
+                and (gap_start + relative_idx) not in shadow_indices
+            )
+            if omitted_renderable:
+                projected.append(
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "_source": "display_projection",
+                        "_latest_turn_gap": {
+                            "start_index": gap_start,
+                            "end_index": gap_end,
+                            "omitted_records": gap_end - gap_start,
+                            "omitted_renderable": omitted_renderable,
+                        },
+                    }
+                )
+        original = source[source_idx]
+        if _is_display_background_trigger(original):
+            task_id = _display_background_task_id(original)
+            resumes = bool(control_resume_flags.get(source_idx))
+            source_kind = str(original.get("_source") or "").strip()
+            if source_kind not in {"process_wakeup", "async_delegation"}:
+                source_kind = (
+                    "async_delegation"
+                    if _display_control_text(original).upper().startswith("[ASYNC DELEGATION")
+                    else "process_wakeup"
+                )
+            message = {
+                "role": "user",
+                "content": "",
+                "_source": source_kind,
+                "_display_semantic_control": True,
+                "_display_resumes_human_turn": resumes,
+            }
+            if task_id:
+                message["_wakeup_meta"] = {"task_id": task_id}
+        else:
+            message = dict(original)
+            explicit_semantics = assistant_semantics.get(source_idx)
+            if explicit_semantics:
+                message["_display_semantic_type"] = explicit_semantics[0]
+                message["_display_background_update"] = explicit_semantics[1]
+        message["_display_source_index"] = source_idx
+        projected.append(message)
+        previous_idx = source_idx
+    return projected, prompt_idx
+
+
+def _filter_tool_calls_for_projected_messages(tool_calls, messages) -> list:
+    """Rebase tool-call anchors through a non-contiguous display projection."""
+    source_to_projected = {}
+    for projected_idx, message in enumerate(messages or []):
+        if not isinstance(message, dict):
+            continue
+        source_idx = message.get("_display_source_index")
+        if isinstance(source_idx, bool) or not isinstance(source_idx, int):
+            continue
+        source_to_projected[source_idx] = projected_idx
+    filtered = []
+    for tool_call in tool_calls or []:
+        if not isinstance(tool_call, dict):
+            continue
+        source_idx = tool_call.get("assistant_msg_idx")
+        if source_idx not in source_to_projected:
+            continue
+        rebased = dict(tool_call)
+        rebased["assistant_msg_idx"] = source_to_projected[source_idx]
+        filtered.append(rebased)
+    return filtered
+
+
+def _message_window_is_truncated_for_display(
+    messages, offset, *, load_messages: bool, msg_limit
+) -> bool:
+    """Return whether a bounded response omits absolute transcript positions."""
+    if not load_messages or msg_limit is None:
+        return False
+    try:
+        expected = max(0, int(offset or 0))
+    except (TypeError, ValueError):
+        expected = 0
+    if expected > 0:
+        return True
+    for message in messages or []:
+        if not isinstance(message, dict):
+            continue
+        if message.get("_latest_turn_gap"):
+            return True
+        source_idx = message.get("_display_source_index")
+        if isinstance(source_idx, bool) or not isinstance(source_idx, int):
+            continue
+        if source_idx != expected:
+            return True
+        expected = source_idx + 1
+    return False
 
 
 _LIMITED_TOOL_CONTENT_MAX_CHARS = 4096
@@ -12841,6 +13438,11 @@ def handle_get(handler, parsed) -> bool:
             msg_before = int(_msg_before) if _msg_before else None
         except (ValueError, TypeError):
             msg_before = None
+        latest_human_turn = bool(
+            msg_limit is not None
+            and msg_before is None
+            and query.get("latest_human_turn", [""])[0] == "1"
+        )
         # ?expand_renderable=1 is retained for compatibility with older
         # frontends. msg_limit now counts visible transcript rows by default, so
         # the flag no longer changes the server-side pagination semantics.
@@ -12871,6 +13473,9 @@ def handle_get(handler, parsed) -> bool:
                 return bad(handler, "Session not found", 404)
             original_stream_id = getattr(s, "active_stream_id", None)
             _clear_stale_stream_state(s)
+            _message_revision = (
+                _session_message_mutation_revision(s) if load_messages else None
+            )
             cli_meta = _lookup_cli_session_metadata(sid) if _session_requires_cli_metadata_lookup(s) else {}
             is_messaging_session = _is_messaging_session_record(s) or _is_messaging_session_record(cli_meta)
             cli_messages = []
@@ -12980,12 +13585,18 @@ def handle_get(handler, parsed) -> bool:
                 _summary_message_count = None
                 _summary_last_message_at = None
             if load_messages:
-                _truncated_msgs, _messages_offset = _message_window_for_display(
-                    _all_msgs,
-                    msg_limit=msg_limit,
-                    msg_before=msg_before,
-                    expand_renderable=expand_renderable,
-                )
+                if latest_human_turn:
+                    _truncated_msgs, _messages_offset = _latest_human_turn_projection_for_display(
+                        _all_msgs,
+                        msg_limit=msg_limit,
+                    )
+                else:
+                    _truncated_msgs, _messages_offset = _message_window_for_display(
+                        _all_msgs,
+                        msg_limit=msg_limit,
+                        msg_before=msg_before,
+                        expand_renderable=expand_renderable,
+                    )
                 if msg_limit is not None:
                     _truncated_msgs = _messages_for_limited_payload(_truncated_msgs)
                 _truncated_msgs = _hydrate_anchor_activity_scenes(
@@ -13067,11 +13678,17 @@ def handle_get(handler, parsed) -> bool:
             # in the session-level list).  The browser-side
             # _syncToolCallsForLoadedMessages handles deduplication by tid.
             if _windowed_messages:
-                _session_tool_calls = _tool_calls_for_message_window(
-                    _session_tool_calls,
-                    _messages_offset,
-                    len(_truncated_msgs),
-                )
+                if latest_human_turn:
+                    _session_tool_calls = _filter_tool_calls_for_projected_messages(
+                        _session_tool_calls,
+                        _truncated_msgs,
+                    )
+                else:
+                    _session_tool_calls = _tool_calls_for_message_window(
+                        _session_tool_calls,
+                        _messages_offset,
+                        len(_truncated_msgs),
+                    )
             _merged_message_count = _summary_message_count if _summary_message_count is not None else len(_all_msgs)
             _merged_last_message_at = _summary_last_message_at if _summary_last_message_at is not None else 0
             if _summary_last_message_at is None and _all_msgs:
@@ -13104,6 +13721,8 @@ def handle_get(handler, parsed) -> bool:
                 "threshold_tokens": _threshold_tokens,
                 "last_prompt_tokens": getattr(s, "last_prompt_tokens", 0) or 0,
             }
+            if load_messages:
+                raw["message_revision"] = _message_revision
             if original_stream_id:
                 try:
                     journal = find_run_summary(original_stream_id)
@@ -13164,10 +13783,21 @@ def handle_get(handler, parsed) -> bool:
             # Signal to the frontend that older messages were omitted. The
             # message window cursor already reflects visible-row pagination and
             # avoids false positives when raw hidden tool rows exceed msg_limit.
-            _truncated = load_messages and msg_limit is not None and _messages_offset > 0
+            _truncated = _message_window_is_truncated_for_display(
+                _truncated_msgs,
+                _messages_offset,
+                load_messages=load_messages,
+                msg_limit=msg_limit,
+            )
             raw["_messages_truncated"] = _truncated
             raw["_messages_offset"] = _messages_offset
             raw["_msg_limit_max"] = _MAX_MSG_LIMIT
+            raw["_latest_human_turn_projected"] = latest_human_turn
+            raw["_latest_human_turn_gap_count"] = sum(
+                1
+                for message in _truncated_msgs
+                if isinstance(message, dict) and message.get("_latest_turn_gap")
+            )
             _t4 = _time.monotonic()
             if _diag: _diag.stage("t4_after_compact_and_merge")
             if effective_model:
@@ -15377,6 +16007,27 @@ def handle_post(handler, parsed) -> bool:
         if keep < 0:
             return bad(handler, "keep_count must be non-negative")
         with _get_session_agent_lock(body["session_id"]):
+            active_stream_id = str(getattr(s, "active_stream_id", None) or "").strip()
+            pending_user_message = str(getattr(s, "pending_user_message", None) or "").strip()
+            active_run_stream_id = _active_run_stream_for_session(body["session_id"])
+            if active_stream_id or pending_user_message or active_run_stream_id:
+                return bad(handler, "Session changed while preparing truncation", status=409)
+            expected_message_revision = str(body.get("expected_message_revision") or "").strip()
+            if not expected_message_revision:
+                return bad(handler, "Missing required field(s): expected_message_revision")
+            current_message_revision = _session_message_mutation_revision(s)
+            if not hmac.compare_digest(expected_message_revision, current_message_revision):
+                return bad(handler, "Session changed while preparing truncation", status=409)
+            expected_message_count = body.get("expected_message_count")
+            if expected_message_count is not None:
+                try:
+                    expected_message_count = int(expected_message_count)
+                except (TypeError, ValueError):
+                    return bad(handler, "expected_message_count must be an integer")
+                if expected_message_count < 0:
+                    return bad(handler, "expected_message_count must be non-negative")
+                if expected_message_count != len(s.messages or []):
+                    return bad(handler, "Session changed while preparing truncation", status=409)
             from api.session_ops import truncate_session_at_keep
 
             old_msg_count, old_ctx_count = truncate_session_at_keep(s, keep)
@@ -15394,7 +16045,11 @@ def handle_post(handler, parsed) -> bool:
             {
                 "ok": True,
                 "session": public_session_projection(
-                    s.compact() | {"messages": s.messages}
+                    s.compact()
+                    | {
+                        "messages": s.messages,
+                        "message_revision": _session_message_mutation_revision(s),
+                    }
                 ),
             },
         )

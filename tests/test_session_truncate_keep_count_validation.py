@@ -75,10 +75,18 @@ def _make_session(monkeypatch, tmp_path, sid):
     return Session
 
 
-def _post_truncate(monkeypatch, sid, keep_count):
+def _post_truncate(monkeypatch, sid, keep_count, *, include_revision=True):
     import api.routes as routes
+    from api.models import Session
 
-    body_bytes = json.dumps({"session_id": sid, "keep_count": keep_count}).encode()
+    session = Session.load(sid)
+    body = {
+        "session_id": sid,
+        "keep_count": keep_count,
+    }
+    if include_revision:
+        body["expected_message_revision"] = routes._session_message_mutation_revision(session)
+    body_bytes = json.dumps(body).encode()
     monkeypatch.setattr(routes, "_check_csrf", lambda handler: True)
 
     handler = _JSONHandler(body_bytes)
@@ -141,3 +149,20 @@ def test_truncate_zero_keep_count_clears_transcript(monkeypatch, tmp_path):
     loaded = Session.load("trunc_zero")
     assert loaded is not None
     assert loaded.messages == []
+
+
+def test_truncate_without_revision_fails_closed(monkeypatch, tmp_path):
+    Session = _make_session(monkeypatch, tmp_path, "trunc_missing_revision")
+
+    captured = _post_truncate(
+        monkeypatch,
+        "trunc_missing_revision",
+        2,
+        include_revision=False,
+    )
+
+    assert captured["status"] == 400
+    assert "expected_message_revision" in captured["payload"]["error"]
+    loaded = Session.load("trunc_missing_revision")
+    assert loaded is not None
+    assert [m["content"] for m in loaded.messages] == ["first", "reply first", "second"]

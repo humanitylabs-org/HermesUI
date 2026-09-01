@@ -208,17 +208,25 @@
     const delegationMatch=text.match(/^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE\s*(?:—|-)\s*([^\]\s]+)/i);
     return delegationMatch?delegationMatch[1]:'';
   }
+  function backgroundToolTaskIds(message){
+    const ids=new Set();
+    if(!(message&&message.role==='tool')) return ids;
+    const meta=message._wakeup_meta&&typeof message._wakeup_meta==='object'?message._wakeup_meta:{};
+    for(const value of [meta.task_id,meta.process_id,meta.delegation_id,meta.completion_id]){
+      const candidate=String(value||'').trim();
+      if(candidate.length>=4&&candidate.length<=200) ids.add(candidate);
+    }
+    const matches=rawText(message).match(/\b[A-Za-z0-9][A-Za-z0-9_-]{3,199}\b/g)||[];
+    for(const candidate of matches){
+      if(candidate.includes('_')||candidate.includes('-')||/^[A-Fa-f0-9]{8,64}$/.test(candidate)) ids.add(candidate);
+    }
+    return ids;
+  }
   function backgroundTriggerResumesUserRun(cached,message,index){
     const taskId=backgroundTriggerTaskId(message);
     const lastUserIdx=Number(cached&&cached.lastUserDirectedIdx);
-    const messages=cached&&Array.isArray(cached.source)?cached.source:[];
     if(!taskId||!Number.isInteger(lastUserIdx)||lastUserIdx<0||index<=lastUserIdx) return false;
-    const start=Math.max(lastUserIdx+1,index-600);
-    for(let cursor=index-1;cursor>=start;cursor--){
-      const prior=messages[cursor];
-      if(prior&&prior.role==='tool'&&rawText(prior).includes(taskId)) return true;
-    }
-    return false;
+    return cached.linkedBackgroundTaskIds instanceof Set&&cached.linkedBackgroundTaskIds.has(taskId);
   }
   const isRenderable=message=>{
     if(!message||!['user','assistant'].includes(message.role)) return false;
@@ -247,6 +255,10 @@
       if(!cached.firstUser&&message.role==='user'&&cleanUserText(message)) cached.firstUser=entry;
       return;
     }
+    if(message&&message.role==='tool'){
+      for(const taskId of backgroundToolTaskIds(message)) cached.linkedBackgroundTaskIds.add(taskId);
+      return;
+    }
     if(message&&message.role==='user'){
       if(isBackgroundUpdateTrigger(message)){
         const resumesUserRun=backgroundTriggerResumesUserRun(cached,message,index);
@@ -268,6 +280,7 @@
       cached.backgroundResumeBoundary=null;
       cached.userDirectedRunOpen=true;
       cached.lastUserDirectedIdx=index;
+      cached.linkedBackgroundTaskIds.clear();
     }
     if(cached.backgroundUpdateActive){
       if(message&&message.role==='assistant'&&assistantContinuesUserDirectedTurn(message)){
@@ -299,7 +312,7 @@
   };
   const rebuildProjection=(messages)=>{
     const projector=typeof window!=='undefined'&&window.HermesMessageProjection;
-    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:'',backgroundUpdateActive:false,backgroundResumeBoundary:null,userDirectedRunOpen:false,lastUserDirectedIdx:-1,semanticState:projector?projector.createState():null};
+    const cached={source:messages,length:0,entries:[],firstUser:null,firstSignature:'',tailSignature:'',backgroundUpdateActive:false,backgroundResumeBoundary:null,userDirectedRunOpen:false,lastUserDirectedIdx:-1,linkedBackgroundTaskIds:new Set(),semanticState:projector?projector.createState():null};
     for(let index=0;index<messages.length;index++) appendMessageEntry(cached,messages[index],index);
     cached.length=messages.length;
     cached.firstSignature=messages.length?messageSignature(messages[0]):'';

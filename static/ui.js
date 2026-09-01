@@ -617,6 +617,7 @@ function _cancelMessageVirtualizedRender(){
 }
 function _messageIsRenderable(m){
   if(!m||!m.role||m.role==='tool') return false;
+  if(m._latest_turn_gap) return true;
   if(_isBackgroundUpdateTriggerMessage(m)) return false;
   if(_isContextCompactionMessage(m)||_isPreservedCompressionTaskListMessage(m)) return false;
   if(_isRecoveryControlMessage(m)) return false;
@@ -642,6 +643,7 @@ function _isBackgroundUpdateTriggerMessage(m){
 }
 function _assistantContinuesUserDirectedTurn(m){
   if(!m||m.role!=='assistant') return false;
+  if(m._latest_turn_gap) return true;
   if(Array.isArray(m.tool_calls)&&m.tool_calls.length) return true;
   if(Array.isArray(m._partial_tool_calls)&&m._partial_tool_calls.length) return true;
   if(Array.isArray(m.content)&&m.content.some(part=>part&&part.type==='tool_use')) return true;
@@ -660,16 +662,11 @@ function _backgroundUpdateTaskId(m){
   const delegationMatch=text.match(/^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE\s*(?:—|-)\s*([^\]\s]+)/i);
   return delegationMatch?delegationMatch[1]:'';
 }
-function _backgroundUpdateResumesUserRun(messages,triggerIdx,lastUserIdx){
+function _backgroundUpdateResumesUserRun(messages,triggerIdx,lastUserIdx,linkedTaskIds){
   const list=Array.isArray(messages)?messages:[];
   const taskId=_backgroundUpdateTaskId(list[triggerIdx]);
   if(!taskId||lastUserIdx<0||triggerIdx<=lastUserIdx) return false;
-  const start=Math.max(lastUserIdx+1,triggerIdx-600);
-  for(let index=triggerIdx-1;index>=start;index--){
-    const message=list[index];
-    if(message&&message.role==='tool'&&String(msgContent(message)||'').includes(taskId)) return true;
-  }
-  return false;
+  return linkedTaskIds instanceof Set&&linkedTaskIds.has(taskId);
 }
 function _getVisibleMessagesWithIdx(){
   if(!_visWithIdxCache || _visWithIdxCacheLen !== S.messages.length || _visWithIdxCacheSrc !== S.messages){
@@ -690,10 +687,27 @@ function _getVisibleMessagesWithIdx(){
     let backgroundUpdateActive=false;
     let userDirectedRunOpen=false;
     let lastUserDirectedIdx=-1;
+    const linkedBackgroundTaskIds=new Set();
+    const rememberBackgroundToolTaskIds=message=>{
+      const meta=message&&message._wakeup_meta&&typeof message._wakeup_meta==='object'?message._wakeup_meta:{};
+      for(const value of [meta.task_id,meta.process_id,meta.delegation_id,meta.completion_id]){
+        const candidate=String(value||'').trim();
+        if(candidate.length>=4&&candidate.length<=200) linkedBackgroundTaskIds.add(candidate);
+      }
+      const matches=String(msgContent(message)||'').match(/\b[A-Za-z0-9][A-Za-z0-9_-]{3,199}\b/g)||[];
+      for(const candidate of matches){
+        if(candidate.includes('_')||candidate.includes('-')||/^[A-Fa-f0-9]{8,64}$/.test(candidate)) linkedBackgroundTaskIds.add(candidate);
+      }
+    };
     for(const m of (S.messages||[])){
+      if(m&&m.role==='tool'){
+        rememberBackgroundToolTaskIds(m);
+        rawIdx++;
+        continue;
+      }
       if(m&&m.role==='user'){
         if(_isBackgroundUpdateTriggerMessage(m)){
-          const resumesUserRun=_backgroundUpdateResumesUserRun(S.messages,rawIdx,lastUserDirectedIdx);
+          const resumesUserRun=_backgroundUpdateResumesUserRun(S.messages,rawIdx,lastUserDirectedIdx,linkedBackgroundTaskIds);
           backgroundUpdateActive=!userDirectedRunOpen&&!resumesUserRun;
           if(resumesUserRun) userDirectedRunOpen=true;
           rawIdx++;
@@ -702,6 +716,7 @@ function _getVisibleMessagesWithIdx(){
         backgroundUpdateActive=false;
         userDirectedRunOpen=true;
         lastUserDirectedIdx=rawIdx;
+        linkedBackgroundTaskIds.clear();
       }
       if(backgroundUpdateActive){
         if(m&&m.role==='assistant'&&_messageIsRenderable(m)&&!!(msgContent(m)||m.attachments?.length||m._statusCard)){
@@ -996,12 +1011,51 @@ function _messageSessionIndexBase(){
 function _messageSessionIndexForRawIdx(rawIdx){
   const n=Number(rawIdx);
   if(!Number.isFinite(n)) return null;
+  const message=Array.isArray(S.messages)?S.messages[n]:null;
+  const projected=Number(message&&message._display_source_index);
+  if(Number.isFinite(projected)) return projected;
+  // Sparse semantic windows cannot infer an absolute coordinate from a local
+  // row number. Newly appended/live rows without a server source index must
+  // fail closed until settlement supplies a contiguous window or explicit
+  // _display_source_index; otherwise edit/regenerate/fork could truncate the
+  // wrong point in the full transcript.
+  if(Array.isArray(S.messages)&&S.messages.some(item=>{
+    const source=item&&item._display_source_index;
+    return source!==null&&source!==''&&Number.isInteger(Number(source));
+  })) return null;
   return _messageSessionIndexBase()+n;
 }
 function _messageRawIdxForSessionIndex(sessionIdx){
   const n=Number(sessionIdx);
   if(!Number.isFinite(n)) return null;
+  if(Array.isArray(S.messages)){
+    const projectedIdx=S.messages.findIndex(message=>Number(message&&message._display_source_index)===n);
+    if(projectedIdx>=0) return projectedIdx;
+  }
   return n-_messageSessionIndexBase();
+}
+function _messagePrefixLoadedThrough(keepCount){
+  const count=Number(keepCount);
+  if(!Number.isInteger(count)||count<0) return false;
+  if(typeof _messagesTruncated!=='undefined'&&_messagesTruncated) return false;
+  if(_messageSessionIndexBase()!==0) return false;
+  if(!Array.isArray(S.messages)||S.messages.length<count) return false;
+  return !S.messages.some(message=>message&&message._latest_turn_gap);
+}
+function _sessionMutationExpectedMessageCount(){
+  const raw=S.session&&S.session.message_count;
+  if(raw===null||raw===undefined||raw==='') return null;
+  const value=Number(raw);
+  return Number.isInteger(value)&&value>=0?value:null;
+}
+function _sessionMutationExpectedMessageRevision(){
+  return String(S.session&&S.session.message_revision||'').trim()||null;
+}
+function _sessionMutationStillSafe(sessionId,expectedMessageCount,expectedMessageRevision){
+  if(!S.session||S.session.session_id!==sessionId||S.busy) return false;
+  if(expectedMessageCount!==null&&Array.isArray(S.messages)&&S.messages.length!==expectedMessageCount) return false;
+  if(expectedMessageRevision!==null&&String(S.session.message_revision||'').trim()!==expectedMessageRevision) return false;
+  return true;
 }
 function _messageVirtualScrollTopForVisibleIdx(visWithIdx, visibleIdx, container){
   const idx=Math.max(0,Number(visibleIdx)||0);
@@ -12838,6 +12892,138 @@ function _onBackgroundUpdateToggle(details){
   if(!details) return;
   _writeActivityDisclosureState(details.getAttribute('data-activity-disclosure-key'), !!details.open);
 }
+async function _loadLatestTurnGap(details){
+  if(!details||details._latestTurnGapLoaded||details._latestTurnGapLoading) return;
+  const rawIdx=Number(details.getAttribute('data-raw-idx'));
+  const message=Array.isArray(S.messages)?S.messages[rawIdx]:null;
+  const gap=message&&message._latest_turn_gap;
+  const start=Number(gap&&gap.start_index);
+  const end=Number(gap&&gap.end_index);
+  const body=details.querySelector('.latest-turn-gap-body');
+  if(!body||!Number.isFinite(start)||!Number.isFinite(end)||end<=start) return;
+  details._latestTurnGapLoading=true;
+  body.textContent='Loading work details…';
+  try{
+    const sid=String((S.session&&S.session.session_id)||'');
+    if(!sid) throw new Error('No active session');
+    let cursor=end;
+    let loaded=[];
+    const pagedToolCalls=[];
+    let rounds=0;
+    const pageLimit=Math.max(1,Math.min(500,Number(S.session&&S.session._msg_limit_max)||500));
+    while(cursor>start&&rounds<50){
+      const data=await api(
+        `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${pageLimit}&msg_before=${cursor}`,
+        {timeoutMs:120000}
+      );
+      if(!data||!data.session) throw new Error('Work details unavailable');
+      const offset=Number(data.session._messages_offset);
+      const page=Array.isArray(data.session.messages)?data.session.messages:[];
+      if(!Number.isFinite(offset)||offset>=cursor) break;
+      const bounded=page.map((item,index)=>{
+        if(!item||typeof item!=='object') return item;
+        return {...item,_display_source_index:offset+index};
+      }).filter(item=>{
+        const source=Number(item&&item._display_source_index);
+        return Number.isFinite(source)&&source>=start&&source<end;
+      });
+      const pageToolCalls=Array.isArray(data.session.tool_calls)?data.session.tool_calls:[];
+      pageToolCalls.forEach(call=>{
+        if(!call||typeof call!=='object') return;
+        const localAssistantIdx=Number(call.assistant_msg_idx);
+        if(!Number.isInteger(localAssistantIdx)||localAssistantIdx<0) return;
+        const sourceIdx=offset+localAssistantIdx;
+        if(sourceIdx<start||sourceIdx>=end) return;
+        pagedToolCalls.push({...call,_display_source_index:sourceIdx});
+      });
+      loaded=bounded.concat(loaded);
+      cursor=offset;
+      rounds+=1;
+    }
+    body.innerHTML='';
+    const fragment=document.createDocumentFragment();
+    const seenTools=new Set();
+    const sessionCallsBySource=new Map();
+    pagedToolCalls.forEach(call=>{
+      const source=Number(call&&call._display_source_index);
+      if(!Number.isInteger(source)) return;
+      if(!sessionCallsBySource.has(source)) sessionCallsBySource.set(source,[]);
+      sessionCallsBySource.get(source).push(call);
+    });
+    let visibleRows=0;
+    loaded.forEach(item=>{
+      if(!item||item.role!=='assistant') return;
+      const source=Number(item._display_source_index);
+      const calls=[];
+      const itemCalls=Array.isArray(item.tool_calls)?item.tool_calls:[];
+      const structuredCalls=Array.isArray(item.content)
+        ? item.content.filter(part=>part&&part.type==='tool_use').map(part=>({
+          id:part.id||part.tool_use_id||part.call_id||'',
+          tool_use_id:part.tool_use_id||part.id||'',
+          call_id:part.call_id||'',
+          name:part.name||part.function&&part.function.name||'Tool',
+          function:part.function,
+        }))
+        : [];
+      for(const call of itemCalls.concat(structuredCalls,sessionCallsBySource.get(source)||[])){
+        if(!call||typeof call!=='object') continue;
+        const id=String(call.id||call.tool_call_id||call.tid||call.tool_use_id||call.call_id||'');
+        const name=String(call.function&&call.function.name||call.name||'Tool');
+        const localKey=id||name;
+        if(calls.some(existing=>{
+          const existingId=String(existing.id||existing.tool_call_id||existing.tid||existing.tool_use_id||existing.call_id||'');
+          const existingName=String(existing.function&&existing.function.name||existing.name||'Tool');
+          return (id&&existingId===id)||(!id&&!existingId&&existingName===localKey);
+        })) continue;
+        calls.push(call);
+      }
+      calls.forEach(call=>{
+        const name=String(call&&call.function&&call.function.name||call&&call.name||'Tool').replace(/[_-]+/g,' ').trim();
+        const id=String(call&&(call.id||call.tool_call_id||call.tid||call.tool_use_id||call.call_id)||'');
+        const key=id||`${Number(item._display_source_index)}:${name}`;
+        if(seenTools.has(key)) return;
+        seenTools.add(key);
+        const row=document.createElement('div');
+        row.className='latest-turn-gap-tool';
+        row.textContent=name||'Tool';
+        fragment.appendChild(row);
+        visibleRows+=1;
+      });
+      const text=String(
+        typeof _assistantVisibleContentForReasoningCompare==='function'
+          ? _assistantVisibleContentForReasoningCompare(item)
+          : (typeof msgContent==='function'?msgContent(item):item.content||'')
+      ).trim();
+      if(!text) return;
+      const row=document.createElement('div');
+      row.className='latest-turn-gap-prose';
+      row.textContent=text.length>800?`${text.slice(0,800)}…`:text;
+      fragment.appendChild(row);
+      visibleRows+=1;
+    });
+    if(!visibleRows){
+      const empty=document.createElement('div');
+      empty.className='latest-turn-gap-empty';
+      empty.textContent='No user-facing work details were retained in this range.';
+      fragment.appendChild(empty);
+    }
+    if(cursor>start){
+      const partial=document.createElement('div');
+      partial.className='latest-turn-gap-empty';
+      partial.textContent='Additional work records remain outside this expanded view.';
+      fragment.appendChild(partial);
+    }
+    body.appendChild(fragment);
+    details._latestTurnGapLoaded=true;
+  }catch(error){
+    body.textContent=error&&error.message?error.message:'Work details unavailable';
+  }finally{
+    details._latestTurnGapLoading=false;
+  }
+}
+function _onLatestTurnGapToggle(details){
+  if(details&&details.open) _loadLatestTurnGap(details);
+}
 function _toggleToolWorklogGroup(summary){
   const group=summary&&summary.closest?summary.closest('.tool-worklog-tool-group,.tool-group'):null;
   if(group){
@@ -16964,7 +17150,12 @@ function renderMessages(options){
   // always be complete — never cut mid-run, never head+tail with a gap.
   const assistantTurnFinalVisibleContentByRawIdx=_assistantTurnFinalVisibleContentMap(visWithIdx);
   const assistantTurnVisibleContentByRawIdx=_assistantTurnVisibleContentMap(visWithIdx);
-  const hasServerOlder=!!(typeof _messagesTruncated!=='undefined' && _messagesTruncated && S.messages.length>0);
+  const hasServerOlder=!!(
+    typeof _messagesTruncated!=='undefined'
+    && _messagesTruncated
+    && Number(_oldestIdx)>0
+    && S.messages.length>0
+  );
   const serverOlderCount=hasServerOlder&&Number.isFinite(Number(_oldestIdx))?Math.max(0,Number(_oldestIdx)):0;
   if(typeof _applySessionNavigationPrefs==='function') _applySessionNavigationPrefs();
   if(virtualWindow.virtualized&&virtualWindow.topPad>0){
@@ -17317,6 +17508,19 @@ function renderMessages(options){
       continue;
     }
     currentBackgroundUpdatesGroup=null;
+
+    if(m&&m._latest_turn_gap){
+      currentAssistantTurn=null;
+      const gap=m._latest_turn_gap||{};
+      const omitted=Math.max(0,Number(gap.omitted_renderable)||Number(gap.omitted_records)||0);
+      const row=document.createElement('div');
+      row.className='msg-row latest-turn-gap-row';
+      row.dataset.msgIdx=rawIdx;
+      row.dataset.role='work_details_gap';
+      row.innerHTML=`<details class="background-update-card latest-turn-gap-card" data-raw-idx="${rawIdx}" ontoggle="_onLatestTurnGapToggle(this)"><summary class="tool-call-group-summary tool-worklog-summary transcript-disclosure-summary"><span class="tool-call-group-label tool-worklog-label background-update-label">Work details</span><span class="background-update-count">${esc(_fmtTokens(omitted))}</span><span class="tool-call-group-chevron background-update-toggle transcript-disclosure-chevron">${li('chevron-right',12)}</span></summary><div class="background-update-body latest-turn-gap-body">Open to load omitted work details.</div></details>`;
+      inner.appendChild(row);
+      continue;
+    }
 
     if(isProcessWakeup){
       currentAssistantTurn=null;
@@ -19566,7 +19770,18 @@ function autoResizeTextarea(ta) {
 async function submitEdit(msgIdx, newText) {
   if(!S.session || S.busy) return;
   const initialSid = S.session.session_id;
-  const absoluteKeepCount = _oldestIdx + msgIdx;
+  // msgIdx is zero-based and the edited message itself must be removed.
+  // A turn-aware projection is sparse, so local-window arithmetic is unsafe:
+  // resolve the message's original transcript coordinate before any full-load
+  // await can replace S.messages and reset _oldestIdx.
+  const absoluteKeepCount = _messageSessionIndexForRawIdx(msgIdx);
+  if(!Number.isInteger(absoluteKeepCount)||absoluteKeepCount<0) return;
+  const expectedMessageCount=_sessionMutationExpectedMessageCount();
+  const expectedMessageRevision=_sessionMutationExpectedMessageRevision();
+  if(!expectedMessageRevision){
+    setStatus(t('edit_failed')+'Reload this session before editing');
+    return;
+  }
   // #5924: capture the deliberate-pick signal up front (pre-network), scoped to
   // initialSid — a non-default session model (vs profile default), which is
   // inference-free and survives the failed send's marker consumption. See
@@ -19575,16 +19790,24 @@ async function submitEdit(msgIdx, newText) {
   if(typeof _ensureAllMessagesLoaded==='function'){
     await _ensureAllMessagesLoaded();
   }
-  if(!S.session || S.session.session_id !== initialSid) return;
+  if(!_sessionMutationStillSafe(initialSid,expectedMessageCount,expectedMessageRevision)) return;
+  if(!_messagePrefixLoadedThrough(absoluteKeepCount)){
+    setStatus(t('edit_failed')+'Full transcript unavailable');
+    return;
+  }
   try {
-    await api('/api/session/truncate', {method:'POST', body:JSON.stringify({
+    const truncateData=await api('/api/session/truncate', {method:'POST', body:JSON.stringify({
       session_id: initialSid,
-      keep_count: absoluteKeepCount
+      keep_count: absoluteKeepCount,
+      expected_message_count: Array.isArray(S.messages)?S.messages.length:null,
+      expected_message_revision: expectedMessageRevision
     })});
-    // #5924 SILENT-race guard: a session switch during the truncate await must not
-    // let this recovery apply session A's intent (truncate/re-arm/send) to the
-    // newly-visible session.
-    if(!S.session || S.session.session_id !== initialSid) return;
+    // #5924 SILENT-race guard: a session switch or successor turn during the
+    // truncate await must not let this recovery apply stale local state.
+    if(!_sessionMutationStillSafe(initialSid,expectedMessageCount,expectedMessageRevision)) return;
+    if(truncateData&&truncateData.session&&truncateData.session.message_revision){
+      S.session.message_revision=truncateData.session.message_revision;
+    }
     S.messages = S.messages.slice(0, absoluteKeepCount);
     renderMessages();
     $('msg').value = newText;
@@ -19602,23 +19825,52 @@ async function regenerateResponse(btn) {
   const row = btn.closest('[data-msg-idx]');
   if(!row) return;
   const assistantIdx = parseInt(row.dataset.msgIdx, 10);
-  const absoluteKeepCount = _oldestIdx + assistantIdx;
+  // keep_count is the zero-based assistant coordinate: truncate immediately
+  // before the answer being regenerated. Use the projected source coordinate
+  // rather than the row's sparse local position.
+  const absoluteKeepCount = _messageSessionIndexForRawIdx(assistantIdx);
+  if(!Number.isInteger(absoluteKeepCount)||absoluteKeepCount<0) return;
   const initialSid = S.session.session_id;
+  const expectedMessageCount=_sessionMutationExpectedMessageCount();
+  const expectedMessageRevision=_sessionMutationExpectedMessageRevision();
+  if(!expectedMessageRevision){
+    setStatus(t('regen_failed')+'Reload this session before regenerating');
+    return;
+  }
   let lastUserText = '';
   for(let i = assistantIdx - 1; i >= 0; i--) {
     const m = S.messages[i];
-    if(m && m.role === 'user') { lastUserText = msgContent(m); break; }
+    if(!(m&&m.role==='user')) continue;
+    if(
+      m._display_semantic_control
+      || (typeof _isBackgroundUpdateTriggerMessage==='function'&&_isBackgroundUpdateTriggerMessage(m))
+      || (typeof _isContextCompactionMessage==='function'&&_isContextCompactionMessage(m))
+      || (typeof _isPreservedCompressionTaskListMessage==='function'&&_isPreservedCompressionTaskListMessage(m))
+      || (typeof _isRecoveryControlMessage==='function'&&_isRecoveryControlMessage(m))
+    ) continue;
+    const candidate=msgContent(m);
+    if(candidate){lastUserText=candidate;break;}
   }
   if(!lastUserText) return;
   if(typeof _ensureAllMessagesLoaded==='function'){
     await _ensureAllMessagesLoaded();
   }
-  if(!S.session || S.session.session_id !== initialSid) return;
+  if(!_sessionMutationStillSafe(initialSid,expectedMessageCount,expectedMessageRevision)) return;
+  if(!_messagePrefixLoadedThrough(absoluteKeepCount)){
+    setStatus(t('regen_failed')+'Full transcript unavailable');
+    return;
+  }
   try {
-    await api('/api/session/truncate', {method:'POST', body:JSON.stringify({
+    const truncateData=await api('/api/session/truncate', {method:'POST', body:JSON.stringify({
       session_id: initialSid,
-      keep_count: absoluteKeepCount
+      keep_count: absoluteKeepCount,
+      expected_message_count: Array.isArray(S.messages)?S.messages.length:null,
+      expected_message_revision: expectedMessageRevision
     })});
+    if(!_sessionMutationStillSafe(initialSid,expectedMessageCount,expectedMessageRevision)) return;
+    if(truncateData&&truncateData.session&&truncateData.session.message_revision){
+      S.session.message_revision=truncateData.session.message_revision;
+    }
     S.messages = S.messages.slice(0, absoluteKeepCount);
     renderMessages();
     $('msg').value = lastUserText;

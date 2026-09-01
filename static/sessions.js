@@ -3257,9 +3257,10 @@ let _messagesTruncated = false;
 const _INITIAL_MSG_LIMIT = 6;
 const _OLDER_MSG_LIMIT = 30;
 // Cold loads start tiny, then widen at most twice only when the suffix contains
-// assistant output but not the human prompt that owns it. This keeps ordinary
-// sessions fast while making a long latest turn causally complete.
-const _LATEST_TURN_AUTO_LIMITS = [120, 480];
+// Mixed-version fallback: an older backend ignores latest_human_turn=1. Page
+// backward by its advertised ceiling until the shared semantic projection sees
+// the owning prompt, then compact the recovered range exactly like the server.
+const _LATEST_TURN_PAGE_MAX = 50;
 // Frontend-only warm transcript cache. Page memory is mirrored into bounded
 // sessionStorage so a reload in the same tab can reuse recent tails. Content is
 // never placed in CacheStorage/localStorage, disappears when the tab closes,
@@ -3313,6 +3314,7 @@ function _sessionMessageCacheSnapshot(sid,session){
     updated_at:session.updated_at,
     last_message_at:session.last_message_at,
     message_count:_sessionMessageCacheCount(session),
+    message_revision:String(session.message_revision||''),
     archived:!!session.archived,
     active_stream_id:String(session.active_stream_id||''),
     is_streaming:!!session.is_streaming,
@@ -3531,7 +3533,7 @@ async function _warmSessionMessageCacheEntry(row, expectedProfile, expectedEpoch
   request=(async()=>{
     try{
       const data=await api(
-        `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${_INITIAL_MSG_LIMIT}`,
+        `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${_INITIAL_MSG_LIMIT}&latest_human_turn=1`,
         {timeoutMs:120000}
       );
       if(expectedEpoch!==_sessionMessageCacheEpoch||String(S.activeProfile||'default')!==expectedProfile) return false;
@@ -3682,9 +3684,28 @@ function _syncToolCallsForLoadedMessages(messages, sessionToolCalls){
   }
 }
 
-function _initialTailNeedsHumanTurn(messages){
+function _initialTailNeedsHumanTurn(messages,messagesOffset){
   const list=Array.isArray(messages)?messages:[];
   if(!list.length) return false;
+  // A persisted multimodal transport shadow is normally recognized against the
+  // immediately preceding attachment-bearing human row. If a mixed-version tail
+  // begins at the shadow, that predecessor is outside the page; force one older
+  // fetch rather than accepting transport JSON as the semantic prompt.
+  const first=list[0];
+  const firstSerialized=(first&&first.role==='user'&&!(Array.isArray(first.attachments)&&first.attachments.length))
+    ? (typeof _serializedStructuredMessageContent==='function'
+      ? _serializedStructuredMessageContent(first.content)
+      : null)
+    : null;
+  const rawFirst=String(first&&first.content||'').trim();
+  const detachedMultimodalShadow=Number(messagesOffset)>0
+    && first&&first.role==='user'
+    && !(Array.isArray(first.attachments)&&first.attachments.length)
+    && !!(
+      firstSerialized&&firstSerialized.hasMedia
+      || (/^(?:json|message):\s*(?:\[|\x7b)/i.test(rawFirst)&&/"type"\s*:\s*"(?:image|image_url|input_image|output_image)"/i.test(rawFirst))
+    );
+  if(detachedMultimodalShadow) return true;
   if(typeof window!=='undefined'&&window.HermesMessageProjection){
     const projected=window.HermesMessageProjection.project(list);
     const hasHuman=projected.some(entry=>entry.visible&&entry.semanticType==='human_prompt');
@@ -3707,26 +3728,170 @@ function _initialTailNeedsHumanTurn(messages){
 }
 
 async function _expandInitialTailToLatestHumanTurn(sid, data, ownsLoad){
-  let current=data;
-  for(const desiredLimit of _LATEST_TURN_AUTO_LIMITS){
-    const session=current&&current.session;
-    if(!session||!session._messages_truncated||!_initialTailNeedsHumanTurn(session.messages)) break;
-    const serverMax=Math.max(1,Number(session._msg_limit_max)||_MSG_LIMIT_MAX);
-    const limit=Math.min(desiredLimit,serverMax);
-    const currentRenderable=(Array.isArray(session.messages)?session.messages:[]).filter(message=>(
-      typeof _messageIsRenderable==='function'?_messageIsRenderable(message):!!(message&&message.role&&message.role!=='tool')
-    )).length;
-    if(limit<=currentRenderable) continue;
-    const expanded=await api(
-      `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${limit}&expand_renderable=1`,
-      {timeoutMs:120000}
-    );
-    if(typeof ownsLoad==='function'&&!ownsLoad()) return current;
-    if(!expanded||!expanded.session||String(expanded.session.session_id||'')!==String(sid)) return current;
-    current=expanded;
-    if(limit>=serverMax) break;
+  if(data&&data.session&&data.session._latest_human_turn_projected) return data;
+  const initialSession=data&&data.session;
+  if(!initialSession||!initialSession._messages_truncated||!_initialTailNeedsHumanTurn(initialSession.messages,initialSession._messages_offset)) return data;
+
+  const stamp=(session)=>{
+    const offset=Math.max(0,Number(session&&session._messages_offset)||0);
+    return (Array.isArray(session&&session.messages)?session.messages:[]).map((message,index)=>{
+      if(!(message&&typeof message==='object')) return message;
+      const existing=Number(message._display_source_index);
+      if(Number.isFinite(existing)) return message;
+      return {...message,_display_source_index:offset+index};
+    });
+  };
+  const mergeBySourceIndex=(older,newer)=>{
+    const byIndex=new Map();
+    [...(older||[]),...(newer||[])].forEach(message=>{
+      const sourceIndex=Number(message&&message._display_source_index);
+      if(Number.isFinite(sourceIndex)) byIndex.set(sourceIndex,message);
+    });
+    return [...byIndex.entries()].sort((a,b)=>a[0]-b[0]).map(entry=>entry[1]);
+  };
+  const compact=(session)=>{
+    const messages=Array.isArray(session&&session.messages)?session.messages:[];
+    const projector=typeof window!=='undefined'&&window.HermesMessageProjection;
+    if(!projector||!messages.length) return session;
+    const projected=projector.project(messages);
+    let human=null;
+    projected.forEach(entry=>{
+      if(entry&&entry.visible&&entry.semanticType==='human_prompt') human=entry;
+    });
+    if(!human) return session;
+
+    const projectedByRawIdx=new Map(projected.map(entry=>[entry.rawIdx,entry]));
+    const afterHuman=projected.filter(entry=>entry&&entry.visible&&entry.rawIdx>=human.rawIdx);
+    const primaryFinal=afterHuman.filter(entry=>entry.semanticType==='assistant_final').pop()||null;
+    const tailVisible=afterHuman.slice(-6);
+    const selected=new Set([human.rawIdx,...tailVisible.map(entry=>entry.rawIdx)]);
+    if(primaryFinal) selected.add(primaryFinal.rawIdx);
+    // Hidden background controls still own semantic turn boundaries. Retain a
+    // sanitized marker so compacting a mixed-version response cannot promote a
+    // later async update to the primary final (or break a linked resume).
+    projected.forEach(entry=>{
+      if(
+        entry
+        && entry.rawIdx>=human.rawIdx
+        && entry.semanticType==='system_control'
+        && typeof projector.isBackgroundTrigger==='function'
+        && projector.isBackgroundTrigger(entry.message)
+      ) selected.add(entry.rawIdx);
+    });
+
+    const selectedCallIds=new Set();
+    selected.forEach(rawIndex=>{
+      const message=messages[rawIndex];
+      const calls=[]
+        .concat(Array.isArray(message&&message.tool_calls)?message.tool_calls:[])
+        .concat(Array.isArray(message&&message._partial_tool_calls)?message._partial_tool_calls:[]);
+      calls.forEach(call=>{
+        const callId=String(call&&(call.id||call.tid||call.tool_call_id||call.tool_use_id||call.call_id)||'').trim();
+        if(callId) selectedCallIds.add(callId);
+      });
+    });
+    if(selectedCallIds.size){
+      messages.forEach((message,rawIndex)=>{
+        if(!(message&&message.role==='tool')) return;
+        const callId=String(message.tool_call_id||message.tool_use_id||message.call_id||message.tid||'').trim();
+        if(callId&&selectedCallIds.has(callId)) selected.add(rawIndex);
+      });
+    }
+
+    const visibleIndices=new Set(afterHuman.map(entry=>entry.rawIdx));
+    const ordered=[...selected].filter(index=>index>=human.rawIdx).sort((a,b)=>a-b);
+    const compacted=[];
+    let previousRaw=null;
+    let previousSource=null;
+    for(const rawIndex of ordered){
+      const message=messages[rawIndex];
+      if(!(message&&typeof message==='object')) continue;
+      const sourceIndex=Number(message._display_source_index);
+      if(!Number.isFinite(sourceIndex)) continue;
+      if(previousRaw!==null&&rawIndex>previousRaw+1){
+        let omittedRenderable=0;
+        for(let candidate=previousRaw+1;candidate<rawIndex;candidate++){
+          if(visibleIndices.has(candidate)) omittedRenderable++;
+        }
+        if(omittedRenderable>0){
+          compacted.push({
+            role:'assistant',
+            content:'',
+            _source:'display_projection',
+            _latest_turn_gap:{
+              start_index:previousSource+1,
+              end_index:sourceIndex,
+              omitted_records:Math.max(0,sourceIndex-previousSource-1),
+              omitted_renderable:omittedRenderable,
+            },
+          });
+        }
+      }
+      const semanticEntry=projectedByRawIdx.get(rawIndex);
+      if(semanticEntry&&semanticEntry.semanticType==='system_control'&&projector.isBackgroundTrigger(message)){
+        compacted.push({
+          role:'user',
+          content:'',
+          _source:message._source==='async_delegation'?'async_delegation':'process_wakeup',
+          _display_semantic_control:true,
+          _display_resumes_human_turn:semanticEntry.resumesHumanTurn===true,
+          _display_source_index:sourceIndex,
+        });
+      }else{
+        compacted.push(message);
+      }
+      previousRaw=rawIndex;
+      previousSource=sourceIndex;
+    }
+    const humanSource=Number(messages[human.rawIdx]&&messages[human.rawIdx]._display_source_index);
+    if(!Number.isFinite(humanSource)||!compacted.length) return session;
+    let expectedSource=humanSource;
+    const sparseProjection=compacted.some(message=>{
+      if(!(message&&typeof message==='object')) return false;
+      if(message._latest_turn_gap) return true;
+      const sourceIndex=Number(message._display_source_index);
+      if(!Number.isInteger(sourceIndex)) return false;
+      if(sourceIndex!==expectedSource) return true;
+      expectedSource=sourceIndex+1;
+      return false;
+    });
+    return {
+      ...session,
+      messages:compacted,
+      tool_calls:[],
+      _messages_offset:humanSource,
+      _messages_truncated:humanSource>0||sparseProjection,
+      _latest_human_turn_projected:true,
+      _latest_human_turn_projection_source:'client_paging',
+      _latest_human_turn_gap_count:compacted.filter(message=>message&&message._latest_turn_gap).length,
+    };
+  };
+
+  let current={...initialSession,messages:stamp(initialSession)};
+  let cursor=Math.max(0,Number(initialSession._messages_offset)||0);
+  const serverMax=Math.max(1,Math.min(_MSG_LIMIT_MAX,Number(initialSession._msg_limit_max)||_MSG_LIMIT_MAX));
+  for(let pageNumber=0;pageNumber<_LATEST_TURN_PAGE_MAX&&cursor>0;pageNumber++){
+    let pageData;
+    try{
+      pageData=await api(
+        `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${serverMax}&msg_before=${cursor}`,
+        {timeoutMs:120000}
+      );
+    }catch(_error){
+      break;
+    }
+    if(typeof ownsLoad==='function'&&!ownsLoad()) return data;
+    const page=pageData&&pageData.session;
+    if(!page||String(page.session_id||'')!==String(sid)) break;
+    const pageOffset=Math.max(0,Number(page._messages_offset)||0);
+    if(pageOffset>=cursor) break;
+    current={...current,...page,messages:mergeBySourceIndex(stamp(page),current.messages),_messages_offset:pageOffset};
+    if(!_initialTailNeedsHumanTurn(current.messages,pageOffset)){
+      return {session:compact(current)};
+    }
+    cursor=pageOffset;
   }
-  return current;
+  return data;
 }
 
 async function _ensureMessagesLoaded(sid, opts) {
@@ -3765,7 +3930,9 @@ async function _ensureMessagesLoaded(sid, opts) {
   // Older frontends used expand_renderable=1 to request visible-row expansion.
   // The server now counts msg_limit by visible transcript rows by default; keep
   // the flag for compatibility with mixed-version deployments.
-  const expandParam = boundedReloadLimit ? '&expand_renderable=1' : '';
+  const expandParam = boundedReloadLimit
+    ? `&expand_renderable=1${(!opts.force&&boundedReloadLimit===_INITIAL_MSG_LIMIT)?'&latest_human_turn=1':''}`
+    : '';
   let data;
   try {
     if(!opts.force&&typeof _takeFreshSessionMessageCache==='function'){
@@ -3849,6 +4016,7 @@ async function _ensureMessagesLoaded(sid, opts) {
   }
   if(S.session&&S.session.session_id===sid){
     S.session.message_count=Number(data.session.message_count || msgs.length);
+    S.session.message_revision=String(data.session.message_revision || '');
     S.lastUsage={...(data.session.last_usage||S.lastUsage||{})};
     // Phase 2: the messages=1 response carries the canonical cold-load
     // `todo_state` snapshot, derived server-side from the FULL untruncated
@@ -4502,8 +4670,24 @@ async function _loadOlderMessages() {
 //      ensure-all calls from rapid double-clicks on Start.
 //   2. Bump _messagesGeneration before mutating S.messages so any
 //      in-flight prefetch's post-await generation check bails out.
+function _loadedMessageWindowIsSparse(){
+  if(!Array.isArray(S.messages)||!S.messages.length) return false;
+  let expected=Math.max(0,Number(_oldestIdx)||0);
+  for(const message of S.messages){
+    if(!(message&&typeof message==='object')) continue;
+    if(message._latest_turn_gap) return true;
+    const sourceIndex=Number(message._display_source_index);
+    if(!Number.isInteger(sourceIndex)) continue;
+    if(sourceIndex!==expected) return true;
+    expected=sourceIndex+1;
+  }
+  return false;
+}
+function _messageHistoryNeedsFullLoad(){
+  return !!_messagesTruncated||_loadedMessageWindowIsSparse();
+}
 async function _ensureAllMessagesLoaded() {
-  if (!_messagesTruncated || !S.session) return;
+  if (!_messageHistoryNeedsFullLoad() || !S.session) return;
   if (_loadingOlder) {
     // A prefetch is mid-flight (between the `_loadingOlder = true` line
     // and its post-await guards). Bumping the generation token now
@@ -4516,7 +4700,7 @@ async function _ensureAllMessagesLoaded() {
     while (_loadingOlder) {
       await new Promise(resolve => setTimeout(resolve, 16));
     }
-    if (!_messagesTruncated || !S.session) return;
+    if (!_messageHistoryNeedsFullLoad() || !S.session) return;
   }
   _loadingOlder = true;
   try {
@@ -4547,6 +4731,7 @@ async function _ensureAllMessagesLoaded() {
     _syncToolCallsForLoadedMessages(msgs, data.session.tool_calls);
     if (S.session && S.session.session_id === sid) {
       S.session.message_count = Number(data.session.message_count || msgs.length);
+      S.session.message_revision = String(data.session.message_revision || '');
     }
   } finally {
     _loadingOlder = false;

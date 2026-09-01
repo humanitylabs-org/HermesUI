@@ -115,7 +115,11 @@ def test_truncate_endpoint_also_truncates_context_messages(monkeypatch, tmp_path
     session.save()
 
     # Call the real truncate endpoint via handle_post
-    body = {"session_id": "issue2914truncate", "keep_count": 2}
+    body = {
+        "session_id": "issue2914truncate",
+        "keep_count": 2,
+        "expected_message_revision": routes._session_message_mutation_revision(session),
+    }
     body_bytes = json.dumps(body).encode()
     monkeypatch.setattr(routes, "_check_csrf", lambda handler: True)
 
@@ -179,7 +183,11 @@ def test_truncate_endpoint_compaction_leading_context_row(monkeypatch, tmp_path)
     )
     session.save()
 
-    body = {"session_id": "issue5096truncatectx", "keep_count": 2}
+    body = {
+        "session_id": "issue5096truncatectx",
+        "keep_count": 2,
+        "expected_message_revision": routes._session_message_mutation_revision(session),
+    }
     body_bytes = json.dumps(body).encode()
     monkeypatch.setattr(routes, "_check_csrf", lambda handler: True)
 
