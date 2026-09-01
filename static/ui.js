@@ -627,10 +627,15 @@ function _messageIsRenderable(m){
   const hasAssistantVisibleAnchor=hasTc||hasTu||hasPartialTc||_messageHasReasoningPayload(m)||_assistantMessageHasVisibleContent(m);
   return !!(msgContent(m)||m._statusCard||m.attachments?.length||(m.role==='assistant'&&(hasReasoningAnchor||hasAssistantVisibleAnchor)));
 }
+function _backgroundUpdateControlText(m){
+  const raw=String(msgContent(m)||'');
+  if(typeof _stripWorkspaceDisplayPrefix==='function') return _stripWorkspaceDisplayPrefix(raw);
+  return raw.replace(/^\s*\[Workspace(?:::[^\]]*|:[^\]]*)\]\s*/i,'').trim();
+}
 function _isBackgroundUpdateTriggerMessage(m){
   if(!m||m.role!=='user') return false;
   if(m._source==='process_wakeup'||m._source==='async_delegation') return true;
-  const text=String(msgContent(m)||'');
+  const text=_backgroundUpdateControlText(m);
   return /^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE(?:\s*(?:—|-)\s*[^\]]*)?\]/i.test(text)
     || /^\s*\[IMPORTANT:\s*Background process\b/i.test(text)
     || /^\s*\[BACKGROUND WAKEUP\b/i.test(text);
@@ -649,7 +654,7 @@ function _backgroundUpdateTaskId(m){
     .map(value=>String(value||'').trim())
     .find(value=>value.length>=4&&value.length<=200);
   if(direct) return direct;
-  const text=String(msgContent(m)||'');
+  const text=_backgroundUpdateControlText(m);
   const processMatch=text.match(/\b(proc_[A-Za-z0-9_-]+)\b/);
   if(processMatch) return processMatch[1];
   const delegationMatch=text.match(/^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE\s*(?:—|-)\s*([^\]\s]+)/i);

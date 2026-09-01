@@ -186,9 +186,9 @@ global.localStorage={{getItem(){{return null;}},setItem(){{}}}};
 global.S={{session:{{session_id:'session-1'}},messages:[
   {{role:'user',content:'json:[{{"type":"text","text":"[Workspace::v1: /tmp]\\nBuild and ship the live dashboard.\\n\\n[Attached files: /tmp/screenshot.png]"}},{{"type":"image_url","image_url":{{"url":"data:image/png;base64,SECRET_PIXELS"}}}}]',id:'u1'}},
   {{role:'assistant',content:'I am deploying it now.',id:'a1',tool_calls:[{{function:{{name:'terminal'}}}}],finish_reason:'tool_calls'}},
-  {{role:'user',content:'[ASYNC DELEGATION BATCH COMPLETE — review-1] Review finished.',_source:'process_wakeup',id:'b1'}},
+  {{role:'user',content:'[Workspace::v1: /home/oscar/workspace]\\n[ASYNC DELEGATION BATCH COMPLETE — deleg_6695d6f0] Review finished.',id:'b1'}},
   {{role:'assistant',content:'The dashboard is live and verified.',id:'a2',finish_reason:'stop'}},
-  {{role:'user',content:'[IMPORTANT: Background process proc_1 completed (exit_code=0).]',_source:'process_wakeup',id:'b2'}},
+  {{role:'user',content:'[Workspace::v1: /home/oscar/workspace]\\n[IMPORTANT: Background process proc_1 completed (exit_code=0).]',id:'b2'}},
   {{role:'assistant',content:'',id:'bg-tool',tool_calls:[{{function:{{name:'terminal'}}}}],finish_reason:'tool_calls'}},
   {{role:'tool',content:'BACKGROUND_QA_COMPLETE',id:'bg-tool-result'}},
   {{role:'assistant',content:'Independent review completed with no blockers.',id:'b3',finish_reason:'stop'}},

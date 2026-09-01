@@ -183,7 +183,7 @@
   function isBackgroundUpdateTrigger(message){
     if(!message||message.role!=='user') return false;
     if(message._source==='process_wakeup'||message._source==='async_delegation') return true;
-    const text=rawText(message);
+    const text=cleanUserText(message);
     return /^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE(?:\s*(?:—|-)\s*[^\]]*)?\]/i.test(text)
       || /^\s*\[IMPORTANT:\s*Background process\b/i.test(text)
       || /^\s*\[BACKGROUND WAKEUP\b/i.test(text);
@@ -202,7 +202,7 @@
       .map(value=>String(value||'').trim())
       .find(value=>value.length>=4&&value.length<=200);
     if(direct) return direct;
-    const text=rawText(message);
+    const text=cleanUserText(message);
     const processMatch=text.match(/\b(proc_[A-Za-z0-9_-]+)\b/);
     if(processMatch) return processMatch[1];
     const delegationMatch=text.match(/^\s*\[ASYNC DELEGATION(?: BATCH)? COMPLETE\s*(?:—|-)\s*([^\]\s]+)/i);

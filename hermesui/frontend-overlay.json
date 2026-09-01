@@ -51,7 +51,7 @@
       "upstream_sha256": "c43b7b0885cf3cb285edc7046463076c9bf7a25dd5aa8eeb60198bf5c21524b0"
     },
     {
-      "hermesui_sha256": "4bd9ba17f4a3a50d484af82d80dabfc45eae244da660ff790426ccf1288a3dd3",
+      "hermesui_sha256": "92c402d6c035bb48a6d5a4d04b9ab4b224c78c0dedbbff36246f08e5bd2f3d7c",
       "path": "static/index.html",
       "upstream_sha256": "4850e0f609c56ef5619dcb023f95398224b053fcca6b1125d4f8a2923f9b2a3c"
     },
@@ -66,7 +66,7 @@
       "upstream_sha256": "da3e24d84ae91fba3f8ba51f48d51d277b4f6d443506e888a178ac7d1fed1c6a"
     },
     {
-      "hermesui_sha256": "f1139335e5613749374a9a426a7acb227ef03f8f49ae707cba1cda8a958327ff",
+      "hermesui_sha256": "e910111c30973f04ff0154203aa7413bb0fe2e9e84fada8b75896147f32ff037",
       "path": "static/message_projection.js",
       "upstream_sha256": null
     },
@@ -86,7 +86,7 @@
       "upstream_sha256": "5eb65e2ee84e757f426cf1aa2b45a51104c3551f1651c75d6573ba8076401a69"
     },
     {
-      "hermesui_sha256": "2ee80e3bf98998dabc41dacf5a9309231033b7f641589e72b16bdda723d3dd96",
+      "hermesui_sha256": "bfa55306fb03a615f5ef25b024f5a9e761e9097cf9718ae9171f7ac601cef782",
       "path": "static/session-dashboard.js",
       "upstream_sha256": null
     },
@@ -111,7 +111,7 @@
       "upstream_sha256": "54bf60f68b5a099f808076de1c43d99cee0bdac05e5067e806f5b0148d8d9e33"
     },
     {
-      "hermesui_sha256": "602772a00e9213fe30d3e33e46925ebecea5650dabab24d1c1912d0b2ee27535",
+      "hermesui_sha256": "3a72d906c32c745bb6179dd008d4a85f01639706f442209f12a8787db0089a7b",
       "path": "static/sw.js",
       "upstream_sha256": "cfdc35b1dd3f20f9ef8e885008dd76c3bcd2fe3deb61c1708f2e6d88514e2ff8"
     },
@@ -126,7 +126,7 @@
       "upstream_sha256": null
     },
     {
-      "hermesui_sha256": "f3bb8bbdad12f54f4840b0d618a1f4ec359e9d94fd0d6ff5c170d1459df6821f",
+      "hermesui_sha256": "697de723ee1fb9312fe65f1a289ad822b265c2c92e7cfff5fede182919c14eee",
       "path": "static/ui.js",
       "upstream_sha256": "d03404c70ada963b353c36ca6a0215f1786f150d854d3aa36a19ac071d718ec4"
     },

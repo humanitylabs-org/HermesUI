@@ -37,7 +37,7 @@ const messages=[
   {role:'assistant',content:'',tool_calls:[{function:{name:'terminal'}}],finish_reason:'tool_calls'},
   {role:'tool',content:'DEPLOY_FINISHED'},
   {role:'assistant',content:'The transcript repair is live and verified.',finish_reason:'stop'},
-  {role:'user',content:'[IMPORTANT: Background process proc_qa completed (exit_code=0).]',_source:'process_wakeup'},
+  {role:'user',content:'[Workspace::v1: /home/oscar/workspace]\n[IMPORTANT: Background process proc_qa completed (exit_code=0).]'},
   {role:'assistant',content:'',tool_calls:[{function:{name:'terminal'}}],finish_reason:'tool_calls'},
   {role:'tool',content:'QA_COMPLETE'},
   {role:'assistant',content:'Independent QA reported no blockers.',finish_reason:'stop'},
@@ -70,7 +70,7 @@ const messages=[
   {role:'assistant',content:'',tool_calls:[{function:{name:'terminal'}}],finish_reason:'tool_calls'},
   {role:'tool',content:'Background process proc_linked started.'},
   {role:'assistant',content:'Verification is still running.',finish_reason:'stop'},
-  {role:'user',content:'[IMPORTANT: Background process proc_linked completed (exit_code=0).]',_source:'process_wakeup',_wakeup_meta:{task_id:'proc_linked'}},
+  {role:'user',content:'[Workspace::v1: /home/oscar/workspace]\n[IMPORTANT: Background process proc_linked completed (exit_code=0).]'},
   {role:'assistant',content:'The export contains 3,486 verified contacts.',finish_reason:'stop'},
 ];
 const visible=HermesMessageProjection.visible(messages).map(entry=>({text:String(entry.message.content||''),type:entry.semanticType,bg:entry.backgroundUpdate}));
@@ -83,6 +83,37 @@ process.stdout.write(JSON.stringify(visible));
         "bg": False,
     }
     assert all(not entry["bg"] for entry in payload)
+
+
+def test_workspace_prefixed_delegation_envelope_is_never_a_human_prompt():
+    script = r"""
+const fs=require('fs');
+global.window=global;
+global.msgContent=message=>String(message&&message.content||'');
+global._messageIsRenderable=message=>!!(message&&message.role!=='tool'&&(message.content||(message.tool_calls||[]).length));
+global._isContextCompactionMessage=()=>false;
+global._isPreservedCompressionTaskListMessage=()=>false;
+global._isRecoveryControlMessage=()=>false;
+eval(fs.readFileSync(process.argv[1],'utf8'));
+const messages=[
+  {role:'user',content:'Ship the Apps page.'},
+  {role:'assistant',content:'The Apps page is live.',finish_reason:'stop'},
+  {role:'user',content:'[Workspace::v1: /home/oscar/workspace]\n[ASYNC DELEGATION BATCH COMPLETE — deleg_6695d6f0]\nA background fan-out finished.'},
+  {role:'assistant',content:'Independent review found one blocker.',finish_reason:'stop'},
+];
+const all=HermesMessageProjection.project(messages);
+process.stdout.write(JSON.stringify({
+  visible:all.filter(entry=>entry.visible).map(entry=>({idx:entry.rawIdx,type:entry.semanticType,text:String(entry.message.content||'')})),
+  controls:all.filter(entry=>entry.semanticType==='system_control').map(entry=>entry.rawIdx),
+}));
+"""
+    payload = _run_node(script)
+    assert payload["controls"] == [2]
+    assert payload["visible"] == [
+        {"idx": 0, "type": "human_prompt", "text": "Ship the Apps page."},
+        {"idx": 1, "type": "assistant_final", "text": "The Apps page is live."},
+        {"idx": 3, "type": "async_update", "text": "Independent review found one blocker."},
+    ]
 
 
 def test_cold_tail_expands_only_until_latest_human_prompt_is_present():

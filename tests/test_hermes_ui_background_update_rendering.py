@@ -71,6 +71,7 @@ let _visWithIdxCacheSrc = null;
 const heightStart = src.indexOf('const MESSAGE_RENDER_WINDOW_DEFAULT');
 const heightEnd = src.indexOf('const MESSAGE_VIRTUAL_MEASUREMENT_MAX_RERENDERS', heightStart);
 if(heightStart !== -1 && heightEnd !== -1) eval(src.slice(heightStart, heightEnd));
+eval(extractFunc('_backgroundUpdateControlText'));
 eval(extractFunc('_isBackgroundUpdateTriggerMessage'));
 eval(extractFunc('_assistantContinuesUserDirectedTurn'));
 eval(extractFunc('_backgroundUpdateTaskId'));
@@ -129,7 +130,7 @@ _visWithIdxCacheLen = 0;
 _visWithIdxCacheSrc = null;
 S.messages = [
   {role:'assistant',content:'Deploying now.',tool_calls:[{function:{name:'terminal'}}],finish_reason:'tool_calls'},
-  {role:'user',content:'[ASYNC DELEGATION BATCH COMPLETE — review-1]',_source:'process_wakeup'},
+  {role:'user',content:'[Workspace::v1: /home/oscar/workspace]\n[ASYNC DELEGATION BATCH COMPLETE — deleg_6695d6f0]\nA background fan-out finished.'},
   {role:'assistant',content:'Live now and verified.',finish_reason:'stop'},
   {role:'user',content:'[IMPORTANT: Background process proc_9 completed (exit_code=0).]',_source:'process_wakeup'},
   {role:'assistant',content:'Independent review completed.',finish_reason:'stop'},
