@@ -48,6 +48,7 @@ jobs:
             tests/test_hermes_ui_browser_conversation_lifecycle.py \
             tests/test_hermes_ui_chat_shell.py \
             tests/test_hermes_ui_boundary.py \
+            tests/test_hermes_ui_cloudflare_installer.py \
             tests/test_hermes_ui_installer_runtime_identity.py \
             tests/test_hermes_ui_runtime_home_guard.py \
             tests/test_hermes_ui_mobile_session_swipe.py \
@@ -63,3 +64,5 @@ jobs:
         run: |
           ./qa/tailnet-installer-smoke.sh
           ./qa/update-smoke.sh
+      - name: Test Cloudflare-first composition lifecycle
+        run: ./qa/cloudflare-installer-smoke.sh

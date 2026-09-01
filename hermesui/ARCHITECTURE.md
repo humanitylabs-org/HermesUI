@@ -29,28 +29,30 @@ The first command refreshes the overlay inventory. The second rejects backend dr
 
 Frontend tests use downstream-specific names under `tests/test_hermes_ui_*` and `tests/test_hermesui_subpath_*`. Upstream tests are not rewritten to make the custom interface pass.
 
-## Layer 3: Tailnet composition
+## Layer 3: private-access composition
 
 `hermesui/installer/` is an operational wrapper, not a backend fork. It:
 
-- checks for Linux, Python, Hermes Agent, systemd user services, and Tailscale;
+- checks for Linux, Python, Hermes Agent, and systemd user services;
 - runs the unchanged upstream WebUI server from the reviewed Hermes UI checkout;
 - binds the server to loopback;
-- exposes only `/hermesUI` through Tailscale Serve;
+- prefers a dedicated Cloudflare Tunnel + Access boundary for a new VPS install;
+- creates Access and its exact-email allow policy before DNS and requires Access JWT validation again at the origin connector;
+- preserves an existing healthy Tailscale Serve installation and supports a new Tailscale install only by explicit choice;
 - provides scoped status, update, and uninstall operations;
-- does not enable Funnel or modify Hermes Agent data.
+- does not enable Funnel, create a temporary public tunnel, or modify Hermes Agent data.
 
 The installer never patches files under `api/` or changes the upstream request/response contract.
 
 ## Downstream verification and release wiring
 
-Hermes UI keeps Nesquena's test, browser, documentation, and Docker checks but wires the relevant read-only jobs to the downstream `hermes-ui` integration branch. Those workflow overrides are hash-pinned by `hermesui/check_boundary.py`; they do not change application runtime behavior.
+Hermes UI keeps Nesquena's test, browser, documentation, and Docker checks. The downstream overlay workflow runs for every pull request and push, while inherited workflow overrides are hash-pinned by `hermesui/check_boundary.py`; none changes application runtime behavior.
 
 The inherited tag-triggered release and GHCR publisher is disabled on the downstream line. `.github/workflows/release.yml` is a read-only manual preflight for an exact reviewed commit. Publishing a tag, GitHub Release, package, image, website prompt, or deployment remains a separate human-approved action.
 
 ## Humanity Labs button
 
-The humanitylabs.org button should copy or launch the reviewed prompt from `docs/give-this-prompt-to-your-ai.md`. The user's AI performs prerequisite checks, clones an immutable reviewed Hermes UI release, runs the Tailnet installer, and reports the private URL. The website does not host the user's agent or proxy their traffic.
+The aiwizards.com button should copy or launch the reviewed prompt from `docs/give-this-prompt-to-your-ai.md`. The user's AI performs prerequisite checks, clones an immutable reviewed Hermes UI release, chooses the supported access mode under the documented rules, runs the matching installer, and reports the private URL. The website does not host the user's agent or proxy their traffic.
 
 ## Release invariant
 
@@ -61,5 +63,5 @@ A normal Hermes UI release is valid only when all of these are true:
 - no upstream backend/runtime path differs from `UPSTREAM.json`;
 - the frontend overlay hashes match the shipped files;
 - frontend and mounted-subpath browser tests pass;
-- Tailnet install/status/update/uninstall smokes pass;
+- Cloudflare install/status/uninstall and Tailscale install/status/update/uninstall smokes pass;
 - an independent review confirms the exact immutable commit.

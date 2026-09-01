@@ -399,7 +399,7 @@ exec 8>&-
 grep -q 'another HermesUI setup, update, or uninstall is already running' "$TMP/lock-contention.err"
 
 # Unsupported client-only or isolated modes fail before any local or Tailnet
-# discovery/mutation. v0.2.2 intentionally supports standalone only.
+# discovery/mutation. Wizard App intentionally supports standalone only.
 for unsupported_mode in external isolated; do
   : >"$LOG"
   export HERMESUI_MODE="$unsupported_mode"

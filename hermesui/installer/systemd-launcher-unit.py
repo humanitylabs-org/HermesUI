@@ -33,7 +33,7 @@ def render(
     if not 1024 <= port <= 65535:
         raise RuntimeError("HermesUI launcher requires an unprivileged TCP port")
     if profile != "default":
-        raise RuntimeError("v0.2.2 standalone installation supports only the default Hermes profile")
+        raise RuntimeError("Wizard App standalone installation supports only the default Hermes profile")
     values = (str(repo_root), str(home), str(hermes_home), profile)
     if any("\n" in value or "\0" in value for value in values):
         raise RuntimeError("paths containing newlines or NUL bytes are unsupported")

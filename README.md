@@ -1,16 +1,18 @@
 # Hermes UI
 
-Hermes UI is Humanity Labs' **frontend-only fork** of [Nesquena's Hermes WebUI](https://github.com/nesquena/hermes-webui). Nesquena owns the WebUI server, API, authentication, persistence, streaming, and Hermes Agent integration. Humanity Labs changes only the browser interface and supplies a separate Tailnet installer.
+Hermes UI is Humanity Labs' **frontend-only fork** of [Nesquena's Hermes WebUI](https://github.com/nesquena/hermes-webui). Nesquena owns the WebUI server, API, authentication, persistence, streaming, and Hermes Agent integration. Humanity Labs changes only the browser interface and supplies private-access installers.
 
 The project has three intentionally separate layers:
 
 1. **Upstream WebUI backend** — kept byte-for-byte identical to the commit in `UPSTREAM.json`.
 2. **Hermes UI frontend** — the changed files under `static/`, recorded with source and result hashes in `hermesui/frontend-overlay.json`.
-3. **Tailnet composition** — install, status, update, and uninstall tools under `hermesui/installer/`. These run one unchanged upstream server on loopback and expose `/hermesUI` privately with Tailscale Serve. The standalone installer persists the resolved Hermes home/profile and fails closed rather than launch a second execution backend over the same Hermes state; external/client-only mode is not yet supported.
+3. **Private-access composition** — install, status, and uninstall tools under `hermesui/installer/`. A new VPS install prefers a dedicated Cloudflare Tunnel protected by Cloudflare Access; an existing healthy Tailscale Serve installation is preserved, and a new Tailscale install remains available by explicit choice. Both modes run one unchanged upstream server on loopback, persist the resolved Hermes home/profile, and fail closed rather than launch a second execution backend over the same Hermes state; external/client-only mode is not supported.
 
 Run `python3 hermesui/check_boundary.py` before every commit. It fails if an upstream backend/runtime file changed or if the frontend overlay manifest is stale. When a frontend asset changes, regenerate the manifest with `python3 hermesui/update_overlay_manifest.py`.
 
-The intended one-button flow on humanitylabs.org gives the user's AI the reviewed install prompt in `docs/give-this-prompt-to-your-ai.md`. The host must already have Hermes Agent, Python, systemd user services, and Tailscale connected to the user's devices.
+The intended one-button flow on aiwizards.com gives the user's AI the reviewed install prompt in `docs/give-this-prompt-to-your-ai.md`. The host must already have Hermes Agent, Python, and systemd user services. Cloudflare mode additionally needs a dedicated hostname, a Zero Trust organization with the One-Time PIN identity provider enabled, `cloudflared`, and a narrowly scoped API token supplied from an o...[truncated] That token needs account permissions **Cloudflare Tunnel: Edit**, **Access: Apps and Policies: Edit**, and **Access: Organizations, Identity Providers, and Groups: Read**, plus zone permission **DNS: Edit** for the selected zone. Tailscale mode needs a connected Tailnet with MagicDNS.
+
+If Cloudflare accepts a mutation but its response is lost, the installer reconciles the exact provider inventory before continuing. If reconciliation is unavailable, it retains owner-only recovery state and refuses a blind retry. After provider connectivity is restored, run `./hermesui/installer/cloudflare-uninstall.sh --api-token-file /path/to/token` before retrying setup.
 
 See [the architecture contract](hermesui/ARCHITECTURE.md) and [upstream refresh procedure](docs/UPSTREAM-MAINTENANCE.md).
 

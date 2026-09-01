@@ -222,7 +222,7 @@ def verify_owned_process(
         raise RuntimeError("Hermes home and profile ownership checks must be supplied together")
     if hermes_home is not None and profile is not None:
         if profile != "default":
-            raise RuntimeError("v0.2.2 standalone installation supports only the default Hermes profile")
+            raise RuntimeError("Wizard App standalone installation supports only the default Hermes profile")
         required_env.update(
             {
                 "HERMESUI_MODE": "standalone",

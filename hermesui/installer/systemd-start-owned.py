@@ -53,7 +53,7 @@ def build_command(
     guard = (repo_root / "hermesui" / "installer" / "runtime-home-guard.py").resolve(strict=True)
     hermes_home = hermes_home.expanduser().resolve(strict=False)
     if profile != "default":
-        raise RuntimeError("v0.2.2 standalone installation supports only the default Hermes profile")
+        raise RuntimeError("Wizard App standalone installation supports only the default Hermes profile")
     runtime_commit = git_oid(repo_root, "HEAD")
     runtime_tree = git_oid(repo_root, "HEAD^{tree}")
     managed_path = f"{home}/.local/bin:/usr/local/bin:/usr/bin:/bin"
