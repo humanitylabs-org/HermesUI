@@ -65,7 +65,7 @@ def test_serialized_multimodal_content_exposes_only_text_and_preserves_literal_j
     prompt = (
         "[Workspace::v1: /home/oscar/workspace]\n"
         "Remove the redundant transcript chrome.\n\n"
-        "[Attached files: /tmp/screenshot.png]"
+        "[Attached files: /home/oscar/.hermes/nesquena-webui/attachments/605b057e462e/screenshot.png]"
     )
     transport = "\x00json:" + json.dumps(
         [
@@ -87,12 +87,15 @@ def test_serialized_multimodal_content_exposes_only_text_and_preserves_literal_j
     )
     script = f"""
 {helpers}
+global.S={{sessionId:'605b057e462e'}};
 const transport={json.dumps(transport)};
 const malformed={json.dumps(malformed)};
 const literal='json:[1,2,3]';
 const native=[{{type:'text',text:'native prompt'}},{{type:'image_url',image_url:{{url:'data:image/png;base64,SECRET_PIXELS'}}}}];
 const parsedTransport=_serializedStructuredMessageContent(transport);
 const parsedNative=_structuredMessageContentText(native);
+const recovered=_serializedAttachmentMedia(parsedTransport.text,parsedTransport.media.length);
+const rejected=_serializedAttachmentMedia(parsedTransport.text.replace('605b057e462e','different-session'),parsedTransport.media.length);
 process.stdout.write(JSON.stringify({{
   transport:msgContent({{content:transport}}),
   malformed:msgContent({{content:malformed}}),
@@ -100,6 +103,10 @@ process.stdout.write(JSON.stringify({{
   native:msgContent({{content:native}}),
   transportMediaCount:parsedTransport.media.length,
   nativeMediaCount:parsedNative.media.length,
+  recoveredCount:recovered.length,
+  recoveredName:recovered[0]?.name||'',
+  recoveredUsesMediaEndpoint:String(recovered[0]?.url||'').startsWith('api/media?path='),
+  rejectedCount:rejected.length,
 }}));
 """
     payload = _run_node(script)
@@ -109,6 +116,10 @@ process.stdout.write(JSON.stringify({{
     assert payload["native"] == "native prompt"
     assert payload["transportMediaCount"] == 1
     assert payload["nativeMediaCount"] == 1
+    assert payload["recoveredCount"] == 1
+    assert payload["recoveredName"] == "screenshot.png"
+    assert payload["recoveredUsesMediaEndpoint"] is True
+    assert payload["rejectedCount"] == 0
     assert "SECRET_PIXELS" not in json.dumps(payload)
 
 
@@ -171,5 +182,7 @@ def test_render_loop_uses_structured_text_and_media_instead_of_transport_bytes()
     assert "const structured=_serializedStructuredMessageContent(content);" in render
     assert "content=structured.text;" in render
     assert "structuredMedia=structured.media||[];" in render
+    assert "_serializedAttachmentMedia(content,structuredMedia.length)" in render
     assert "else if(structuredMedia.length)" in render
+    assert "api/media?path=" in UI_JS
     assert "_renderAttachmentHtml(fname,String(item&&item.url||''))" in render

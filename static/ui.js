@@ -11220,6 +11220,33 @@ function _serializedStructuredMessageContent(value){
     };
   }
 }
+function _serializedAttachmentMedia(text, expectedCount){
+  // Provider context rows can contain truncated data URIs while the original
+  // WebUI uploads are still available in the session's private attachment dir.
+  // Only accept files inside THIS session's attachment folder; user-authored
+  // marker text must not become an arbitrary local-file read primitive.
+  const marker=String(text||'').match(/\[Attached files:\s*([\s\S]*?)\]\s*$/i);
+  const sessionId=String((typeof S!=='undefined'&&S&&S.sessionId)||'').trim();
+  if(!marker||!sessionId||!Number.isFinite(Number(expectedCount))||Number(expectedCount)<=0)return [];
+  const expectedSegment=`/nesquena-webui/attachments/${sessionId}/`;
+  const paths=marker[1].split(/,\s*(?=\/)/).map(value=>value.trim()).filter(Boolean);
+  const media=[];
+  for(const path of paths){
+    const segmentIndex=path.indexOf(expectedSegment);
+    if(segmentIndex<0)continue;
+    const trustedRoot=path.slice(0,segmentIndex);
+    if(!(trustedRoot.endsWith('/.hermes')||trustedRoot.includes('/.hermes/profiles/')))continue;
+    const fileName=path.slice(segmentIndex+expectedSegment.length);
+    if(!fileName||fileName==='.'||fileName==='..'||fileName.includes('/')||fileName.includes('\\'))continue;
+    if(!/\.(?:png|jpe?g|gif|webp)$/i.test(fileName))continue;
+    media.push({
+      name:fileName,
+      url:`api/media?path=${encodeURIComponent(path)}&sid=${encodeURIComponent(sessionId)}`,
+    });
+    if(media.length>=Number(expectedCount))break;
+  }
+  return media;
+}
 function _multimodalShadowComparableText(value){
   const raw=String(value||'').trim();
   if(typeof _normalizeUserTranscriptText==='function'){
@@ -17116,6 +17143,10 @@ function renderMessages(options){
         content=structured.text;
         structuredMedia=structured.media||[];
       }
+    }
+    if(structuredMedia.length){
+      const attachmentMedia=_serializedAttachmentMedia(content,structuredMedia.length);
+      if(attachmentMedia.length===structuredMedia.length)structuredMedia=attachmentMedia;
     }
     if(m.role==='assistant'&&!m._live&&typeof content==='string'){
       const anchorFinal=_assistantTurnAnchorSettledFinalAnswer(m, content, {
