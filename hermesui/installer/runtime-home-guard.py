@@ -206,7 +206,7 @@ def exec_runtime(args: argparse.Namespace) -> None:
     python = args.python.resolve(strict=True)
     hermes_home = normalize_home(args.hermes_home)
     if args.profile != "default" or not PROFILE_RE.fullmatch(args.profile):
-        raise RuntimeError("v0.2.2 supports only the default Hermes profile for standalone installation")
+        raise RuntimeError("Wizard App supports only the default Hermes profile for standalone installation")
     guard(hermes_home)
     env = os.environ.copy()
     env["HERMES_HOME"] = str(hermes_home)

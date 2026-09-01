@@ -44,7 +44,7 @@ requested_mode="${HERMESUI_MODE:-standalone}"
 case "$requested_mode" in
   standalone) ;;
   external)
-    printf 'ERROR: HermesUI external/client-only mode is not supported safely in v0.2.2 because the current backend protocol cannot prove runtime-home and profile identity. Nothing was changed.\n' >&2
+    printf 'ERROR: Wizard App external/client-only mode is not supported safely because the current backend protocol cannot prove runtime-home and profile identity. Nothing was changed.\n' >&2
     exit 1
     ;;
   isolated)
@@ -94,7 +94,7 @@ unit_schema=current
 requested_hermes_home="${HERMES_HOME:-}"
 requested_profile="${HERMES_PROFILE:-default}"
 [[ "$requested_profile" == "default" ]] || {
-  printf 'ERROR: HermesUI v0.2.2 standalone installation supports only the default Hermes profile.\n' >&2
+  printf 'ERROR: Wizard App standalone installation supports only the default Hermes profile.\n' >&2
   exit 1
 }
 default_hermes_home="$(python3 "$RUNTIME_GUARD" normalize "$HOME/.hermes")" || exit 1
