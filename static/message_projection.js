@@ -145,6 +145,17 @@
       if(isSystemControl(message)){
         return {message,rawIdx:index,visible:false,boundary:true,semanticType:'system_control',backgroundUpdate:false};
       }
+      const previousHuman=(state.lastHumanIdx===index-1)?source[state.lastHumanIdx]:null;
+      if(
+        previousHuman
+        && typeof root._isSerializedMultimodalShadow==='function'
+        && root._isSerializedMultimodalShadow(message,previousHuman)
+      ){
+        return {
+          message,rawIdx:index,visible:false,boundary:false,
+          semanticType:'system_control',backgroundUpdate:false,turnId:state.turnId,
+        };
+      }
       state.turnId+=1;
       state.lastHumanIdx=index;
       state.humanRunOpen=true;

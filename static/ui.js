@@ -11143,11 +11143,107 @@ function syncTopbar(){
   if(titleLabel) titleLabel.textContent=S.activeProfile||'default';
 }
 
+function _structuredMessageContentText(value){
+  const parts=Array.isArray(value)?value:[value];
+  const text=[];
+  let recognized=false;
+  let hasMedia=false;
+  for(const part of parts){
+    if(typeof part==='string'){
+      text.push(part);
+      recognized=true;
+      continue;
+    }
+    if(!part||typeof part!=='object') continue;
+    const type=String(part.type||'').toLowerCase();
+    if(['text','input_text','output_text'].includes(type)){
+      text.push(String(part.text??part.content??''));
+      recognized=true;
+      continue;
+    }
+    if(['image','image_url','input_image','output_image'].includes(type)){
+      recognized=true;
+      hasMedia=true;
+      continue;
+    }
+    if(Array.isArray(part.content)){
+      const nested=_structuredMessageContentText(part.content);
+      if(nested.recognized){
+        recognized=true;
+        hasMedia=hasMedia||nested.hasMedia;
+        if(nested.text) text.push(nested.text);
+      }
+    }
+  }
+  return {recognized,text:text.join('').trim(),hasMedia};
+}
+function _serializedStructuredMessageContent(value){
+  if(typeof value!=='string') return null;
+  // Hermes transport rows can carry one leading NUL before the explicit json:
+  // marker. It is a framing byte, not user content, and String.trim() keeps it.
+  const framed=value.replace(/^[\u0000\uFEFF]+/,'').trim();
+  if(!/^json\s*:/i.test(framed)) return null;
+  const source=framed.replace(/^json\s*:\s*/i,'');
+  if(!/^[\[{]/.test(source)) return null;
+  try{
+    const extracted=_structuredMessageContentText(JSON.parse(source));
+    return extracted.recognized?extracted:null;
+  }catch(_){
+    // A few adapters expand escaped line breaks before persistence, making the
+    // JSON formally invalid. Recover only known text parts; never copy image
+    // URLs or base64 data into the transcript.
+    const text=[];
+    const pattern=/"type"\s*:\s*"(?:text|input_text|output_text)"[\s\S]*?"text"\s*:\s*"((?:\\.|[^"\\])*)"/gi;
+    let match;
+    while((match=pattern.exec(source))){
+      const quoted=String(match[1]||'').replace(/\r/g,'\\r').replace(/\n/g,'\\n').replace(/\t/g,'\\t');
+      try{text.push(JSON.parse(`"${quoted}"`));}
+      catch(__){text.push(match[1]||'');}
+    }
+    if(!text.length) return null;
+    return {
+      recognized:true,
+      text:text.join('').trim(),
+      hasMedia:/"type"\s*:\s*"(?:image|image_url|input_image|output_image)"/i.test(source),
+    };
+  }
+}
+function _multimodalShadowComparableText(value){
+  const raw=String(value||'').trim();
+  if(typeof _normalizeUserTranscriptText==='function'){
+    try{return String(_normalizeUserTranscriptText(raw)||'').trim();}
+    catch(_){}
+  }
+  const withoutFiles=raw.replace(/\n\n\[Attached files: [^\]]+\]$/,'').trim();
+  const withoutWorkspaceV1=withoutFiles.replace(/^\s*\[Workspace::v1:\s*(?:\\.|[^\]\\])+\]\s*/,'');
+  if(withoutWorkspaceV1!==withoutFiles) return withoutWorkspaceV1.trim();
+  return withoutFiles.replace(/^\s*\[Workspace:[^\]]+\]\s*/,'').trim();
+}
+function _isSerializedMultimodalShadow(message,previousMessage){
+  if(!(message&&previousMessage)||message.role!=='user'||previousMessage.role!=='user') return false;
+  if(Array.isArray(message.attachments)&&message.attachments.length) return false;
+  if(!Array.isArray(previousMessage.attachments)||!previousMessage.attachments.length) return false;
+  const extracted=_serializedStructuredMessageContent(message.content);
+  if(!(extracted&&extracted.hasMedia)) return false;
+  const currentText=_multimodalShadowComparableText(extracted.text);
+  const previousText=_multimodalShadowComparableText(msgContent(previousMessage));
+  if(!currentText||currentText!==previousText) return false;
+  const currentTs=Number(message.timestamp??message._ts??message.created_at);
+  const previousTs=Number(previousMessage.timestamp??previousMessage._ts??previousMessage.created_at);
+  return Number.isFinite(currentTs)&&Number.isFinite(previousTs)&&Math.abs(currentTs-previousTs)<=10;
+}
 function msgContent(m){
-  // Extract plain text content from a message for filtering
-  let c=m.content||'';
-  if(Array.isArray(c))c=c.filter(p=>p&&p.type==='text').map(p=>p.text||'').join('').trim();
-  return String(c).trim();
+  // Extract plain text content from a message for filtering and rendering.
+  const c=m&&m.content!==undefined?m.content:'';
+  if(Array.isArray(c)){
+    if(typeof _structuredMessageContentText==='function') return _structuredMessageContentText(c).text;
+    return c.filter(part=>part&&part.type==='text').map(part=>part.text||'').join('').trim();
+  }
+  const serialized=typeof _serializedStructuredMessageContent==='function'
+    ? _serializedStructuredMessageContent(c)
+    : null;
+  if(serialized) return serialized.text;
+  return String(c||'').trim();
 }
 
 function _isRecoveryControlMessageText(text){
