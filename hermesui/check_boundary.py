@@ -36,12 +36,12 @@ PINNED_NONSTATIC_SHA256 = {
     # Inherited workflows change only downstream branch reachability and the
     # exact test launchers needed for Hermes UI's replacement frontend contracts.
     ".github/workflows/browser-smoke.yml": "7951ea95e6f52b602c3edabd2845cc604968b722a4086873c0cf5b6a4fe4ef37",
-    ".github/workflows/conversation-lifecycle.yml": "b3b99ae563e2c98cc04577d621de76553555e07e0eb031062ac168a1d8ed77a2",
+    ".github/workflows/conversation-lifecycle.yml": "315825eae6970bd06c2f1e4accb09908efcdeeff63127c98aa4de0e4196e1974",
     ".github/workflows/docker-smoke.yml": "d031d2bbc3bdcb70a493b3cca96cd6de9ef3a9f4b2cbfed6314b6194bc3b6651",
     ".github/workflows/docs-ci.yml": "0386ae319fe867609fc75c640ae80213651ff0b3503702e77f59354f246bebc6",
     ".github/workflows/native-windows-startup.yml": "00d46bdcd5f5a6535d28882ceadeaa07041e94ba1292f43e55268914c4681d4b",
     ".github/workflows/release.yml": "6f83c8e12ad3a6407b4fb18f806bcd3c4c7dc91e544e638c0cda5d6026b7c498",
-    ".github/workflows/tests.yml": "0ddd9ddb2da9942a6bd796bb81717ce67e6b5069071f40710bee2b6380fd84b2",
+    ".github/workflows/tests.yml": "0d125c079088ee71f6cb8aea2acbc3f8dc3d5010568c5c40c5791b6a5504f365",
 }
 DOWNSTREAM_PREFIXES = ("hermesui/",)
 DOWNSTREAM_TEST_PREFIXES = (

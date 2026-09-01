@@ -3,7 +3,7 @@
 This is the release prompt template. The published AI Wizards page and release asset replace `REVIEWED_COMMIT_SHA` with the independently reviewed 40-character commit before anyone copies it. Do not use this unresolved template directly.
 
 ```text
-Install Wizard App v0.3.0 from https://github.com/humanitylabs-org/HermesUI on this Linux Hermes device.
+Install Wizard App v0.3.1 from https://github.com/humanitylabs-org/HermesUI on this Linux Hermes device.
 
 Use one private-access mode only:
 - If Wizard App is already installed through a healthy Tailscale Serve route recorded in `~/.config/hermesui/install.env`, preserve that route and URL. Do not add Cloudflare.
@@ -14,11 +14,11 @@ Complete and verify the installation:
 
 1. Inspect the host, the existing Hermes/WebUI processes, `~/.config/hermesui/install.env`, and any existing checkout. Preserve all Hermes conversations, profiles, configuration, credentials, workspaces, and gateway services. Do not overwrite a dirty checkout or start a second WebUI over the same `HERMES_HOME`. If a healthy Wizard App installation already exists, preserve it and report its current version and access mode; this setup prompt is not an authorization to migrate or update it.
 
-2. For a new install, set `expected_commit="REVIEWED_COMMIT_SHA"`. Refuse to continue unless it is exactly 40 lowercase hexadecimal characters. Clone the repository into a new `~/apps/HermesUI` checkout, then check out reviewed tag `v0.3.0`. Verify that `git describe --tags --exact-match` returns `v0.3.0` and that `git rev-parse HEAD`, `git rev-parse 'v0.3.0^{commit}'`, and the peeled commit from `git ls-remote origin 'refs/tags/v0.3.0^{}'` all equal the literal `expected_commit`.
+2. For a new install, set `expected_commit="REVIEWED_COMMIT_SHA"`. Refuse to continue unless it is exactly 40 lowercase hexadecimal characters. Clone the repository into a new `~/apps/HermesUI` checkout, then check out reviewed tag `v0.3.1`. Verify that `git describe --tags --exact-match` returns `v0.3.1` and that `git rev-parse HEAD`, `git rev-parse 'v0.3.1^{commit}'`, and the peeled commit from `git ls-remote origin 'refs/tags/v0.3.1^{}'` all equal the literal `expected_commit`.
 
 3. Run `hermes --version` and `hermes doctor`. The installer supports Linux, Python 3.11–3.13, git, curl, Hermes Agent, and systemd user services. Ask before sudo, package-manager commands, installing cloudflared or Tailscale, or enabling user lingering. Resolve one prerequisite at a time.
 
-4. For a new Cloudflare install, ask me for a dedicated hostname under a zone I control and the exact email address or addresses allowed to operate this Hermes account. Treat those users as trusted operators. Obtain the Cloudflare account ID and zone ID. Have me save a narrowly scoped Cloudflare API token in a local owner-only regular file without pasting it into chat; the token needs account permissions Cloudflare Tunnel: Edit, Access: Apps and Policies: Edit, and Access: Organizations, Identity Providers, and Groups: Read, plus zone permission DNS: Edit for the selected zone. Confirm the account has a Zero Trust organization and the Cloudflare One-Time PIN identity provider enabled. Confirm the hostname, operator emails, account ID, zone ID, token path, and the planned ne...[truncated]
+4. For a new Cloudflare install, ask me for a dedicated hostname under a zone I control and the exact email address or addresses allowed to operate this Hermes account. Treat those users as trusted operators. Obtain the Cloudflare account ID and zone ID. Have me save a narrowly scoped Cloudflare API token in a local owner-only regular file without pasting it into chat; the token needs account permissions Cloudflare Tunnel: Edit, Access: Apps and Policies: Edit, and Access: Organizations, Identity Providers, and Groups: Read, plus zone permission DNS: Edit for the selected zone. Confirm the account has a Zero Trust organization and the Cloudflare One-Time PIN identity provider enabled. Confirm the hostname, operator emails, account ID, zone ID, token path, and the planned new Cloudflare resource names before running:
 
    ./hermesui/installer/setup.sh --mode cloudflare \
      --account-id ACCOUNT_ID \

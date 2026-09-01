@@ -64,8 +64,6 @@ def test_all_visible_shell_brand_surfaces_use_the_wizard_hat():
     assert 'rel="icon" type="image/svg+xml" href="static/wizard-hat.svg"' in INDEX
     assert 'rel="shortcut icon" href="static/wizard-hat.ico"' in INDEX
     assert 'rel="apple-touch-icon" sizes="512x512" href="static/wizard-hat-apple-touch.png"' in INDEX
-    assert 'id="tailnetAppHome"' in INDEX
-    assert 'class="tailnet-app-home-icon" src="static/wizard-hat.svg"' in INDEX
     assert 'class="wizard-brand-icon" src="static/wizard-hat.svg"' in INDEX
     assert 'class="wizard-brand-mark" src="static/wizard-hat-mark.svg"' in INDEX
     assert 'aria-label="Wizard hat"' in INDEX
