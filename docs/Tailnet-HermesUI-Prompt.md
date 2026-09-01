@@ -3,7 +3,7 @@
 This is the release prompt template. The published AI Wizards page and release asset replace `REVIEWED_COMMIT_SHA` with the independently reviewed 40-character commit before anyone copies it. Do not use this unresolved template directly.
 
 ```text
-Instal...[truncated]
+Install Wizard App v0.3.1 from https://github.com/humanitylabs-org/HermesUI on this Linux Hermes device.
 
 Use one private-access mode only:
 - If Wizard App is already installed through a healthy Tailscale Serve route recorded in `~/.config/hermesui/install.env`, preserve that route and URL. Do not add Cloudflare.
@@ -18,7 +18,7 @@ Complete and verify the installation:
 
 3. Run `hermes --version` and `hermes doctor`. The installer supports Linux, Python 3.11–3.13, git, curl, Hermes Agent, and systemd user services. Ask before sudo, package-manager commands, installing cloudflared or Tailscale, or enabling user lingering. Resolve one prerequisite at a time.
 
-4. For a new Cloudflare install, ask me for a dedicated hostname under a zone I control and the exact email address or addresses allowed to operate this Hermes account. Treat those users as trusted operators. Obtain the Cloudflare account ID and zone ID. Have me save a narrowly scoped Cloudflare API token in a local owner-only regular file without pasting it into chat; the token needs account permissions Cloudflare Tunnel: Edit, Access: Apps and Policies: Edit, and Access: Organizations, Identity Providers, and Groups: Read, plus zone permission DNS: Edit for the selected zone. Confirm the account has a Zero Trust organization and the Cloudflare One-Time PIN identity provider enabled. Confirm the hostname, operator emails, account ID, zone ID, token path, and the planned ne...[truncated]
+4. For a new Cloudflare install, ask me for a dedicated hostname under a zone I control and the exact email address or addresses allowed to operate this Hermes account. Treat those users as trusted operators. Obtain the Cloudflare account ID and zone ID. Have me save a narrowly scoped Cloudflare API token in a local owner-only regular file without pasting it into chat; the token needs account permissions Cloudflare Tunnel: Edit, Access: Apps and Policies: Edit, and Access: Organizations, Identity Providers, and Groups: Read, plus zone permission DNS: Edit for the selected zone. Confirm the account has a Zero Trust organization and the Cloudflare One-Time PIN identity provider enabled. Confirm the hostname, operator emails, account ID, zone ID, token path, and the planned new Cloudflare resource names before running:
 
    ./hermesui/installer/setup.sh --mode cloudflare \
      --account-id ACCOUNT_ID \

@@ -10,36 +10,11 @@ The project has three intentionally separate layers:
 
 Run `python3 hermesui/check_boundary.py` before every commit. It fails if an upstream backend/runtime file changed or if the frontend overlay manifest is stale. When a frontend asset changes, regenerate the manifest with `python3 hermesui/update_overlay_manifest.py`.
 
-The intended one-button flow on aiwizards.com gives the user's AI the reviewed install prompt in `docs/give-this-prompt-to-your-ai.md`. The host must already have Hermes Agent, Python, and systemd user services. Cloudflare mode additionally needs a dedicated hostname, a Zero Trust organization with the One-Time PIN identity provider enabled, `cloudflared`, and a narrowly scoped API token supplied from an o...[truncated] That token needs account permissions **Cloudflare Tunnel: Edit**, **Access: Apps and Policies: Edit**, and **Access: Organizations, Identity Providers, and Groups: Read**, plus zone permission **DNS: Edit** for the selected zone. Tailscale mode needs a connected Tailnet with MagicDNS.
+The intended one-button flow on aiwizards.com gives the user's AI the reviewed install prompt in `docs/give-this-prompt-to-your-ai.md`. The host must already have Hermes Agent, Python, and systemd user services. Cloudflare mode additionally needs a dedicated hostname, a Zero Trust organization with the One-Time PIN identity provider enabled, `cloudflared`, and a narrowly scoped API token supplied from an owner-only regular local file. That token needs account permissions **Cloudflare Tunnel: Edit**, **Access: Apps and Policies: Edit**, and **Access: Organizations, Identity Providers, and Groups: Read**, plus zone permission **DNS: Edit** for the selected zone. Tailscale mode needs a connected Tailnet with MagicDNS.
 
 If Cloudflare accepts a mutation but its response is lost, the installer reconciles the exact provider inventory before continuing. If reconciliation is unavailable, it retains owner-only recovery state and refuses a blind retry. After provider connectivity is restored, run `./hermesui/installer/cloudflare-uninstall.sh --api-token-file /path/to/token` before retrying setup.
 
 See [the architecture contract](hermesui/ARCHITECTURE.md) and [upstream refresh procedure](docs/UPSTREAM-MAINTENANCE.md).
-
-## Tailnet app rail
-
-Hermes UI keeps itself first in a persistent Tailnet app rail. Additional private apps are loaded from an optional per-installation `static/tailnet-apps.json`; the repository ignores this local file so private hostnames cannot enter an ordinary `git add -A`. An ordinary click selects the app inside Hermes UI through its same-origin `frameHref`: side by side with Hermes on wide screens and in the main workspace on narrow screens. A modified click or explicit direct-open action uses the app's HTTPS `href` in a separate browser tab.
-
-The local file uses this shape:
-
-```json
-{
-  "version": 1,
-  "apps": [
-    {
-      "id": "private-app",
-      "label": "Private App",
-      "href": "https://device.example.ts.net/private-app/",
-      "frameHref": "/tailnet-frame/?app=private-app",
-      "icon": "apps"
-    }
-  ]
-}
-```
-
-Both URLs are required. `href` is the canonical direct destination and must use HTTPS, except for same-origin development links. `frameHref` must resolve to the Hermes UI origin and should point to the trusted local frame route for that app. Apps that cannot be embedded should not be added until that route is available; their direct `href` remains the modified-click fallback. Accepted icon names are `pipeline`, `apps`, `draw`, `browser`, `terminal`, and `monitor`; malformed, duplicate, and unsafe entries are ignored. The rail remains available on mobile while the selected app replaces the main workspace beside it.
-
----
 
 # Upstream Hermes Web UI documentation
 
@@ -197,18 +172,13 @@ For self-hosted VM or homelab installs, `ctl.sh` wraps the common daemon lifecyc
 > Hermes/agent OpenAI-compatible API server to run chat. `HERMES_API_URL` is only
 > read by the Tasks/cron health probe and does not route chat.
 >
-> Two options if you run an external endpoint:
->
-> 1. **Use its models as a chat provider** (supported today): add it in
+> If you run an external endpoint, you can use its models as a chat provider:
+> add it in
 >    **Settings → Providers** as a custom OpenAI-compatible provider with
 >    `base_url = http://127.0.0.1:8642/v1` and your bearer token.
-> 2. **Route chat through a Hermes Gateway API server** (supported today via
->    `HERMES_WEBUI_CHAT_BACKEND=gateway`): see [`docs/advanced-chat-setup.md`](docs/advanced-chat-setup.md).
->    Full agent-loop delegation is not yet shipped; tracked in [#1925](https://github.com/nesquena/hermes-webui/issues/1925).
-
-### Advanced: dynamic recall prefill & Gateway-backed chat
-
-Two optional, self-hosted-deployment features — attaching dynamic **session-recall prefill** to browser turns (Joplin/Obsidian/Notion/llm-wiki routers), and routing browser chat through a running **Hermes Gateway** — are documented in [`docs/advanced-chat-setup.md`](docs/advanced-chat-setup.md). Most users need neither.
+>
+> The Wizard App v0.3.1 installer does not install or advertise an external
+> Gateway chat backend, app controller, private-app rail, or same-origin app routes.
 
 The bootstrap will:
 

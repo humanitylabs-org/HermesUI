@@ -41,7 +41,7 @@ PINNED_NONSTATIC_SHA256 = {
     ".github/workflows/docs-ci.yml": "0386ae319fe867609fc75c640ae80213651ff0b3503702e77f59354f246bebc6",
     ".github/workflows/native-windows-startup.yml": "00d46bdcd5f5a6535d28882ceadeaa07041e94ba1292f43e55268914c4681d4b",
     ".github/workflows/release.yml": "6f83c8e12ad3a6407b4fb18f806bcd3c4c7dc91e544e638c0cda5d6026b7c498",
-    ".github/workflows/tests.yml": "0ddd9ddb2da9942a6bd796bb81717ce67e6b5069071f40710bee2b6380fd84b2",
+    ".github/workflows/tests.yml": "0d125c079088ee71f6cb8aea2acbc3f8dc3d5010568c5c40c5791b6a5504f365",
 }
 DOWNSTREAM_PREFIXES = ("hermesui/",)
 DOWNSTREAM_TEST_PREFIXES = (

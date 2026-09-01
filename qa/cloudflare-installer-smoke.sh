@@ -34,6 +34,10 @@ set -euo pipefail
 printf 'systemctl %s\n' "$*" >>"$HERMESUI_QA_LOG"
 args=("$@")
 if [[ " ${args[*]} " == *' cat '* ]]; then exit 1; fi
+if [[ -n "${HERMESUI_QA_FAIL_APP_DISABLE_ONCE:-}" && " ${args[*]} " == *' disable --now hermesui.service '* && ! -e "$HERMESUI_QA_FAIL_APP_DISABLE_ONCE" ]]; then
+  : >"$HERMESUI_QA_FAIL_APP_DISABLE_ONCE"
+  exit 42
+fi
 exit 0
 SH
 cat >"$BIN/curl" <<'SH'
@@ -75,7 +79,7 @@ emails = []
 index = 0
 while index < len(args):
     key = args[index]
-    if key == '--preserve-connector-token':
+    if key in {'--preserve-connector-token', '--preserve-state'}:
         values[key] = True
         index += 1
         continue
@@ -109,7 +113,13 @@ if action == 'apply':
 else:
     if not values.get('--preserve-connector-token'):
         connector.unlink(missing_ok=True)
-    state.unlink(missing_ok=True)
+    if values.get('--preserve-state'):
+        payload = json.loads(state.read_text(encoding='utf-8'))
+        payload['status'] = 'provider_resources_removed'
+        state.write_text(json.dumps(payload), encoding='utf-8')
+        state.chmod(0o600)
+    else:
+        state.unlink(missing_ok=True)
 PY
 cat >"$BIN/tailnet-prereq" <<'SH'
 #!/usr/bin/env bash
@@ -186,6 +196,20 @@ grep -q 'did not prove a Cloudflare Access gate' "$TMP/generic403.err"
 [[ ! -e "$SYSTEMD/hermesui.service" && ! -e "$SYSTEMD/hermesui-cloudflared.service" ]]
 unset HERMESUI_QA_GATE_MODE
 
+disable_count_before="$(grep -c 'systemctl --user disable' "$LOG" || true)"
+ln -s "$TMP/foreign-missing-install-state" "$STATE/install.env"
+if "$ROOT/hermesui/installer/setup.sh" --mode cloudflare \
+  --account-id account --zone-id zone --hostname wizard.example.com \
+  --allow-email owner@example.com --api-token-file "$STATE/api-token" \
+  >"$TMP/dangling.out" 2>"$TMP/dangling.err"; then
+  printf 'Setup unexpectedly overwrote a dangling install-state symlink.\n' >&2
+  exit 1
+fi
+grep -q 'refusing to overwrite existing install path' "$TMP/dangling.err"
+[[ -L "$STATE/install.env" ]]
+[[ "$disable_count_before" == "$(grep -c 'systemctl --user disable' "$LOG" || true)" ]]
+rm "$STATE/install.env"
+
 "$ROOT/hermesui/installer/setup.sh" --mode auto \
   --account-id account --zone-id zone --hostname wizard.example.com \
   --allow-email owner@example.com --api-token-file "$STATE/api-token"
@@ -206,6 +230,15 @@ fi
 grep -q 'does not prove Cloudflare Access' "$TMP/status403.err"
 unset HERMESUI_QA_GATE_MODE
 "$ROOT/hermesui/installer/cloudflare-status.sh" | grep -q 'Wizard App URL: https://wizard.example.com/'
+export HERMESUI_QA_FAIL_APP_DISABLE_ONCE="$TMP/app-disable-failed"
+if "$ROOT/hermesui/installer/cloudflare-uninstall.sh" --api-token-file "$STATE/api-token"; then
+  printf 'Injected local teardown failure unexpectedly succeeded.\n' >&2
+  exit 1
+fi
+grep -q 'provider_resources_removed' "$STATE/cloudflare.json"
+[[ -e "$STATE/install.env" && -e "$STATE/cloudflare.json" && -e "$STATE/cloudflared.token" ]]
+[[ -e "$SYSTEMD/hermesui.service" && -e "$SYSTEMD/hermesui-cloudflared.service" ]]
+unset HERMESUI_QA_FAIL_APP_DISABLE_ONCE
 "$ROOT/hermesui/installer/cloudflare-uninstall.sh" --api-token-file "$STATE/api-token"
 [[ ! -e "$STATE/install.env" && ! -e "$STATE/cloudflare.json" && ! -e "$STATE/cloudflared.token" ]]
 [[ ! -e "$SYSTEMD/hermesui.service" && ! -e "$SYSTEMD/hermesui-cloudflared.service" ]]

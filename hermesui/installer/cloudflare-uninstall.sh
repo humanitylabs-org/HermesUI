@@ -46,12 +46,35 @@ else:
     print(state.get("status", ""))
 PY
 )"
+  if [[ -e "$app_unit" || -L "$app_unit" || -e "$tunnel_unit" || -L "$tunnel_unit" ]]; then
+    printf 'ERROR: local service units still exist but install.env is missing; refusing provider cleanup without an ownership proof.\n' >&2
+    exit 1
+  fi
   if [[ "$recovery_status" == "recovery_required" ]]; then
     "$python_bin" "$provisioner" cleanup \
       --api-token-file "$api_token_file" \
       --connector-token-file "$connector_token" \
       --state-file "$cloudflare_state"
     printf 'Incomplete Cloudflare provisioning was reconciled and cleaned. Hermes data was preserved.\n'
+    exit 0
+  elif [[ "$recovery_status" == "provider_resources_removed" ]]; then
+    "$python_bin" - "$connector_token" "$cloudflare_state" <<'PY'
+import os
+import stat
+import sys
+
+for raw in sys.argv[1:]:
+    path = os.path.abspath(raw)
+    try:
+        info = os.stat(path, follow_symlinks=False)
+    except FileNotFoundError:
+        continue
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+        raise SystemExit(f"ERROR: refusing to remove ambiguous local state path: {path}")
+    os.unlink(path)
+PY
+    "$systemctl_bin" --user daemon-reload
+    printf 'Wizard App Cloudflare uninstall finalization completed. Hermes data was preserved.\n'
     exit 0
   fi
 fi
@@ -90,29 +113,44 @@ PY
 )
 port="${local_state[0]}"
 hermes_home="${local_state[1]}"
-"$python_bin" "$units_helper" verify \
+provider_status="$("$python_bin" - "$cloudflare_state" <<'PY'
+import json
+import sys
+from pathlib import Path
+print(json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")).get("status", "installed"))
+PY
+)"
+if [[ "$provider_status" != "provider_resources_removed" ]]; then
+  "$python_bin" "$units_helper" verify \
+    --app-unit "$app_unit" --tunnel-unit "$tunnel_unit" \
+    --repo-root "$repo_root" --home "$HOME" --hermes-home "$hermes_home" \
+    --python "$python_bin" --cloudflared "$cloudflared_bin" --token-file "$connector_token" --port "$port"
+  "$systemctl_bin" --user disable --now hermesui-cloudflared.service
+  "$python_bin" "$provisioner" cleanup \
+    --api-token-file "$api_token_file" \
+    --connector-token-file "$connector_token" \
+    --state-file "$cloudflare_state" \
+    --preserve-connector-token \
+    --preserve-state
+fi
+if [[ -e "$app_unit" || -L "$app_unit" ]]; then
+  "$systemctl_bin" --user disable --now hermesui.service
+fi
+"$python_bin" "$units_helper" remove-existing \
   --app-unit "$app_unit" --tunnel-unit "$tunnel_unit" \
   --repo-root "$repo_root" --home "$HOME" --hermes-home "$hermes_home" \
   --python "$python_bin" --cloudflared "$cloudflared_bin" --token-file "$connector_token" --port "$port"
-"$systemctl_bin" --user disable --now hermesui-cloudflared.service
-"$python_bin" "$provisioner" cleanup \
-  --api-token-file "$api_token_file" \
-  --connector-token-file "$connector_token" \
-  --state-file "$cloudflare_state" \
-  --preserve-connector-token
-"$systemctl_bin" --user disable --now hermesui.service
-"$python_bin" "$units_helper" remove \
-  --app-unit "$app_unit" --tunnel-unit "$tunnel_unit" \
-  --repo-root "$repo_root" --home "$HOME" --hermes-home "$hermes_home" \
-  --python "$python_bin" --cloudflared "$cloudflared_bin" --token-file "$connector_token" --port "$port"
-"$python_bin" - "$connector_token" "$state_file" <<'PY'
+"$python_bin" - "$connector_token" "$state_file" "$cloudflare_state" <<'PY'
 import os
 import stat
 import sys
 
 for raw in sys.argv[1:]:
     path = os.path.abspath(raw)
-    info = os.stat(path, follow_symlinks=False)
+    try:
+        info = os.stat(path, follow_symlinks=False)
+    except FileNotFoundError:
+        continue
     if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
         raise SystemExit(f"ERROR: refusing to remove ambiguous local state path: {path}")
     os.unlink(path)

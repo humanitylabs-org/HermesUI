@@ -61,7 +61,7 @@ tunnel_name="HermesUI ${hostname,,}"
 [[ -z "$(git -C "$repo_root" status --porcelain --untracked-files=no)" ]] || { printf 'ERROR: repository checkout has tracked local changes.\n' >&2; exit 1; }
 [[ -d "$hermes_home" ]] || { printf 'ERROR: Hermes home does not exist: %s\n' "$hermes_home" >&2; exit 1; }
 for path in "$state_file" "$cloudflare_state" "$connector_token" "$app_unit" "$tunnel_unit"; do
-  [[ ! -e "$path" ]] || { printf 'ERROR: refusing to overwrite existing install path: %s\n' "$path" >&2; exit 1; }
+  [[ ! -e "$path" && ! -L "$path" ]] || { printf 'ERROR: refusing to overwrite existing install path: %s\n' "$path" >&2; exit 1; }
 done
 for unit in hermesui.service hermesui-cloudflared.service hermesui-launcher.service; do
   if "$systemctl_bin" --user cat "$unit" >/dev/null 2>&1; then
@@ -74,20 +74,37 @@ mkdir -p "$state_dir" "$systemd_dir"
 chmod 700 "$state_dir"
 provisioned=0
 units_written=0
+app_start_attempted=0
+tunnel_start_attempted=0
 cleanup_failed_install() {
   status=$?
   trap - EXIT
-  "$systemctl_bin" --user disable --now hermesui-cloudflared.service hermesui.service >/dev/null 2>&1 || true
+  local_cleanup_ok=1
   if [[ "$units_written" == 1 ]]; then
-    "$python_bin" "$units_helper" remove \
+    if "$python_bin" "$units_helper" verify \
       --app-unit "$app_unit" --tunnel-unit "$tunnel_unit" \
       --repo-root "$repo_root" --home "$HOME" --hermes-home "$hermes_home" \
-      --python "$python_bin" --cloudflared "$cloudflared_bin" --token-file "$connector_token" --port "$PORT" \
-      || printf 'ERROR: managed systemd units changed during rollback and were preserved.\n' >&2
-    "$systemctl_bin" --user daemon-reload >/dev/null 2>&1 || true
+      --python "$python_bin" --cloudflared "$cloudflared_bin" --token-file "$connector_token" --port "$PORT"; then
+      if [[ "$tunnel_start_attempted" == 1 ]]; then
+        "$systemctl_bin" --user disable --now hermesui-cloudflared.service >/dev/null 2>&1 || true
+      fi
+      if [[ "$app_start_attempted" == 1 ]]; then
+        "$systemctl_bin" --user disable --now hermesui.service >/dev/null 2>&1 || true
+      fi
+      if ! "$python_bin" "$units_helper" remove \
+        --app-unit "$app_unit" --tunnel-unit "$tunnel_unit" \
+        --repo-root "$repo_root" --home "$HOME" --hermes-home "$hermes_home" \
+        --python "$python_bin" --cloudflared "$cloudflared_bin" --token-file "$connector_token" --port "$PORT"; then
+        printf 'ERROR: managed systemd units changed during rollback and were preserved.\n' >&2
+        local_cleanup_ok=0
+      fi
+      "$systemctl_bin" --user daemon-reload >/dev/null 2>&1 || true
+    else
+      printf 'ERROR: managed systemd units changed during rollback and were preserved.\n' >&2
+      local_cleanup_ok=0
+    fi
   fi
-  rm -f "$state_file"
-  if [[ "$provisioned" == 1 && -r "$cloudflare_state" ]]; then
+  if [[ "$provisioned" == 1 && -r "$cloudflare_state" && "$local_cleanup_ok" == 1 ]]; then
     "$python_bin" "$provisioner" cleanup \
       --api-token-file "$api_token_file" \
       --connector-token-file "$connector_token" \
@@ -124,12 +141,14 @@ provisioned=1
 units_written=1
 systemd-analyze --user verify "$app_unit" "$tunnel_unit"
 "$systemctl_bin" --user daemon-reload
+app_start_attempted=1
 "$systemctl_bin" --user enable --now hermesui.service
 for _ in $(seq 1 30); do
   "$curl_bin" -fsS --max-time 3 "$origin/health" >/dev/null 2>&1 && break
   sleep 1
 done
 "$curl_bin" -fsS --max-time 5 "$origin/health" >/dev/null
+tunnel_start_attempted=1
 "$systemctl_bin" --user enable --now hermesui-cloudflared.service
 "$systemctl_bin" --user is-active hermesui.service >/dev/null
 "$systemctl_bin" --user is-active hermesui-cloudflared.service >/dev/null

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import os
 import re
@@ -87,6 +86,7 @@ class CloudflareApi:
         )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                response_status = getattr(response, "status", 200)
                 raw = response.read()
         except urllib.error.HTTPError as exc:
             raw = exc.read()
@@ -106,7 +106,10 @@ class CloudflareApi:
             return {"success": True, "result": None}
         envelope = json.loads(raw.decode("utf-8"))
         if not isinstance(envelope, dict) or envelope.get("success") is not True:
-            raise RuntimeError(f"Cloudflare API {method} {path} returned an unsuccessful response")
+            raise CloudflareApiError(
+                f"Cloudflare API {method} {path} returned an unsuccessful response",
+                status=response_status,
+            )
         return envelope
 
     def request(self, method: str, path: str, body: Any = None) -> Any:
@@ -162,7 +165,7 @@ def read_secret_file(path: Path) -> str:
     return value
 
 
-def atomic_write(path: Path, content: str, mode: int) -> None:
+def atomic_write(path: Path, content: str, mode: int, *, create_only: bool = False) -> None:
     path = path.expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
@@ -172,7 +175,10 @@ def atomic_write(path: Path, content: str, mode: int) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
-        os.replace(temporary, path)
+        if create_only:
+            os.link(temporary, path, follow_symlinks=False)
+        else:
+            os.replace(temporary, path)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -195,12 +201,16 @@ def api_paths(config: ProvisionConfig) -> dict[str, str]:
     }
 
 
-def desired_app(config: ProvisionConfig, idps: list[dict[str, Any]]) -> dict[str, Any]:
+def desired_app(
+    config: ProvisionConfig,
+    idps: list[dict[str, Any]],
+    ownership_id: str | None = None,
+) -> dict[str, Any]:
     ids = [item.get("id") for item in idps if isinstance(item, dict) and isinstance(item.get("id"), str)]
     if not ids:
         raise RuntimeError("Cloudflare Access has no configured identity provider")
     return {
-        "name": f"HermesUI — {config.hostname}",
+        "name": f"HermesUI — {config.hostname}" + (f" [{ownership_id}]" if ownership_id else ""),
         "domain": config.hostname,
         "type": "self_hosted",
         "session_duration": "24h",
@@ -211,9 +221,9 @@ def desired_app(config: ProvisionConfig, idps: list[dict[str, Any]]) -> dict[str
     }
 
 
-def desired_policy(config: ProvisionConfig) -> dict[str, Any]:
+def desired_policy(config: ProvisionConfig, ownership_id: str | None = None) -> dict[str, Any]:
     return {
-        "name": "HermesUI owners",
+        "name": "HermesUI owners" + (f" [{ownership_id}]" if ownership_id else ""),
         "decision": "allow",
         "session_duration": "24h",
         "include": [{"email": {"email": email}} for email in config.allowed_emails],
@@ -279,6 +289,11 @@ def exact_fields(actual: dict[str, Any], expected: dict[str, Any], fields: tuple
     return all(actual.get(field) == expected.get(field) for field in fields)
 
 
+def is_definitive_mutation_error(error: BaseException) -> bool:
+    """Treat explicit non-5xx provider failures as final; reconcile transport/5xx ambiguity."""
+    return isinstance(error, CloudflareApiError) and error.status is not None and error.status < 500
+
+
 def create_or_recover(
     *,
     label: str,
@@ -298,6 +313,8 @@ def create_or_recover(
             return created
         original = RuntimeError(f"Cloudflare returned an incomplete {label} create response")
     except Exception as create_error:
+        if is_definitive_mutation_error(create_error):
+            raise
         original = create_error
     try:
         candidates = [
@@ -320,7 +337,15 @@ def create_or_recover(
     return candidates[0]
 
 
-def recovery_state(config: ProvisionConfig, created: dict[str, str | None]) -> dict[str, Any]:
+def recovery_state(
+    config: ProvisionConfig,
+    created: dict[str, str | None],
+    *,
+    ownership_id: str | None = None,
+    auth_domain: str | None = None,
+    app_audience: str | None = None,
+    pending_mutation: str | None = None,
+) -> dict[str, Any]:
     return {
         "version": 1,
         "status": "recovery_required",
@@ -329,11 +354,15 @@ def recovery_state(config: ProvisionConfig, created: dict[str, str | None]) -> d
         "hostname": config.hostname,
         "origin_url": config.origin_url,
         "allowed_emails": list(config.allowed_emails),
+        "ownership_id": ownership_id,
+        "auth_domain": auth_domain,
         "access_app_id": created.get("app"),
+        "access_app_aud": app_audience,
         "access_policy_id": created.get("policy"),
         "tunnel_id": created.get("tunnel"),
         "tunnel_name": config.tunnel_name,
         "dns_record_id": created.get("dns"),
+        "pending_mutation": pending_mutation,
         "managed": {"access_app": True, "dns_record": True, "tunnel": True},
     }
 
@@ -344,15 +373,26 @@ def provision(
     token_path: Path,
     state_path: Path,
 ) -> dict[str, Any]:
-    paths = api_paths(config)
-    if token_path.exists() or state_path.exists():
+    if os.path.lexists(token_path) or os.path.lexists(state_path):
         raise RuntimeError("Cloudflare installer state already exists; run status or uninstall instead of overwriting it")
+
+    ownership_id = secrets.token_hex(8)
+    suffix = f" [{ownership_id}]"
+    managed_config = ProvisionConfig(
+        config.account_id,
+        config.zone_id,
+        config.hostname,
+        config.allowed_emails,
+        config.origin_url,
+        config.tunnel_name[: 100 - len(suffix)] + suffix,
+    )
+    paths = api_paths(managed_config)
 
     organization = api.request("GET", paths["org"])
     idps = listed(api, paths["idps"])
-    applications = matching(listed(api, paths["apps"]), domain=config.hostname, type="self_hosted")
-    tunnels = matching(listed(api, paths["tunnels"]), name=config.tunnel_name)
-    records = matching(listed(api, paths["dns"]), name=config.hostname)
+    applications = matching(listed(api, paths["apps"]), domain=managed_config.hostname, type="self_hosted")
+    tunnels = matching(listed(api, paths["tunnels"]), name=managed_config.tunnel_name)
+    records = matching(listed(api, paths["dns"]), name=managed_config.hostname)
     if applications:
         raise RuntimeError("hostname already has an Access application; refusing to take ownership")
     if tunnels:
@@ -361,10 +401,37 @@ def provision(
         raise RuntimeError("hostname already has a DNS record; refusing to take ownership")
     if not isinstance(organization, dict):
         raise RuntimeError("Cloudflare Access organization is not configured")
+    auth_domain = organization.get("auth_domain")
+    if not isinstance(auth_domain, str) or not auth_domain.endswith(".cloudflareaccess.com"):
+        raise RuntimeError("Cloudflare Access organization did not return a valid auth domain")
 
     created: dict[str, str | None] = {"app": None, "policy": None, "tunnel": None, "dns": None}
+    app_audience: str | None = None
+    pending_mutation: str | None = None
+
+    def save_recovery(*, create_only: bool = False) -> dict[str, Any]:
+        state = recovery_state(
+            managed_config,
+            created,
+            ownership_id=ownership_id,
+            auth_domain=auth_domain,
+            app_audience=app_audience,
+            pending_mutation=pending_mutation,
+        )
+        atomic_write(
+            state_path,
+            json.dumps(state, sort_keys=True, indent=2) + "\n",
+            0o600,
+            create_only=create_only,
+        )
+        return state
+
+    # Commit the unique ownership marker and exact plan before the first provider mutation.
+    save_recovery(create_only=True)
     try:
-        desired_application = desired_app(config, idps)
+        desired_application = desired_app(managed_config, idps, ownership_id)
+        pending_mutation = "access_application_create"
+        save_recovery()
         app = create_or_recover(
             label="Access application",
             create=lambda: api.request("POST", paths["app_create"], desired_application),
@@ -372,7 +439,16 @@ def provision(
             is_exact=lambda item: exact_fields(
                 item,
                 desired_application,
-                ("domain", "type", "session_duration", "allowed_idps", "auto_redirect_to_identity", "app_launcher_visible", "allow_iframe"),
+                (
+                    "name",
+                    "domain",
+                    "type",
+                    "session_duration",
+                    "allowed_idps",
+                    "auto_redirect_to_identity",
+                    "app_launcher_visible",
+                    "allow_iframe",
+                ),
             ),
             independent=True,
             required_fields=("id", "aud"),
@@ -380,9 +456,14 @@ def provision(
         if not isinstance(app.get("id"), str) or not isinstance(app.get("aud"), str):
             raise RuntimeError("Cloudflare did not return a valid Access application")
         created["app"] = app["id"]
+        app_audience = app["aud"]
+        pending_mutation = None
+        save_recovery()
 
-        policy_path = f"/accounts/{config.account_id}/access/apps/{app['id']}/policies"
-        desired_access_policy = desired_policy(config)
+        policy_path = f"/accounts/{managed_config.account_id}/access/apps/{app['id']}/policies"
+        desired_access_policy = desired_policy(managed_config, ownership_id)
+        pending_mutation = "access_policy_create"
+        save_recovery()
         policy = create_or_recover(
             label="Access policy",
             create=lambda: api.request("POST", policy_path, desired_access_policy),
@@ -390,31 +471,56 @@ def provision(
             is_exact=lambda item: exact_fields(
                 item,
                 desired_access_policy,
-                ("decision", "session_duration", "include", "exclude", "require"),
+                ("name", "decision", "session_duration", "include", "exclude", "require"),
             ),
         )
         if not isinstance(policy.get("id"), str):
             raise RuntimeError("Cloudflare did not return a valid Access policy")
         created["policy"] = policy["id"]
+        pending_mutation = None
+        save_recovery()
 
-        tunnel_secret = base64.b64encode(secrets.token_bytes(32)).decode("ascii")
-        desired_tunnel = {"name": config.tunnel_name, "tunnel_secret": tunnel_secret, "config_src": "cloudflare"}
+        # No DNS is published unless the application has exactly one exact allow policy.
+        policy_readback = listed(api, policy_path + "?per_page=100")
+        if (
+            len(policy_readback) != 1
+            or policy_readback[0].get("id") != policy["id"]
+            or not exact_fields(
+                policy_readback[0],
+                desired_access_policy,
+                ("name", "decision", "session_duration", "include", "exclude", "require"),
+            )
+        ):
+            raise RuntimeError("Access policy read-back mismatch")
+
+        desired_tunnel = {"name": managed_config.tunnel_name, "config_src": "cloudflare"}
+        pending_mutation = "tunnel_create"
+        save_recovery()
         tunnel = create_or_recover(
             label="tunnel",
             create=lambda: api.request("POST", paths["tunnel_create"], desired_tunnel),
             inventory=lambda: listed(api, paths["tunnels"]),
-            is_exact=lambda item: item.get("name") == config.tunnel_name and item.get("config_src") == "cloudflare",
+            is_exact=lambda item: item.get("name") == managed_config.tunnel_name
+            and item.get("config_src") == "cloudflare",
             independent=True,
         )
         if not isinstance(tunnel.get("id"), str):
             raise RuntimeError("Cloudflare did not return a valid tunnel")
         created["tunnel"] = tunnel["id"]
+        pending_mutation = None
+        save_recovery()
 
-        tunnel_config_path = f"/accounts/{config.account_id}/cfd_tunnel/{tunnel['id']}/configurations"
-        expected_config = desired_tunnel_config(config, organization.get("auth_domain", ""), app["aud"])
+        tunnel_config_path = (
+            f"/accounts/{managed_config.account_id}/cfd_tunnel/{tunnel['id']}/configurations"
+        )
+        expected_config = desired_tunnel_config(managed_config, auth_domain, app["aud"])
+        pending_mutation = "tunnel_configuration_update"
+        save_recovery()
         try:
             api.request("PUT", tunnel_config_path, expected_config)
         except Exception as original:
+            if isinstance(original, CloudflareApiError):
+                raise
             config_after_error = api.request("GET", tunnel_config_path)
             if not isinstance(config_after_error, dict) or config_after_error.get("config") != expected_config["config"]:
                 raise RuntimeError(
@@ -423,98 +529,128 @@ def provision(
         config_readback = api.request("GET", tunnel_config_path)
         if not isinstance(config_readback, dict) or config_readback.get("config") != expected_config["config"]:
             raise RuntimeError("Cloudflare tunnel configuration read-back mismatch")
+        pending_mutation = None
+        save_recovery()
 
         desired_dns = {
             "type": "CNAME",
-            "name": config.hostname,
+            "name": managed_config.hostname,
             "content": f"{tunnel['id']}.cfargotunnel.com",
             "proxied": True,
             "ttl": 1,
         }
+        pending_mutation = "dns_record_create"
+        save_recovery()
         dns = create_or_recover(
             label="DNS record",
             create=lambda: api.request("POST", paths["dns_create"], desired_dns),
             inventory=lambda: listed(api, paths["dns"]),
-            is_exact=lambda item: exact_fields(item, desired_dns, ("type", "name", "content", "proxied", "ttl")),
+            is_exact=lambda item: exact_fields(
+                item, desired_dns, ("type", "name", "content", "proxied", "ttl")
+            ),
             independent=True,
         )
         if not isinstance(dns.get("id"), str):
             raise RuntimeError("Cloudflare did not return a valid DNS record")
         created["dns"] = dns["id"]
+        pending_mutation = None
+        save_recovery()
 
-        app_readback = matching(listed(api, paths["apps"]), domain=config.hostname, type="self_hosted")
+        app_readback = matching(
+            listed(api, paths["apps"]), domain=managed_config.hostname, type="self_hosted"
+        )
         policy_readback = listed(api, policy_path + "?per_page=100")
-        tunnel_readback = matching(listed(api, paths["tunnels"]), name=config.tunnel_name)
-        dns_readback = matching(listed(api, paths["dns"]), name=config.hostname)
+        tunnel_readback = matching(listed(api, paths["tunnels"]), name=managed_config.tunnel_name)
+        dns_readback = matching(listed(api, paths["dns"]), name=managed_config.hostname)
         if (
             len(app_readback) != 1
             or app_readback[0].get("id") != app["id"]
             or not exact_fields(
                 app_readback[0],
                 desired_application,
-                ("domain", "type", "session_duration", "allowed_idps", "auto_redirect_to_identity", "app_launcher_visible", "allow_iframe"),
+                (
+                    "name",
+                    "domain",
+                    "type",
+                    "session_duration",
+                    "allowed_idps",
+                    "auto_redirect_to_identity",
+                    "app_launcher_visible",
+                    "allow_iframe",
+                ),
             )
         ):
             raise RuntimeError("Access application read-back mismatch")
-        matching_policies = matching(policy_readback, id=policy["id"])
         if (
-            len(matching_policies) != 1
+            len(policy_readback) != 1
+            or policy_readback[0].get("id") != policy["id"]
             or not exact_fields(
-                matching_policies[0],
+                policy_readback[0],
                 desired_access_policy,
-                ("decision", "session_duration", "include", "exclude", "require"),
+                ("name", "decision", "session_duration", "include", "exclude", "require"),
             )
         ):
             raise RuntimeError("Access policy read-back mismatch")
         if (
             len(tunnel_readback) != 1
             or tunnel_readback[0].get("id") != tunnel["id"]
-            or tunnel_readback[0].get("name") != config.tunnel_name
+            or tunnel_readback[0].get("name") != managed_config.tunnel_name
             or tunnel_readback[0].get("config_src") != "cloudflare"
         ):
             raise RuntimeError("tunnel read-back mismatch")
         if (
             len(dns_readback) != 1
             or dns_readback[0].get("id") != dns["id"]
-            or not exact_fields(dns_readback[0], desired_dns, ("type", "name", "content", "proxied", "ttl"))
+            or not exact_fields(
+                dns_readback[0], desired_dns, ("type", "name", "content", "proxied", "ttl")
+            )
         ):
             raise RuntimeError("DNS read-back mismatch")
 
-        connector_token = api.request("GET", f"/accounts/{config.account_id}/cfd_tunnel/{tunnel['id']}/token")
+        connector_token = api.request(
+            "GET", f"/accounts/{managed_config.account_id}/cfd_tunnel/{tunnel['id']}/token"
+        )
         if not isinstance(connector_token, str) or not connector_token:
             raise RuntimeError("Cloudflare did not return a connector token")
-        atomic_write(token_path, connector_token + "\n", 0o600)
+        atomic_write(token_path, connector_token + "\n", 0o600, create_only=True)
         state = {
             "version": 1,
-            "account_id": config.account_id,
-            "zone_id": config.zone_id,
-            "hostname": config.hostname,
-            "origin_url": config.origin_url,
-            "allowed_emails": list(config.allowed_emails),
-            "auth_domain": organization["auth_domain"],
+            "status": "installed",
+            "account_id": managed_config.account_id,
+            "zone_id": managed_config.zone_id,
+            "hostname": managed_config.hostname,
+            "origin_url": managed_config.origin_url,
+            "allowed_emails": list(managed_config.allowed_emails),
+            "ownership_id": ownership_id,
+            "auth_domain": auth_domain,
             "access_app_id": app["id"],
             "access_app_aud": app["aud"],
             "access_policy_id": policy["id"],
             "tunnel_id": tunnel["id"],
-            "tunnel_name": config.tunnel_name,
+            "tunnel_name": managed_config.tunnel_name,
             "dns_record_id": dns["id"],
+            "pending_mutation": None,
             "managed": {"access_app": True, "dns_record": True, "tunnel": True},
         }
         atomic_write(state_path, json.dumps(state, sort_keys=True, indent=2) + "\n", 0o600)
         return state
     except BaseException as original:
-        atomic_write(state_path, json.dumps(recovery_state(config, created), sort_keys=True, indent=2) + "\n", 0o600)
+        if is_definitive_mutation_error(original):
+            # An explicit non-5xx provider failure is definitive. Never adopt its pending attribute match.
+            pending_mutation = None
+        recovery = save_recovery()
         try:
-            _rollback_created(config, api, created)
+            if is_definitive_mutation_error(original):
+                _rollback_created(managed_config, api, created)
+                token_path.unlink(missing_ok=True)
+                state_path.unlink(missing_ok=True)
+            else:
+                cleanup(managed_config, api, token_path, state_path, recovery)
         except Exception as cleanup_error:
             token_path.unlink(missing_ok=True)
             raise RuntimeError(
                 f"Cloudflare provisioning failed and cleanup was incomplete; recovery state was retained at {state_path}"
             ) from cleanup_error
-        token_path.unlink(missing_ok=True)
-        if isinstance(original, AmbiguousMutationError):
-            raise RuntimeError(f"{original}; recovery state was retained at {state_path}") from original
-        state_path.unlink(missing_ok=True)
         raise
 
 
@@ -553,6 +689,7 @@ def cleanup(
     state: dict[str, Any],
     *,
     preserve_connector_token: bool = False,
+    preserve_state: bool = False,
 ) -> None:
     expected = {
         "account_id": config.account_id,
@@ -568,6 +705,9 @@ def cleanup(
     if managed != {"access_app": True, "dns_record": True, "tunnel": True}:
         raise RuntimeError("Cloudflare state does not claim exact managed ownership")
     recovery_mode = state.get("status") == "recovery_required"
+    ownership_id = state.get("ownership_id")
+    if ownership_id is not None and not re.fullmatch(r"[0-9a-f]{16}", str(ownership_id)):
+        raise RuntimeError("Cloudflare state has an invalid ownership marker")
     if not recovery_mode:
         for key in ("access_app_id", "access_policy_id", "tunnel_id", "dns_record_id"):
             if not isinstance(state.get(key), str) or not state[key]:
@@ -577,14 +717,14 @@ def cleanup(
     if recovery_mode and not state.get("access_app_id"):
         app_candidates = matching(listed(api, paths["apps"]), domain=config.hostname, type="self_hosted")
         if app_candidates:
-            expected_app = desired_app(config, listed(api, paths["idps"]))
+            expected_app = desired_app(config, listed(api, paths["idps"]), ownership_id)
             exact_apps = [
                 item
                 for item in app_candidates
                 if exact_fields(
                     item,
                     expected_app,
-                    ("domain", "type", "session_duration", "allowed_idps", "auto_redirect_to_identity", "app_launcher_visible", "allow_iframe"),
+                    ("name", "domain", "type", "session_duration", "allowed_idps", "auto_redirect_to_identity", "app_launcher_visible", "allow_iframe"),
                 )
             ]
             if len(app_candidates) != 1 or len(exact_apps) != 1 or not isinstance(exact_apps[0].get("id"), str):
@@ -597,7 +737,7 @@ def cleanup(
             api,
             f"/accounts/{config.account_id}/access/apps/{state['access_app_id']}/policies?per_page=100",
         )
-        expected_policy = desired_policy(config)
+        expected_policy = desired_policy(config, ownership_id)
         exact_policies = [
             item
             for item in policy_candidates
@@ -646,7 +786,7 @@ def cleanup(
         app_path = f"/accounts/{config.account_id}/access/apps/{app_id}"
         app_resource = read_optional(api, app_path)
         if app_resource is not None:
-            expected_app = desired_app(config, listed(api, paths["idps"]))
+            expected_app = desired_app(config, listed(api, paths["idps"]), ownership_id)
             app_fields = (
                 "name",
                 "domain",
@@ -664,7 +804,7 @@ def cleanup(
                 raise RuntimeError("Access application has no valid audience; refusing cleanup")
             policy_id = state.get("access_policy_id")
             policies = listed(api, f"{app_path}/policies?per_page=100")
-            expected_policy = desired_policy(config)
+            expected_policy = desired_policy(config, ownership_id)
             exact_policies = [
                 item
                 for item in policies
@@ -694,7 +834,7 @@ def cleanup(
                 raise RuntimeError("tunnel no longer matches installer ownership; refusing cleanup")
             auth_domain = state.get("auth_domain")
             if not isinstance(auth_domain, str):
-                organization = api.request("GET", paths["organization"])
+                organization = api.request("GET", paths["org"])
                 if isinstance(organization, dict):
                     auth_domain = organization.get("auth_domain")
             if not isinstance(auth_domain, str) or not isinstance(app_audience, str):
@@ -733,7 +873,12 @@ def cleanup(
         raise RuntimeError("Access application still exists after cleanup")
     if not preserve_connector_token:
         token_path.unlink(missing_ok=True)
-    state_path.unlink(missing_ok=True)
+    if preserve_state:
+        state["status"] = "provider_resources_removed"
+        state["pending_mutation"] = None
+        atomic_write(state_path, json.dumps(state, sort_keys=True, indent=2) + "\n", 0o600)
+    else:
+        state_path.unlink(missing_ok=True)
 
 
 def state_config(state: dict[str, Any]) -> ProvisionConfig:
@@ -759,6 +904,7 @@ def parse_args() -> argparse.Namespace:
     apply_parser.add_argument("--tunnel-name", required=True)
     cleanup_parser = sub.add_parser("cleanup")
     cleanup_parser.add_argument("--preserve-connector-token", action="store_true")
+    cleanup_parser.add_argument("--preserve-state", action="store_true")
     for child in (apply_parser, cleanup_parser):
         child.add_argument("--api-token-file", type=Path, required=True)
         child.add_argument("--connector-token-file", type=Path, required=True)
@@ -792,6 +938,7 @@ def main() -> int:
                 args.state_file,
                 state,
                 preserve_connector_token=args.preserve_connector_token,
+                preserve_state=args.preserve_state,
             )
             print("Cloudflare resources removed")
         return 0

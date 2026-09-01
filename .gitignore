@@ -84,6 +84,3 @@ docs/ui-ux/review-shots/
 # Local WebUI runtime data and credentials
 .webui_password
 attachments/
-
-# Per-installation Tailnet app inventory (may contain private MagicDNS hostnames)
-static/tailnet-apps.json

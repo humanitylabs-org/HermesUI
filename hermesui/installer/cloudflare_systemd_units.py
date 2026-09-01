@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import os
 import secrets
 import stat
@@ -12,6 +13,8 @@ from pathlib import Path
 
 APP_MARKER = "# Managed by HermesUI Cloudflare installer: application"
 TUNNEL_MARKER = "# Managed by HermesUI Cloudflare installer: connector"
+RENAME_NOREPLACE = 1
+RENAME_EXCHANGE = 2
 
 
 def quoted(value: str) -> str:
@@ -99,6 +102,18 @@ def _verify_exact(path: Path, expected: str) -> None:
         raise RuntimeError(f"managed unit differs from the specification: {path}")
 
 
+def _renameat2(parent_fd: int, source: str, destination: str, flags: int) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise RuntimeError("this Linux host does not expose renameat2; refusing a non-atomic unit removal")
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    renameat2.restype = ctypes.c_int
+    if renameat2(parent_fd, source.encode(), parent_fd, destination.encode(), flags) != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), source, destination)
+
+
 def _remove_exact(path: Path, expected: str) -> None:
     directory_flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
     if hasattr(os, "O_NOFOLLOW"):
@@ -106,45 +121,61 @@ def _remove_exact(path: Path, expected: str) -> None:
     parent_fd = os.open(path.parent, directory_flags)
     quarantine = f".{path.name}.hermesui-remove-{os.getpid()}-{secrets.token_hex(8)}"
     moved = False
+    replacement_quarantined = False
+    file_fd = -1
     try:
-        os.rename(path.name, quarantine, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
-        moved = True
         flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-        file_fd = os.open(quarantine, flags, dir_fd=parent_fd)
-        try:
-            info = os.fstat(file_fd)
-            if not stat.S_ISREG(info.st_mode):
-                raise RuntimeError(f"refusing non-regular managed unit: {path}")
-            chunks = []
-            while True:
-                chunk = os.read(file_fd, 1024 * 1024)
-                if not chunk:
-                    break
-                chunks.append(chunk)
-            if b"".join(chunks) != expected.encode("utf-8"):
-                raise RuntimeError(f"managed unit differs from the specification: {path}")
-        except Exception:
-            try:
-                os.link(
-                    quarantine,
-                    path.name,
-                    src_dir_fd=parent_fd,
-                    dst_dir_fd=parent_fd,
-                    follow_symlinks=False,
-                )
-                os.unlink(quarantine, dir_fd=parent_fd)
-                moved = False
-            except FileExistsError:
-                pass
-            raise
-        finally:
-            os.close(file_fd)
+        file_fd = os.open(path.name, flags, dir_fd=parent_fd)
+        original = os.fstat(file_fd)
+        if not stat.S_ISREG(original.st_mode):
+            raise RuntimeError(f"refusing non-regular managed unit: {path}")
+        chunks = []
+        while True:
+            chunk = os.read(file_fd, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        if b"".join(chunks) != expected.encode("utf-8"):
+            raise RuntimeError(f"managed unit differs from the specification: {path}")
+
+        _renameat2(parent_fd, path.name, quarantine, RENAME_NOREPLACE)
+        moved = True
+        quarantined = os.stat(quarantine, dir_fd=parent_fd, follow_symlinks=False)
+        if (quarantined.st_dev, quarantined.st_ino) != (original.st_dev, original.st_ino):
+            raise RuntimeError(f"managed unit changed during atomic removal: {path}")
         os.unlink(quarantine, dir_fd=parent_fd)
         moved = False
+    except Exception:
+        if moved:
+            try:
+                os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                _renameat2(parent_fd, quarantine, path.name, RENAME_NOREPLACE)
+                moved = False
+            else:
+                # Restore the object we moved without overwriting the concurrent replacement.
+                _renameat2(parent_fd, quarantine, path.name, RENAME_EXCHANGE)
+                moved = False
+                replacement_quarantined = True
+        raise
     finally:
+        if file_fd >= 0:
+            os.close(file_fd)
         if moved:
             print(f"ERROR: managed unit was quarantined at {path.parent / quarantine}", file=sys.stderr)
+        if replacement_quarantined:
+            print(
+                f"ERROR: a concurrent replacement was preserved at {path.parent / quarantine}",
+                file=sys.stderr,
+            )
         os.close(parent_fd)
+
+
+def _remove_if_present(path: Path, expected: str) -> None:
+    try:
+        _remove_exact(path, expected)
+    except FileNotFoundError:
+        pass
 
 
 def absolute_existing(path: Path, label: str) -> Path:
@@ -249,7 +280,7 @@ WantedBy=default.target
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("write", "verify", "remove"))
+    parser.add_argument("action", choices=("write", "verify", "remove", "remove-existing"))
     parser.add_argument("--app-unit", type=Path, required=True)
     parser.add_argument("--tunnel-unit", type=Path, required=True)
     parser.add_argument("--repo-root", type=Path, required=True)
@@ -280,11 +311,14 @@ def main() -> int:
         elif args.action == "verify":
             _verify_exact(args.app_unit, app)
             _verify_exact(args.tunnel_unit, tunnel)
-        else:
+        elif args.action == "remove":
             _verify_exact(args.app_unit, app)
             _verify_exact(args.tunnel_unit, tunnel)
             _remove_exact(args.tunnel_unit, tunnel)
             _remove_exact(args.app_unit, app)
+        else:
+            _remove_if_present(args.tunnel_unit, tunnel)
+            _remove_if_present(args.app_unit, app)
         return 0
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
