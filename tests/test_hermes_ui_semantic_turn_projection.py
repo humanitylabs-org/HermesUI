@@ -138,9 +138,9 @@ global._isPreservedCompressionTaskListMessage=()=>false;
 global._isRecoveryControlMessage=()=>false;
 eval(fs.readFileSync(process.argv[1],'utf8'));
 global._MSG_LIMIT_MAX=500;
-const definitions='var _LATEST_TURN_AUTO_LIMITS=[120,480];'+extractFunc('_initialTailNeedsHumanTurn')+'async '+extractFunc('_expandInitialTailToLatestHumanTurn')+';global.expandTail=_expandInitialTailToLatestHumanTurn;';
+const definitions='var _LATEST_TURN_PAGE_MAX=50;'+extractFunc('_initialTailNeedsHumanTurn')+'async '+extractFunc('_expandInitialTailToLatestHumanTurn')+';global.expandTail=_expandInitialTailToLatestHumanTurn;';
 eval(definitions);
-const initial={session:{session_id:'s1',_messages_truncated:true,_msg_limit_max:500,messages:[
+const initial={session:{session_id:'s1',_messages_truncated:true,_messages_offset:900,_msg_limit_max:500,messages:[
   {role:'assistant',content:'The real answer.',finish_reason:'stop'},
   {role:'user',content:'[BACKGROUND WAKEUP proc_qa]',_source:'process_wakeup'},
   {role:'assistant',content:'Later QA.',finish_reason:'stop'},
@@ -148,20 +148,34 @@ const initial={session:{session_id:'s1',_messages_truncated:true,_msg_limit_max:
 const requests=[];
 global.api=async url=>{
   requests.push(url);
-  return {session:{session_id:'s1',_messages_truncated:true,_msg_limit_max:500,messages:[
-    {role:'user',content:'The initiating human request.'},
-    ...initial.session.messages,
-  ]}};
+  const older=[{role:'user',content:'The initiating human request.'}];
+  for(let index=1;index<500;index++) older.push({
+    role:'assistant',
+    content:'',
+    tool_calls:[{id:'call_'+index,type:'function',function:{name:'tool_'+index,arguments:'{}'}}],
+    finish_reason:'tool_calls',
+  });
+  return {session:{session_id:'s1',_messages_truncated:true,_messages_offset:400,_msg_limit_max:500,messages:older}};
 };
 (async()=>{
   const expanded=await expandTail('s1',initial,()=>true);
-  process.stdout.write(JSON.stringify({requests,messages:expanded.session.messages.map(message=>message.content)}));
+  process.stdout.write(JSON.stringify({
+    requests,
+    messages:expanded.session.messages.map(message=>message.content),
+    projected:expanded.session._latest_human_turn_projected,
+    source:expanded.session._latest_human_turn_projection_source,
+    gaps:expanded.session._latest_human_turn_gap_count,
+  }));
 })().catch(error=>{console.error(error);process.exit(1);});
 """
     payload = _run_node(script)
     assert len(payload["requests"]) == 1
-    assert "msg_limit=120" in payload["requests"][0]
+    assert "msg_limit=500" in payload["requests"][0]
+    assert "msg_before=900" in payload["requests"][0]
     assert payload["messages"][0] == "The initiating human request."
+    assert payload["projected"] is True
+    assert payload["source"] == "client_paging"
+    assert payload["gaps"] == 1
 
 
 def test_cold_tail_with_only_async_updates_still_recovers_the_human_prompt():
