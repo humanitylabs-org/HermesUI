@@ -11146,6 +11146,7 @@ function syncTopbar(){
 function _structuredMessageContentText(value){
   const parts=Array.isArray(value)?value:[value];
   const text=[];
+  const media=[];
   let recognized=false;
   let hasMedia=false;
   for(const part of parts){
@@ -11164,6 +11165,15 @@ function _structuredMessageContentText(value){
     if(['image','image_url','input_image','output_image'].includes(type)){
       recognized=true;
       hasMedia=true;
+      const candidate=typeof part.image_url==='string'
+        ? part.image_url
+        : String((part.image_url&&part.image_url.url)||part.url||'');
+      if(/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(candidate)||/^https?:\/\//i.test(candidate)){
+        const mimeMatch=candidate.match(/^data:image\/([^;,]+)/i);
+        const subtype=String(mimeMatch&&mimeMatch[1]||'png').toLowerCase();
+        const ext=subtype==='jpeg'?'jpg':(['png','gif','webp'].includes(subtype)?subtype:'png');
+        media.push({url:candidate,name:`attachment-${media.length+1}.${ext}`});
+      }
       continue;
     }
     if(Array.isArray(part.content)){
@@ -11172,10 +11182,11 @@ function _structuredMessageContentText(value){
         recognized=true;
         hasMedia=hasMedia||nested.hasMedia;
         if(nested.text) text.push(nested.text);
+        if(Array.isArray(nested.media)) media.push(...nested.media);
       }
     }
   }
-  return {recognized,text:text.join('').trim(),hasMedia};
+  return {recognized,text:text.join('').trim(),hasMedia,media};
 }
 function _serializedStructuredMessageContent(value){
   if(typeof value!=='string') return null;
@@ -11205,6 +11216,7 @@ function _serializedStructuredMessageContent(value){
       recognized:true,
       text:text.join('').trim(),
       hasMedia:/"type"\s*:\s*"(?:image|image_url|input_image|output_image)"/i.test(source),
+      media:[],
     };
   }
 }
@@ -17091,10 +17103,19 @@ function renderMessages(options){
       _prevSepKey=_key;
     }
     let content=m.content||'';
+    let structuredMedia=[];
     let thinkingText='';
     let orderedTransparentParts=_transparentStreamOrderedParts(m);
     if(Array.isArray(content)){
-      content=content.filter(p=>p&&p.type==='text').map(p=>p.text||p.content||'').join('\n');
+      const structured=_structuredMessageContentText(content);
+      content=structured.text;
+      structuredMedia=structured.media||[];
+    }else if(typeof content==='string'){
+      const structured=_serializedStructuredMessageContent(content);
+      if(structured){
+        content=structured.text;
+        structuredMedia=structured.media||[];
+      }
     }
     if(m.role==='assistant'&&!m._live&&typeof content==='string'){
       const anchorFinal=_assistantTurnAnchorSettledFinalAnswer(m, content, {
@@ -17172,6 +17193,11 @@ function renderMessages(options){
         // Use api/file/raw which resolves filename relative to the session workspace.
         const fileUrl='api/file/raw?session_id='+encodeURIComponent(_attachSid)+'&path='+encodeURIComponent(fname);
         return _renderAttachmentHtml(fname,fileUrl);
+      }).join('')}</div>`;
+    }else if(structuredMedia.length){
+      filesHtml=`<div class="msg-files">${structuredMedia.map((item,index)=>{
+        const fname=String(item&&item.name||`attachment-${index+1}.png`);
+        return _renderAttachmentHtml(fname,String(item&&item.url||''));
       }).join('')}</div>`;
     }
     let bodyHtml = _getCachedRender(displayContent, isUser);

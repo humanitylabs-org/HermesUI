@@ -91,11 +91,15 @@ const transport={json.dumps(transport)};
 const malformed={json.dumps(malformed)};
 const literal='json:[1,2,3]';
 const native=[{{type:'text',text:'native prompt'}},{{type:'image_url',image_url:{{url:'data:image/png;base64,SECRET_PIXELS'}}}}];
+const parsedTransport=_serializedStructuredMessageContent(transport);
+const parsedNative=_structuredMessageContentText(native);
 process.stdout.write(JSON.stringify({{
   transport:msgContent({{content:transport}}),
   malformed:msgContent({{content:malformed}}),
   literal:msgContent({{content:literal}}),
   native:msgContent({{content:native}}),
+  transportMediaCount:parsedTransport.media.length,
+  nativeMediaCount:parsedNative.media.length,
 }}));
 """
     payload = _run_node(script)
@@ -103,6 +107,8 @@ process.stdout.write(JSON.stringify({{
     assert payload["malformed"] == "hello\nworld"
     assert payload["literal"] == "json:[1,2,3]"
     assert payload["native"] == "native prompt"
+    assert payload["transportMediaCount"] == 1
+    assert payload["nativeMediaCount"] == 1
     assert "SECRET_PIXELS" not in json.dumps(payload)
 
 
@@ -158,3 +164,12 @@ process.stdout.write(JSON.stringify({{
     assert payload["latest"] == [0, 1]
     # Same content much later can be a deliberate repeat and must remain visible.
     assert payload["distantVisible"] == [0, 1]
+
+
+def test_render_loop_uses_structured_text_and_media_instead_of_transport_bytes():
+    render = UI_JS[UI_JS.index("function renderMessages"):]
+    assert "const structured=_serializedStructuredMessageContent(content);" in render
+    assert "content=structured.text;" in render
+    assert "structuredMedia=structured.media||[];" in render
+    assert "else if(structuredMedia.length)" in render
+    assert "_renderAttachmentHtml(fname,String(item&&item.url||''))" in render
