@@ -87,7 +87,7 @@ def test_serialized_multimodal_content_exposes_only_text_and_preserves_literal_j
     )
     script = f"""
 {helpers}
-global.S={{sessionId:'605b057e462e'}};
+global.S={{session:{{session_id:'605b057e462e'}}}};
 const transport={json.dumps(transport)};
 const malformed={json.dumps(malformed)};
 const literal='json:[1,2,3]';

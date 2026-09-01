@@ -11226,7 +11226,7 @@ function _serializedAttachmentMedia(text, expectedCount){
   // Only accept files inside THIS session's attachment folder; user-authored
   // marker text must not become an arbitrary local-file read primitive.
   const marker=String(text||'').match(/\[Attached files:\s*([\s\S]*?)\]\s*$/i);
-  const sessionId=String((typeof S!=='undefined'&&S&&S.sessionId)||'').trim();
+  const sessionId=String((typeof S!=='undefined'&&S&&((S.session&&S.session.session_id)||S.sessionId))||'').trim();
   if(!marker||!sessionId||!Number.isFinite(Number(expectedCount))||Number(expectedCount)<=0)return [];
   const expectedSegment=`/nesquena-webui/attachments/${sessionId}/`;
   const paths=marker[1].split(/,\s*(?=\/)/).map(value=>value.trim()).filter(Boolean);
