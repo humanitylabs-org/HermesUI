@@ -28,14 +28,14 @@ const CACHE_NAME = 'hermes-shell-__WEBUI_VERSION__';
 // Navigations populate './' only after a successful non-redirect network load.
 const VQ = '?v=__WEBUI_VERSION__';
 const SHELL_ASSETS = [
-  './static/style.css' + VQ + '&overlay=wizard-canvas-v10&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1&high-signal-toggle=v1&mobile-session-home=v1&notification-operations=v3&mobile-rail-right=v1&rail-selection-ring=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&mobile-modern-nav=v1&notification-hierarchy=v1&notification-reply-indicators=v1&mobile-folder-dock=v2&folder-pill-colors=v1&mobile-tabs-removed=v1&mobile-toggle-switches=v1&voice-notes=v1&mobile-folder-quiet=v2&mobile-titlebar=v1&mobile-layer-nav=v7&transcript-disclosures=v1&thread-signal=v1&turn-aware-tail=v2',
+  './static/style.css' + VQ + '&overlay=wizard-canvas-v10&cron-notifications=v9&high-signal-model=v2&high-signal-layout=v1&high-signal-mode=v1&shell-theme=v1&session-status-groups=v1&private-app-rail=v1&new-session-divider=v2&opus-polish=v1&new-session-emphasis=v1&high-signal-toggle=v1&mobile-session-home=v1&notification-operations=v3&mobile-rail-right=v1&rail-selection-ring=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&mobile-modern-nav=v1&notification-hierarchy=v1&notification-reply-indicators=v1&mobile-folder-dock=v2&folder-pill-colors=v1&mobile-tabs-removed=v1&mobile-toggle-switches=v1&voice-notes=v1&mobile-folder-quiet=v2&mobile-titlebar=v1&mobile-layer-nav=v7&transcript-disclosures=v1&thread-signal=v1&turn-aware-tail=v1',
   './static/pwa-startup.js' + VQ,
   './static/boot.js' + VQ + '&tab-polish=v1&mobile-tabs-removed=v1&mobile-back-instant=v1',
   './static/assistant_turn_anchors.js' + VQ,
-  './static/message_projection.js' + VQ + '&semantic-turns=v2&multimodal-display=v4&synthetic-controls=v1&turn-aware-tail=v2',
-  './static/ui.js' + VQ + '&tab-polish=v1&recovery-filter=v2&background-resume=v1&classic-duration=v1&voice-notes=v1&semantic-turns=v2&transcript-disclosures=v1&thread-signal=v1&multimodal-display=v4&synthetic-controls=v1&turn-aware-tail=v2',
+  './static/message_projection.js' + VQ + '&semantic-turns=v2&multimodal-display=v4&synthetic-controls=v1&turn-aware-tail=v1',
+  './static/ui.js' + VQ + '&tab-polish=v1&recovery-filter=v2&background-resume=v1&classic-duration=v1&voice-notes=v1&semantic-turns=v2&transcript-disclosures=v1&thread-signal=v1&multimodal-display=v4&synthetic-controls=v1&turn-aware-tail=v1',
   './static/messages.js' + VQ + '&tab-polish=v1&recovery-filter=v2',
-  './static/sessions.js' + VQ + '&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1&performance-cache=v2&active-session-cache=v1&mobile-folder-dock=v2&folder-pill-colors=v1&done-first=v1&sidebar-order=v2&mobile-tabs-removed=v1&mobile-back-loading=v3&semantic-turns=v2&turn-aware-tail=v2',
+  './static/sessions.js' + VQ + '&tab-polish=v1&status-groups=v1&new-session-divider=v2&status-indicators=v1&blank-draft-working=v1&contained-cron-replies=v1&hidden-cron-project=v1&performance-cache=v2&active-session-cache=v1&mobile-folder-dock=v2&folder-pill-colors=v1&done-first=v1&sidebar-order=v2&mobile-tabs-removed=v1&mobile-back-loading=v3&semantic-turns=v2&turn-aware-tail=v1',
   './static/tailnet-app-rail.js' + VQ + '&overlay=wizard-canvas-v10&bookmark-fallback=v5&bookmark-sync=v1&cron-notifications=v8&shell-theme=v1&private-only=v1&mobile-session-home=v1&cron-operations=v3&mobile-rail-right=v1&human-cron=v1&active-frequency=v1&scheduled-dashboard=v1&silent-notifications=v1&mobile-utility-menu=v1&mobile-bottom-menu=v1&mobile-collapsible-rail=v1&performance-cache=v1&notification-stream=v1&notification-hierarchy=v1&notification-reply-indicators=v1&mobile-toggle-switches=v1&mobile-layer-nav=v6&mobile-settings-menu=v1&marketplace-inline=v1',
   './static/tailnet-app-manager.js' + VQ + '&cron-notifications=v3&semantic-icons=v1&mobile-layer-nav=v3&cloudflare-paths=v1',
   './static/mobile-layer-navigation.js' + VQ + '&mobile-layer-nav=v9&mobile-settings-menu=v1',
@@ -46,7 +46,7 @@ const SHELL_ASSETS = [
   './static/workspace.js' + VQ,
   './static/terminal.js' + VQ,
   './static/onboarding.js' + VQ,
-  './static/session-dashboard.js' + VQ + '&tab-polish=v1&high-signal-model=v6&high-signal-history=v1&background-resume=v1&mode-rail=v1&summary-trust=v1&high-signal-toggle=v1&semantic-turns=v2&synthetic-controls=v1&turn-aware-tail=v2',
+  './static/session-dashboard.js' + VQ + '&tab-polish=v1&high-signal-model=v6&high-signal-history=v1&background-resume=v1&mode-rail=v1&summary-trust=v1&high-signal-toggle=v1&semantic-turns=v2&synthetic-controls=v1&turn-aware-tail=v1',
   './static/vendor/smd.min.js' + VQ,
   './static/vendor/katex/0.16.22/katex.min.css' + VQ,
   './static/vendor/katex/0.16.22/katex.min.js' + VQ,
