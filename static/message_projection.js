@@ -47,7 +47,6 @@
 
   const isRenderable=message=>{
     if(!message||!['user','assistant'].includes(roleOf(message))) return false;
-    if(message._latest_turn_gap) return true;
     if(isSystemControl(message)) return false;
     if(typeof root._messageIsRenderable==='function') return !!root._messageIsRenderable(message);
     if(textOf(message).trim()) return true;
@@ -59,7 +58,6 @@
 
   const assistantContinues=message=>{
     if(!message||roleOf(message)!=='assistant') return false;
-    if(message._latest_turn_gap) return true;
     if(typeof root._assistantMessageHasToolCall==='function'&&root._assistantMessageHasToolCall(message)) return true;
     if(Array.isArray(message.tool_calls)&&message.tool_calls.length) return true;
     if(Array.isArray(message._partial_tool_calls)&&message._partial_tool_calls.length) return true;

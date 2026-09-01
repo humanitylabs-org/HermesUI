@@ -3531,7 +3531,7 @@ async function _warmSessionMessageCacheEntry(row, expectedProfile, expectedEpoch
   request=(async()=>{
     try{
       const data=await api(
-        `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${_INITIAL_MSG_LIMIT}&latest_human_turn=1`,
+        `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${_INITIAL_MSG_LIMIT}`,
         {timeoutMs:120000}
       );
       if(expectedEpoch!==_sessionMessageCacheEpoch||String(S.activeProfile||'default')!==expectedProfile) return false;
@@ -3707,7 +3707,6 @@ function _initialTailNeedsHumanTurn(messages){
 }
 
 async function _expandInitialTailToLatestHumanTurn(sid, data, ownsLoad){
-  if(data&&data.session&&data.session._latest_human_turn_projected) return data;
   let current=data;
   for(const desiredLimit of _LATEST_TURN_AUTO_LIMITS){
     const session=current&&current.session;
@@ -3766,9 +3765,7 @@ async function _ensureMessagesLoaded(sid, opts) {
   // Older frontends used expand_renderable=1 to request visible-row expansion.
   // The server now counts msg_limit by visible transcript rows by default; keep
   // the flag for compatibility with mixed-version deployments.
-  const expandParam = boundedReloadLimit
-    ? `&expand_renderable=1${(!opts.force&&boundedReloadLimit===_INITIAL_MSG_LIMIT)?'&latest_human_turn=1':''}`
-    : '';
+  const expandParam = boundedReloadLimit ? '&expand_renderable=1' : '';
   let data;
   try {
     if(!opts.force&&typeof _takeFreshSessionMessageCache==='function'){
