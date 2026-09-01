@@ -42,7 +42,7 @@ PINNED_NONSTATIC_SHA256 = {
     # test_hermes_ui_true_cold_archive.py suite. Imported channel memory keeps
     # upstream metadata-only behavior.
     "api/models.py": "2d33916801f7fe876436c90d3cd9154b4fb6f91c82c14f84603eead2e54d5185",
-    "api/routes.py": "0be44676bf3908d731da16aba3a593f663599356f908988af0ab41d614ceb4ed",
+    "api/routes.py": "1d82f6b685000c9f0e5d58599eb447597da33d7638fbaeecdc9e96366902bc37",
     "api/session_cold_archive.py": "ec5b3a0b0e6332d9d18f0fb649db34a66cd1b06a19df52717ffea1713c0f559f",
     "api/upload.py": "9d4eff0a1f15b3606f076baffa9ff8eba024bdd54cfe4a11a3c9e5480d4ec854",
     # Two inherited lifecycle regressions now assert the cold-archive cache

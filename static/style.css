@@ -2998,6 +2998,12 @@
   .background-update-body .msg-body{padding:0;max-width:none;font-size:13px;line-height:1.5;}
   .background-update-body .msg-foot{padding:0;margin-top:6px;}
   .background-update-item+.background-update-item{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+  .latest-turn-gap-row{padding:0;}
+  .latest-turn-gap-body{display:grid;gap:7px;padding:0 0 12px;color:var(--muted);font-size:calc(var(--message-body-font-size) * .9);line-height:1.45;}
+  .latest-turn-gap-tool{display:flex;align-items:center;gap:7px;color:var(--muted);}
+  .latest-turn-gap-tool::before{content:'›';opacity:.65;}
+  .latest-turn-gap-prose{padding:7px 0;color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;}
+  .latest-turn-gap-empty{color:var(--muted);font-style:italic;}
   .background-update-item-head{display:flex;align-items:center;gap:8px;margin-bottom:5px;color:var(--muted);font-size:10px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;}
   .background-update-item-head .msg-time{margin-left:auto;text-transform:none;letter-spacing:0;}
   /* #6345: collapsed summary-card variant for parseable wakeups. */

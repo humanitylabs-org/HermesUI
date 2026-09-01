@@ -617,6 +617,7 @@ function _cancelMessageVirtualizedRender(){
 }
 function _messageIsRenderable(m){
   if(!m||!m.role||m.role==='tool') return false;
+  if(m._latest_turn_gap) return true;
   if(_isBackgroundUpdateTriggerMessage(m)) return false;
   if(_isContextCompactionMessage(m)||_isPreservedCompressionTaskListMessage(m)) return false;
   if(_isRecoveryControlMessage(m)) return false;
@@ -642,6 +643,7 @@ function _isBackgroundUpdateTriggerMessage(m){
 }
 function _assistantContinuesUserDirectedTurn(m){
   if(!m||m.role!=='assistant') return false;
+  if(m._latest_turn_gap) return true;
   if(Array.isArray(m.tool_calls)&&m.tool_calls.length) return true;
   if(Array.isArray(m._partial_tool_calls)&&m._partial_tool_calls.length) return true;
   if(Array.isArray(m.content)&&m.content.some(part=>part&&part.type==='tool_use')) return true;
@@ -996,11 +998,18 @@ function _messageSessionIndexBase(){
 function _messageSessionIndexForRawIdx(rawIdx){
   const n=Number(rawIdx);
   if(!Number.isFinite(n)) return null;
+  const message=Array.isArray(S.messages)?S.messages[n]:null;
+  const projected=Number(message&&message._display_source_index);
+  if(Number.isFinite(projected)) return projected;
   return _messageSessionIndexBase()+n;
 }
 function _messageRawIdxForSessionIndex(sessionIdx){
   const n=Number(sessionIdx);
   if(!Number.isFinite(n)) return null;
+  if(Array.isArray(S.messages)){
+    const projectedIdx=S.messages.findIndex(message=>Number(message&&message._display_source_index)===n);
+    if(projectedIdx>=0) return projectedIdx;
+  }
   return n-_messageSessionIndexBase();
 }
 function _messageVirtualScrollTopForVisibleIdx(visWithIdx, visibleIdx, container){
@@ -12838,6 +12847,95 @@ function _onBackgroundUpdateToggle(details){
   if(!details) return;
   _writeActivityDisclosureState(details.getAttribute('data-activity-disclosure-key'), !!details.open);
 }
+async function _loadLatestTurnGap(details){
+  if(!details||details._latestTurnGapLoaded||details._latestTurnGapLoading) return;
+  const rawIdx=Number(details.getAttribute('data-raw-idx'));
+  const message=Array.isArray(S.messages)?S.messages[rawIdx]:null;
+  const gap=message&&message._latest_turn_gap;
+  const start=Number(gap&&gap.start_index);
+  const end=Number(gap&&gap.end_index);
+  const body=details.querySelector('.latest-turn-gap-body');
+  if(!body||!Number.isFinite(start)||!Number.isFinite(end)||end<=start) return;
+  details._latestTurnGapLoading=true;
+  body.textContent='Loading work details…';
+  try{
+    const sid=String((S.session&&S.session.session_id)||'');
+    if(!sid) throw new Error('No active session');
+    let cursor=end;
+    let loaded=[];
+    let rounds=0;
+    const pageLimit=Math.max(1,Math.min(500,Number(S.session&&S.session._msg_limit_max)||500));
+    while(cursor>start&&rounds<50){
+      const data=await api(
+        `/api/session?session_id=${encodeURIComponent(sid)}&messages=1&resolve_model=0&msg_limit=${pageLimit}&msg_before=${cursor}`,
+        {timeoutMs:120000}
+      );
+      if(!data||!data.session) throw new Error('Work details unavailable');
+      const offset=Number(data.session._messages_offset);
+      const page=Array.isArray(data.session.messages)?data.session.messages:[];
+      if(!Number.isFinite(offset)||offset>=cursor) break;
+      const bounded=page.map((item,index)=>{
+        if(!item||typeof item!=='object') return item;
+        return {...item,_display_source_index:offset+index};
+      }).filter(item=>{
+        const source=Number(item&&item._display_source_index);
+        return Number.isFinite(source)&&source>=start&&source<end;
+      });
+      loaded=bounded.concat(loaded);
+      cursor=offset;
+      rounds+=1;
+    }
+    body.innerHTML='';
+    const fragment=document.createDocumentFragment();
+    const seenTools=new Set();
+    let visibleRows=0;
+    loaded.forEach(item=>{
+      if(!item||item.role!=='assistant') return;
+      const calls=Array.isArray(item.tool_calls)?item.tool_calls:[];
+      calls.forEach(call=>{
+        const name=String(call&&call.function&&call.function.name||call&&call.name||'Tool').replace(/[_-]+/g,' ').trim();
+        const id=String(call&&call.id||'');
+        const key=id||`${Number(item._display_source_index)}:${name}`;
+        if(seenTools.has(key)) return;
+        seenTools.add(key);
+        const row=document.createElement('div');
+        row.className='latest-turn-gap-tool';
+        row.textContent=name||'Tool';
+        fragment.appendChild(row);
+        visibleRows+=1;
+      });
+      if(calls.length) return;
+      const text=String(typeof msgContent==='function'?msgContent(item):item.content||'').trim();
+      if(!text) return;
+      const row=document.createElement('div');
+      row.className='latest-turn-gap-prose';
+      row.textContent=text.length>800?`${text.slice(0,800)}…`:text;
+      fragment.appendChild(row);
+      visibleRows+=1;
+    });
+    if(!visibleRows){
+      const empty=document.createElement('div');
+      empty.className='latest-turn-gap-empty';
+      empty.textContent='No user-facing work details were retained in this range.';
+      fragment.appendChild(empty);
+    }
+    if(cursor>start){
+      const partial=document.createElement('div');
+      partial.className='latest-turn-gap-empty';
+      partial.textContent='Additional work records remain outside this expanded view.';
+      fragment.appendChild(partial);
+    }
+    body.appendChild(fragment);
+    details._latestTurnGapLoaded=true;
+  }catch(error){
+    body.textContent=error&&error.message?error.message:'Work details unavailable';
+  }finally{
+    details._latestTurnGapLoading=false;
+  }
+}
+function _onLatestTurnGapToggle(details){
+  if(details&&details.open) _loadLatestTurnGap(details);
+}
 function _toggleToolWorklogGroup(summary){
   const group=summary&&summary.closest?summary.closest('.tool-worklog-tool-group,.tool-group'):null;
   if(group){
@@ -17317,6 +17415,19 @@ function renderMessages(options){
       continue;
     }
     currentBackgroundUpdatesGroup=null;
+
+    if(m&&m._latest_turn_gap){
+      currentAssistantTurn=null;
+      const gap=m._latest_turn_gap||{};
+      const omitted=Math.max(0,Number(gap.omitted_renderable)||Number(gap.omitted_records)||0);
+      const row=document.createElement('div');
+      row.className='msg-row latest-turn-gap-row';
+      row.dataset.msgIdx=rawIdx;
+      row.dataset.role='work_details_gap';
+      row.innerHTML=`<details class="background-update-card latest-turn-gap-card" data-raw-idx="${rawIdx}" ontoggle="_onLatestTurnGapToggle(this)"><summary class="tool-call-group-summary tool-worklog-summary transcript-disclosure-summary"><span class="tool-call-group-label tool-worklog-label background-update-label">Work details</span><span class="background-update-count">${esc(_fmtTokens(omitted))}</span><span class="tool-call-group-chevron background-update-toggle transcript-disclosure-chevron">${li('chevron-right',12)}</span></summary><div class="background-update-body latest-turn-gap-body">Open to load omitted work details.</div></details>`;
+      inner.appendChild(row);
+      continue;
+    }
 
     if(isProcessWakeup){
       currentAssistantTurn=null;
