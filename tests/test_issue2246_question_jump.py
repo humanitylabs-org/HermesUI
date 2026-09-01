@@ -8,31 +8,22 @@ STYLE_CSS = (REPO / "static" / "style.css").read_text(encoding="utf-8")
 I18N_JS = (REPO / "static" / "i18n.js").read_text(encoding="utf-8")
 
 
-def test_assistant_footer_gets_completed_turn_question_jump_button():
-    assert "function _questionJumpButtonHtml(questionRawIdx, assistantRawIdx)" in UI_JS
+def test_assistant_footer_omits_redundant_question_jump_button():
+    """Speaker-side layout already preserves turn context, so the assistant
+    footer should contain only useful metadata/actions rather than a repeated
+    jump-back control."""
     assert "function jumpToTurnQuestion(questionRawIdx, assistantRawIdx)" in UI_JS
-    assert "const questionRawIdxByAssistantRawIdx=new Map()" in UI_JS
-    assert "questionRawIdxByAssistantRawIdx.set(entry.rawIdx,lastQuestionRawIdx)" in UI_JS
     assert "row.id=_userMessageDomId(rawIdx)" in UI_JS
-    assert "const isTurnFinalAssistant=!isUser&&(!nextRendered||!nextRendered.m||nextRendered.m.role!=='assistant')" in UI_JS
-    # #3114 superseded the turn-final-only gate: the jump-to-question button now
-    # renders on every assistant message that has a resolvable question target,
-    # not just the turn-final one (multi-step turns otherwise lost the affordance
-    # on intermediate assistant bubbles). The button is gated on a non-null
-    # resolved target instead of isTurnFinalAssistant.
-    assert "const _qJumpTarget=(!isUser&&!m._live)?questionRawIdxByAssistantRawIdx.get(rawIdx):undefined;" in UI_JS
-    assert "const questionJumpBtn = (_qJumpTarget!==undefined&&_qJumpTarget!==null)" in UI_JS
-    assert "_questionJumpButtonHtml(_qJumpTarget, assistantRawIdxByQuestionRawIdx.get(_qJumpTarget)??rawIdx)" in UI_JS
-    assert "msg-question-jump-btn session-jump-btn session-jump-btn--inline" in UI_JS
+    render = UI_JS[UI_JS.index("function renderMessages"):]
+    assert "questionJumpBtn" not in render
+    assert "questionRawIdxByAssistantRawIdx" not in render
+    assert "assistantRawIdxByQuestionRawIdx" not in render
+    assert '${questionJumpBtn}' not in render
 
 
-def test_multi_segment_turn_jumps_to_first_assistant_segment():
-    # #3852: the reverse map assistantRawIdxByQuestionRawIdx resolves the FIRST
-    # assistant segment for a given question so multi-step turns (tool_call ->
-    # assistant -> tool_call -> assistant) scroll to the start of the response.
-    assert "const assistantRawIdxByQuestionRawIdx=new Map()" in UI_JS
-    assert "if(!assistantRawIdxByQuestionRawIdx.has(qIdx)) assistantRawIdxByQuestionRawIdx.set(qIdx,aIdx)" in UI_JS
-    assert "assistantRawIdxByQuestionRawIdx.get(_qJumpTarget)" in UI_JS
+def test_removed_footer_control_does_not_build_per_turn_jump_maps():
+    assert "const questionRawIdxByAssistantRawIdx=new Map()" not in UI_JS
+    assert "const assistantRawIdxByQuestionRawIdx=new Map()" not in UI_JS
 
 
 def test_question_jump_expands_windowed_history_and_highlights_question():

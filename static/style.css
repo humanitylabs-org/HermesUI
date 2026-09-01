@@ -5128,7 +5128,7 @@ body.resizing .sidebar{transition:none!important;}
 .assistant-turn[data-transparent-turn-collapsed="1"] .transparent-earlier-steps{
   display:none;
 }
-.assistant-turn .msg-role.assistant{cursor:pointer;user-select:none;}
+.assistant-turn .msg-role.assistant:not(.msg-role-metrics-only){cursor:pointer;user-select:none;}
 .assistant-turn .msg-role.assistant .transparent-turn-chevron{
   display:inline-block;margin-left:6px;opacity:.6;
   transition:transform .2s ease;

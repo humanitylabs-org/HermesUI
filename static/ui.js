@@ -11229,17 +11229,44 @@ function isTpsDisplayEnabled(){
   return window._showTps===true;
 }
 function _assistantRoleHtml(tsTitle='', tpsText=''){
-  const _bn=assistantDisplayName();
   const tps=(isTpsDisplayEnabled()&&tpsText)?`<span class="msg-tps-inline" title="Tokens per second">${esc(tpsText)}</span>`:'';
-  return `<div class="msg-role assistant" ${tsTitle?`title="${esc(tsTitle)}"`:''}><div class="role-icon assistant">${esc(_bn.charAt(0).toUpperCase())}</div><span class="msg-role-name">${esc(_bn)}</span>${tps}</div>`;
+  // Left/right alignment already identifies the speaker. Keep a role row only
+  // when it has a real job: Transparent Stream uses it as the turn disclosure,
+  // and the optional TPS preference needs a compact metric hook.
+  if(isTransparentStream()){
+    const label=_workDetailsElapsedLabel('');
+    return `<div class="msg-role assistant" ${tsTitle?`title="${esc(tsTitle)}"`:''}><span class="msg-role-name">${esc(label)}</span>${tps}</div>`;
+  }
+  return tps?`<div class="msg-role assistant msg-role-metrics-only">${tps}</div>`:'';
+}
+function _syncAssistantRole(turn, tsTitle='', tpsText=''){
+  if(!turn) return;
+  const html=_assistantRoleHtml(tsTitle,tpsText);
+  const existing=turn.querySelector('.msg-role.assistant');
+  if(existing){
+    if(html) existing.outerHTML=html;
+    else existing.remove();
+    return;
+  }
+  if(!html) return;
+  const blocks=_assistantTurnBlocks(turn);
+  if(blocks) blocks.insertAdjacentHTML('beforebegin',html);
 }
 function _setAssistantTurnTps(turn, tpsText=''){
   if(!turn) return;
-  const role=turn.querySelector('.msg-role.assistant');
+  const text=String(tpsText||'').trim();
+  let role=turn.querySelector('.msg-role.assistant');
+  if(!role&&text){
+    _syncAssistantRole(turn,'',text);
+    role=turn.querySelector('.msg-role.assistant');
+  }
   if(!role) return;
   let chip=role.querySelector('.msg-tps-inline');
-  const text=String(tpsText||'').trim();
-  if(!text){if(chip) chip.remove();return;}
+  if(!text){
+    if(chip) chip.remove();
+    if(role.classList.contains('msg-role-metrics-only')) role.remove();
+    return;
+  }
   if(!chip){
     chip=document.createElement('span');
     chip.className='msg-tps-inline';
@@ -16849,22 +16876,8 @@ function renderMessages(options){
   let _prevSepKey=null;
   let currentAssistantTurn=null;
   let currentBackgroundUpdatesGroup=null;
-  // Only build question→assistant mapping for the visible window, not the
-  // full visWithIdx.  The jump-to-question button is only rendered for
-  // assistant messages that appear in the current render window anyway.
-  const questionRawIdxByAssistantRawIdx=new Map();
-  let lastQuestionRawIdx=-1;
   const renderedRawIdxs=new Set(renderVisWithIdx.map(e=>e.rawIdx));
   const renderableRawIdxs=new Set(visWithIdx.map(e=>e.rawIdx));
-  for(const entry of visWithIdx){
-    const role=entry&&entry.m&&entry.m.role;
-    if(role==='user') lastQuestionRawIdx=entry.rawIdx;
-    else if(role==='assistant'&&renderedRawIdxs.has(entry.rawIdx)) questionRawIdxByAssistantRawIdx.set(entry.rawIdx,lastQuestionRawIdx);
-  }
-  const assistantRawIdxByQuestionRawIdx=new Map();
-  for(const [aIdx,qIdx] of questionRawIdxByAssistantRawIdx){
-    if(!assistantRawIdxByQuestionRawIdx.has(qIdx)) assistantRawIdxByQuestionRawIdx.set(qIdx,aIdx);
-  }
   // #3709 (defect B): build a per-turn combined visible-answer text so the
   // thinking echo-strip can de-dupe a thinking-only message (whose own visible
   // body is empty) against the answer prose carried by a SIBLING message in the
@@ -17103,16 +17116,7 @@ function renderMessages(options){
     const tsTitle=tsVal?(_fmtSv?_fmtSv(new Date(tsVal*1000),{}):new Date(tsVal*1000).toLocaleString()):'';
     const tsTime=_formatMessageFooterTimestamp(tsVal);
     const timeHtml = tsTime ? `<span class="msg-time" title="${esc(tsTitle)}">${tsTime}</span>` : '';
-    // #3114: show jump-to-question on every assistant message that has a
-    // resolvable question target, not just the turn-final one. Multi-step
-    // turns (tool_call -> assistant -> tool_call -> assistant) otherwise
-    // strip the button from every intermediate assistant bubble and the
-    // user loses the navigation affordance.
-    const _qJumpTarget=(!isUser&&!m._live)?questionRawIdxByAssistantRawIdx.get(rawIdx):undefined;
-    const questionJumpBtn = (_qJumpTarget!==undefined&&_qJumpTarget!==null)
-      ? _questionJumpButtonHtml(_qJumpTarget, assistantRawIdxByQuestionRawIdx.get(_qJumpTarget)??rawIdx)
-      : '';
-    const footHtml = `<div class="msg-foot">${timeHtml}<span class="msg-actions">${editBtn}${ttsBtn}${forkBtn}${copyBtn}${retryBtn}</span>${questionJumpBtn}</div>`;
+    const footHtml = `<div class="msg-foot">${timeHtml}<span class="msg-actions">${editBtn}${ttsBtn}${forkBtn}${copyBtn}${retryBtn}</span></div>`;
 
     if(_isContextCompactionMessage(m)){
       continue;
@@ -17270,8 +17274,7 @@ function renderMessages(options){
         const blocks=_assistantTurnBlocks(recycled);
         if(blocks) blocks.innerHTML='';
         for(const attr of _recycleResetAttrs) recycled.removeAttribute(attr);
-        const role=recycled.querySelector('.msg-role.assistant');
-        if(role) role.outerHTML=_assistantRoleHtml(tsTitle, isTpsDisplayEnabled()?_formatTurnTps(m._turnTps):'');
+        _syncAssistantRole(recycled, tsTitle, isTpsDisplayEnabled()?_formatTurnTps(m._turnTps):'');
         currentAssistantTurn=recycled;
       }else{
         currentAssistantTurn=_createAssistantTurn(tsTitle, isTpsDisplayEnabled()?_formatTurnTps(m._turnTps):'');

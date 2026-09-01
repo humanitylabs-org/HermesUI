@@ -1784,7 +1784,7 @@ console.log(JSON.stringify({
 
     def test_recycled_assistant_turn_refreshes_role_header(self):
         """Recycled assistant turns must refresh timestamp and TPS header markup."""
-        role_header_needle = json.dumps("role.outerHTML=_assistantRoleHtml(")
+        role_header_needle = json.dumps("_syncAssistantRole(recycled,")
         session_id_needle = json.dumps(
             "currentAssistantTurn.dataset.sessionId=S.session.session_id"
         )
@@ -1822,7 +1822,7 @@ console.log(JSON.stringify({
         )
         out = json.loads(_run_node(source))
         assert out["rewrites_role_header"] is True, \
-            "recycled assistant turns must refresh the role header"
+            "recycled assistant turns must synchronize the optional role row"
         assert out["refreshes_session_id"] is True, \
             "recycled assistant turns must refresh the session id"
         assert out["clears_transparent_collapse"] is True, \

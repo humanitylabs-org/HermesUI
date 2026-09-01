@@ -61,10 +61,18 @@ PINNED_NONSTATIC_SHA256 = {
     "tests/test_compact_voice_note_rendering.py": "530ccfba0091c47e363551d62109a145e039ac67078c1d73f1d59d1a46a02f2d",
     "tests/test_stale_stream_cleanup.py": "63efe65c93e1c855c9f9ac484811e2d3c46e6b4378687a736b44fceae4ed2005",
     "tests/test_svg_audio_video_rendering.py": "d86f6ad7086c791d7239708eb7a320b826c5298e9cdde804a59d907919bcc84d",
-    # The inherited visible-order regression now pins the downstream default-
-    # collapsed Work details contract. The restart-guard regression belongs to
-    # the already-carried Wizard App lifecycle hotfix on this release line.
-    "tests/test_live_to_final_anchor_visible_order.py": "1c9a24bb86baab2f176c3372bc74f5e69075e67268a2d0088cc3bc54dc9944d0",
+    # These inherited transcript regressions now pin the downstream calm-thread
+    # contract: redundant assistant identity and per-response jump chrome stay
+    # absent while TPS, Transparent Stream, DOM recycling, and settled ordering
+    # retain their existing behavior.
+    "tests/test_issue1617_tps_message_header.py": "fa80752bd2212bb1f038d8750868e78532a0aa23c40935f698520204ab03876e",
+    "tests/test_issue2246_question_jump.py": "2fe1c188ec8ca4061e23f90ba2576e43fa1153ea1ed7f3f2c448e41eeb12a0d0",
+    "tests/test_issue3820_chat_activity_display_mode.py": "9280699a73e049b44db42e7aedb2e78daf0c257f7ec9316a42014aca3b9627e8",
+    "tests/test_issue4346_vscroll_footer_jitter.py": "d1493dcffbdc2536b14b7d90ad6a6f76598ad099d7aa1ae02fa4bc7716fb2a1a",
+    "tests/test_issue4793_dom_recycle_hardening.py": "f25da120c33440d2786611bfdad448a8a9d1d0377de02ca8fd345feef9109ec2",
+    "tests/test_live_to_final_anchor_visible_order.py": "662d795f0f72caffd99aa12ec8e4884fedb8031a1e9af64a24798bf0f357e237",
+    # The restart-guard regression belongs to the already-carried Wizard App
+    # lifecycle hotfix on this release line.
     "tests/test_wizard_app_systemd_restart_guard.py": "9813977b86cd4d8c93d16c6b6deba6c1803686a3bdacd44ee3dca16d24d707d1",
     # Inherited workflows change only downstream branch reachability and the
     # exact test launchers needed for Hermes UI's replacement frontend contracts.

@@ -841,6 +841,12 @@ def test_transparent_turn_header_is_collapsible():
     # The chevron rotates on collapse.
     assert "transparent-turn-chevron" in STYLE_CSS
     assert "transform:rotate(-90deg)" in STYLE_CSS
+    role_fn = UI_JS[
+        UI_JS.index("function _assistantRoleHtml"):
+        UI_JS.index("function _syncAssistantRole")
+    ]
+    assert "_workDetailsElapsedLabel('')" in role_fn
+    assert "assistantDisplayName()" not in role_fn
 
 
 def test_old_event_fading_medium_to_low():

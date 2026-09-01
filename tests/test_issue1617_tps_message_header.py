@@ -29,6 +29,17 @@ def test_tps_renders_in_message_header_not_global_titlebar():
     assert "tpsStat" not in MESSAGES_JS, "live TPS must not target the removed/global titlebar chip"
 
 
+def test_compact_assistant_turn_omits_redundant_name_and_avatar():
+    role_fn = UI_JS[
+        UI_JS.index("function _assistantRoleHtml"):
+        UI_JS.index("function _syncAssistantRole")
+    ]
+    assert "assistantDisplayName()" not in role_fn
+    assert "role-icon assistant" not in role_fn
+    assert "if(isTransparentStream())" in role_fn
+    assert "msg-role-metrics-only" in role_fn
+
+
 def test_live_metering_updates_only_real_tps_and_never_placeholders():
     listener_start = MESSAGES_JS.find("source.addEventListener('metering'")
     assert listener_start != -1, "messages.js should listen for metering SSE events"
