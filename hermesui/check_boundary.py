@@ -28,6 +28,8 @@ DOWNSTREAM_EXACT = {
     "docs/Tailnet-HermesUI-Prompt.md",
     "docs/UPSTREAM-MAINTENANCE.md",
     "docs/give-this-prompt-to-your-ai.md",
+    "qa/cloudflare-installer-smoke.sh",
+    "qa/cloudflare-update-smoke.sh",
     "qa/tailnet-installer-smoke.sh",
     "qa/update-smoke.sh",
 }

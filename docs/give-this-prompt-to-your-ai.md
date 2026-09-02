@@ -1,25 +1,31 @@
 # Give this prompt to your AI
 
-This is the release prompt template. The published Humanity Labs page and release asset replace `REVIEWED_COMMIT_SHA` with the independently reviewed 40-character commit before anyone copies it. Do not use this unresolved template directly.
+This is the release prompt template. The published AI Wizards page and release asset replace `REVIEWED_COMMIT_SHA` with the reviewed 40-character commit before anyone copies it. Do not use this unresolved template directly.
 
 ```text
-Install HermesUI v0.2.0 from https://github.com/humanitylabs-org/HermesUI on this Hermes device and expose it privately at /hermesUI.
+Install or replace Wizard App v0.4.0 from https://github.com/humanitylabs-org/HermesUI on this Linux Hermes device. This release contains the current Wizard App interface. An existing managed Wizard App installation must be updated even when it is healthy.
 
-Complete and verify the installation:
+Preserve Hermes completely: never delete, move, reset, rewrite, or create a second copy of the active `HERMES_HOME`; preserve every conversation, profile, credential, memory, workspace, scheduled task, gateway, and provider configuration. This operation replaces Wizard App code and its owned runtime only, not Hermes Agent or Hermes data.
 
-1. Check that the host is Linux with Python 3.11, 3.12, or 3.13, git, curl, systemd user services, `systemd-analyze`, Hermes Agent, and Tailscale. Confirm Hermes works with `hermes --version` and `hermes doctor`. Tailscale is mandatory and must be connected with MagicDNS. If a prerequisite is missing, explain one safe fix at a time. Ask before running sudo, a package manager, or the official Tailscale installer. Never enable Funnel.
+1. Inspect the host, active Hermes/WebUI processes, `~/.config/hermesui/install.env`, the installed user units, the existing Wizard App checkout, its Git status, selected `HERMES_HOME`, profile, loopback port, and current Cloudflare or Tailscale access mode. Refuse to touch a dirty or foreign checkout or a unit that cannot be proven installer-owned. Never start a second WebUI over the same `HERMES_HOME`.
 
-2. Set `expected_commit="REVIEWED_COMMIT_SHA"` and refuse to continue if that value is not exactly 40 lowercase hexadecimal characters. Clone the repository at reviewed tag `v0.2.0` into `~/apps/HermesUI`, or safely update an existing clean checkout to that exact tag. Do not overwrite unrelated local changes. Verify `git describe --tags --exact-match` returns `v0.2.0`. Verify `git rev-parse HEAD`, `git rev-parse 'v0.2.0^{commit}'`, and the peeled commit reported by `git ls-remote origin 'refs/tags/v0.2.0^{}'` all equal the literal `expected_commit`. Refuse to continue if any value differs.
+2. Set `expected_commit="REVIEWED_COMMIT_SHA"` and refuse to continue unless it is exactly 40 lowercase hexadecimal characters. Clone the repository into a new temporary owner-only release checkout, check out annotated tag `v0.4.0`, and verify that `git describe --tags --exact-match` returns `v0.4.0`. Verify that `git rev-parse HEAD`, `git rev-parse 'v0.4.0^{commit}'`, and the peeled commit from `git ls-remote origin 'refs/tags/v0.4.0^{}'` all equal the literal `expected_commit`.
 
-3. Run `./hermesui/installer/tailnet-prereq-check.sh`, resolve any failure safely, then run `./hermesui/installer/tailnet-setup.sh`.
+3. If `~/.config/hermesui/install.env` records an existing managed installation, determine its exact checkout path from the verified installer-owned unit. Run the release checkout's updater against that installed checkout:
 
-4. Verify `hermesui-launcher.service` is enabled and `hermesui.service` is active. Run `./hermesui/installer/tailnet-status.sh` to verify the exact managed process. Verify `http://127.0.0.1:8793/health` reports healthy and the server is bound only to loopback. If the installer selected another port, use that exact port for every check.
+   HERMESUI_REPO_ROOT_OVERRIDE="/exact/existing/checkout" \
+     "/exact/release/checkout/hermesui/installer/update.sh" \
+     v0.4.0 "$expected_commit"
 
-5. Verify the canonical private Tailnet URL `https://<this-device>.ts.net/hermesUI/` loads exactly as written. Verify `/hermesUI/health` is healthy and `/hermesUI/manifest.json` identifies HermesUI with relative `id`, `start_url`, and `scope` values that remain contained under `/hermesUI` when installed as a PWA. Confirm the Serve configuration exposes `/hermesUI` only and that Funnel is not enabled.
+   The updater must dispatch to the existing access mode, wait for zero active runs and streams, preserve its exact `HERMES_HOME`, profile, port, hostname, tunnel, Access policy, Tailnet route, and service state, replace the clean checkout at the reviewed commit, and roll back the checkout, owned unit, and runtime on failure. Do not request a Cloudflare token for this code-only replacement and do not recreate provider resources.
 
-6. Treat anyone who can open HermesUI as a trusted operator of this Hermes account. The unchanged upstream backend scopes its cookies to the whole origin (`Path=/`), so use a dedicated MagicDNS origin if sibling paths are not equally trusted. Mounted OIDC callbacks are not supported without upstream backend changes; use password or passkey authentication. If this Tailnet includes people who should not control the agent, help me enable the WebUI password without asking me to paste the password into chat, and recommend a narrow Tailscale grant or ACL.
+4. If no managed Wizard App exists, install from the verified v0.4.0 checkout. Run `hermes --version` and `hermes doctor`. The installer supports Linux, Python 3.11–3.13, git, curl, Hermes Agent, and systemd user services. Ask before sudo, package-manager commands, installing cloudflared or Tailscale, or enabling user lingering.
 
-7. Report the installed tag and commit, service state, loopback bind, local health evidence, Tailnet health evidence, final URL, and exact uninstall command `./hermesui/installer/tailnet-uninstall.sh`. Do not claim success until every check passes.
+5. For a new VPS install, prefer Cloudflare Tunnel + Access. Ask for a dedicated hostname, exact allowed operator email address or addresses, Cloudflare account ID and zone ID, and an owner-only local API-token file; never paste or print the token. Then run `./hermesui/installer/setup.sh --mode cloudflare` with the confirmed `--account-id`, `--zone-id`, `--hostname`, repeated `--allow-email`, and `--api-token-file` arguments. Use Tailscale only if I explicitly choose it, via `./hermesui/installer/setup.sh --mode tailscale`; never enable Funnel.
 
-Preserve existing Hermes conversations, profiles, configuration, credentials, workspaces, and gateway services. Do not publish the app to the internet, enable Funnel, print secrets, or silently replace a different service already using the selected port or `/hermesUI` path.
+6. Verify the exact result. Confirm the installed checkout is detached at `v0.4.0` and `expected_commit`; the selected Wizard App service is enabled/active as appropriate; the server binds only to its recorded `127.0.0.1` port; `/health` is healthy; no second Hermes execution backend exists; and the prior `HERMES_HOME` and profile are still selected. Run `cloudflare-status.sh` or `tailnet-status.sh` for the recorded mode. Compare the served `static/ui.js`, `static/sessions.js`, `static/sw.js`, and `static/tailnet-app-rail.js` SHA-256 values with those files in the verified release checkout, then have me open the private URL and confirm the current Wizard App interface loads without broken assets or browser errors.
+
+7. Report the prior and installed commits, access mode, final private URL, loopback bind, service states, health evidence, served-asset verification, preserved Hermes home/profile, and rollback result or command. Do not claim success unless the update or install and every selected-mode check pass.
+
+Never expose a public origin, weaken Cloudflare Access or Tailscale policy, enable Funnel, print secrets, overwrite a foreign service, or modify Hermes data.
 ```

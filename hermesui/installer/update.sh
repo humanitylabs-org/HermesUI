@@ -19,6 +19,23 @@ else
   exec python3 "$LOCK_HELPER" --lock "$LIFECYCLE_LOCK" --fd 9 -- "$INSTALLER_DIR/update.sh" "$@"
 fi
 
+state_file="${HERMESUI_STATE_FILE:-${HERMESUI_STATE_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/hermesui}/install.env}"
+access_mode=''
+if [[ -r "$state_file" ]]; then
+  while IFS='=' read -r key value; do
+    if [[ "$key" == HERMESUI_ACCESS_MODE ]]; then
+      [[ -z "$access_mode" ]] || {
+        printf 'ERROR: duplicate access-mode key in Wizard App install state.\n' >&2
+        exit 1
+      }
+      access_mode="$value"
+    fi
+  done <"$state_file"
+fi
+if [[ "$access_mode" == cloudflare ]]; then
+  exec "$INSTALLER_DIR/cloudflare-update.sh" "$TAG" "$EXPECTED_COMMIT"
+fi
+
 cd "$REPO_ROOT"
 [[ -z "$(git status --porcelain)" ]] || {
   printf 'ERROR: Refusing to update a dirty HermesUI checkout. Commit or stash changes first.\n' >&2
